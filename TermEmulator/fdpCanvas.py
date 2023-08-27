@@ -39,6 +39,26 @@ class fdpGraph():
             self.add_node(n)
         if edge not in self:
             self.edges[(edge[0].id,edge[1].id)] = edge
+    def compute_forces(self):
+        for ko in self.nodes:
+            for ki in self.nodes:
+                if ko != ki:
+                    a = self.nodes[ko]
+                    b = self.nodes[ki]
+                    d = np.subtract(b.pos,a.pos)
+                    a.frc -= d*d
+                    b.frc += d*d
+        for ko,ki in self.edges:
+            a = self.nodes[ko]
+            b = self.nodes[ki]
+            d = np.subtract(b.pos,a.pos)
+            a.frc += d
+            b.frc -= d
+    def apply_forces(self):
+        for n in self.nodes:
+            node = self.nodes[n]
+            node.pos += node.frc
+            node.frc *= 0
 
 class fdpCanvas(GLCanvas):
     def __init__(self, parent, pos, size):

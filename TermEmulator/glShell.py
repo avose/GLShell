@@ -19,6 +19,8 @@ import TermEmulator
 import fdpCanvas
 import glsProject as glsp
 
+from threading import Thread
+
 ID_TERMINAL = 1
 
 def PrintStringAsAscii(s):
@@ -495,6 +497,7 @@ class glShell(wx.Frame):
 
 if __name__ == '__main__':
     project = glsp.glsProject()
+    project.forces_tick()
     project.print()
     app = wx.App(0);
     termEmulatorDemo = glShell()

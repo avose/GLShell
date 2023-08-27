@@ -62,6 +62,9 @@ class glsProject:
     def add_root(self,path):
         root = glsRoot(path)
         self.roots.append(root)
-
+    def forces_tick(self):
+        for r in self.roots:
+            r.graph.compute_forces()
+            r.graph.apply_forces()
 
             
