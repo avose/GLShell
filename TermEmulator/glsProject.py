@@ -44,16 +44,21 @@ class glsRoot(glsFSObj):
                 self.graph.add_node(node)
                 self.graph.add_edge( (root_node,node) )
 
-    
 class glsProject:
     roots = []
     def __init__(self, paths=["."]):
         for p in paths:
             self.add_root(p)
-            for d in self.roots[0].dirs:
+    def print(self):
+        for r in self.roots:
+            for d in r.dirs:
                 print(str(d))
-            for f in self.roots[0].files:
+            for f in r.files:
                 print(str(f))
+            for ek in r.graph.edges:
+                print(str(ek))
+            for n in r.graph.nodes:
+                print(str(n))
     def add_root(self,path):
         root = glsRoot(path)
         self.roots.append(root)

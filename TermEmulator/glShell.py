@@ -495,6 +495,7 @@ class glShell(wx.Frame):
 
 if __name__ == '__main__':
     project = glsp.glsProject()
+    project.print()
     app = wx.App(0);
     termEmulatorDemo = glShell()
     app.SetTopWindow(termEmulatorDemo)
