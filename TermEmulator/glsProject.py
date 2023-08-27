@@ -1,49 +1,62 @@
 import os
 import sys
 from fdpCanvas import fdpNode
+from fdpCanvas import fdpGraph
 
-class FileWalker:
+class glsFSObj(fdpNode):
+    name = ""
     path = ""
+    abspath = ""
+    def __init__(self, path):
+        self.path = path
+        self.name = os.path.basename(self.path)
+        self.abspath = os.path.abspath(self.path)
+        super().__init__(self.abspath)
+    
+class glsFile(glsFSObj):
+    def __init__(self, path):
+        super().__init__(path)
+    def __str__(self):
+        return self.path + "@" + str(self.pos) + "+" + str(self.frc)
+
+class glsDir(glsFSObj):
+    def __init__(self, path):
+        super().__init__(path)
+    def __str__(self):
+        return self.path + "@" + str(self.pos) + "+" + str(self.frc)
+
+class glsRoot(glsFSObj):
     files = []
     dirs = []
+    graph = fdpGraph()
     def __init__(self, path="."):
-        self.path = path
-        self.walk()
-
-    def walk(self):
+        super().__init__(path)
         for root, dirs, files in os.walk(self.path):
+            root_node = glsDir(root)
             for name in files:
-                self.files.append(os.path.join(root, name))
+                node = glsFile(os.path.join(root, name))
+                self.files.append(node)
+                self.graph.add_node(node)
+                self.graph.add_edge( (root_node,node) )
             for name in dirs:
-                self.dirs.append(os.path.join(root, name))
-                
-class glsFile(fdpNode):
-    path = ""
-    def __init__(self, path):
-        super().__init__()
-        self.path=path
-    def __str__(self):
-        return self.path + "@" + str(self.pos) + "+" + str(self.frc)
+                node = glsDir(os.path.join(root, name))
+                self.dirs.append(node)
+                self.graph.add_node(node)
+                self.graph.add_edge( (root_node,node) )
 
-class glsDir(fdpNode):
-    path = ""
-    def __init__(self, path):
-        super().__init__()
-        self.path=path
-    def __str__(self):
-        return self.path + "@" + str(self.pos) + "+" + str(self.frc)
-        
+    
 class glsProject:
-    path = ""
-    files = []
-    dirs = []
-    walker = None
-    def __init__(self, path="."):
-        self.path = path
-        self.walker = FileWalker(self.path)
-        self.walker.walk()
-        files = [ glsFile(p) for p in self.walker.files ]
-        dirs = [ glsDir(p) for p in self.walker.dirs ]
-        flist = [ str(f) for f in files ]
-        print("Files: %s"%(flist))
-        print("Dirs: %s"%(dirs))
+    roots = []
+    def __init__(self, paths=["."]):
+        for p in paths:
+            self.add_root(p)
+            for d in self.roots[0].dirs:
+                print(str(d))
+            for f in self.roots[0].files:
+                print(str(f))
+    def add_root(self,path):
+        root = glsRoot(path)
+        self.roots.append(root)
+
+
+            

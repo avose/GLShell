@@ -8,11 +8,37 @@ import wx
 
 
 class fdpNode():
-    pos = None
-    frc = None
+    pos = np.array([0,0,0], dtype=float)
+    frc = np.array([0,0,0], dtype=float)
+    id = None
+    def __init__(self,id):
+        self.id = id
+
+class fdpGraph():
+    nodes = {}
+    edges = {}
     def __init__(self):
-        self.pos = np.ndarray(3, dtype=float)
-        self.frc = np.ndarray(3, dtype=float)
+        pass
+    def __contains__(self, key):
+        if isinstance(key, tuple):
+            tup = key
+            if isinstance(key[0], fdpNode):
+                tup = (tup[0].id,tup[1])
+            if isinstance(key[1], fdpNode):
+                tup = (tup[0],tup[1].id)
+            return tup in self.edges
+        elif isinstance(key, fdpNode):
+            return key.id in self.nodes
+        elif isinstance(key, str):
+            return key in self.nodes
+    def add_node(self,node):
+        if node not in self:
+            self.nodes[node.id] = node
+    def add_edge(self,edge):
+        for n in edge:
+            self.add_node(n)
+        if edge not in self:
+            self.edges[(edge[0].id,edge[1].id)] = edge
 
 class fdpCanvas(GLCanvas):
     def __init__(self, parent, pos, size):
