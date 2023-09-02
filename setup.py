@@ -1,18 +1,18 @@
 from setuptools import setup, find_packages
 
-version = '1.0.3dev'
+version = '0.0.1dev'
 
 long_description = (open('README.rst').read() +
     '\n\n' + open('HISTORY.txt').read())
 
 
-setup(name='TermEmulator',
+setup(name='GLShell',
       version=version,
-      description="Emulator for V100 terminal programs",
+      description="Terminal emulator enhanced with OpenGL rendering",
       long_description=long_description,
-      author="Siva Chandran P",
-      author_email="siva.chandran.p@gmail.com",
-      url="https://github.com/sivachandran/TermEmulator",
+      author="Aaron D Vose",
+      author_email="avose@aaronvose.net",
+      url="https://github.com/avose/GLShell",
       license="LGPL",
       packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
       include_package_data=True,
