@@ -14,9 +14,10 @@ import struct
 import tty
 from threading import Thread
 
-import TermEmulator
 import fdpCanvas
 import glsProject as glsp
+sys.path.append('../TermEmulator')
+import TermEmulator
 
 ID_TERMINAL = 1
 
