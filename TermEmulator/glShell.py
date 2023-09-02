@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from __future__ import print_function
 
@@ -8,18 +8,15 @@ import pty
 import threading
 import select
 import wx
-
 import fcntl
 import termios
 import struct
 import tty
+from threading import Thread
 
 import TermEmulator
-
 import fdpCanvas
 import glsProject as glsp
-
-from threading import Thread
 
 ID_TERMINAL = 1
 
@@ -30,101 +27,78 @@ def PrintStringAsAscii(s):
             print(ch, end="")
         else:
             print(ord(ch), end="")
+    return
 
 class glShell(wx.Frame):
+    fdp_canvas = None
     def __init__(self):
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
                           size = (1366, 768))
-        
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-
         hbox0 = wx.BoxSizer(wx.HORIZONTAL)
-
         vbox = wx.BoxSizer(wx.VERTICAL)
+        # HBox1.
         hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-        
         self.st1 = wx.StaticText(self, wx.ID_ANY, "Program path:")
         hbox1.Add(self.st1, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        
         self.tc1 = wx.TextCtrl(self, wx.ID_ANY)
         self.tc1.SetValue("/bin/bash")
         hbox1.Add(self.tc1, 1, wx.ALIGN_CENTER)
-
         self.st2 = wx.StaticText(self, wx.ID_ANY, "Arguments:")
         hbox1.Add(self.st2, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-
         self.tc2 = wx.TextCtrl(self, wx.ID_ANY)
         hbox1.Add(self.tc2, 1, wx.ALIGN_CENTER)
-
         self.b1 = wx.Button(self, wx.ID_ANY, "Run")
         hbox1.Add(self.b1, 0, wx.LEFT | wx.RIGHT, 10)
         self.b1.Bind(wx.EVT_BUTTON, self.OnRun, id = self.b1.GetId())
-        
         vbox.Add(hbox1, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)
-        
+        # HBox2.
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
-        
         self.st3 = wx.StaticText(self, wx.ID_ANY, "Terminal Size, Rows:")
         hbox2.Add(self.st3, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        
         self.tc3 = wx.TextCtrl(self, wx.ID_ANY)
         self.tc3.SetValue("24")
         hbox2.Add(self.tc3, 1, wx.ALIGN_CENTER)
-
         self.st4 = wx.StaticText(self, wx.ID_ANY, "Columns:")
         hbox2.Add(self.st4, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-
         self.tc4 = wx.TextCtrl(self, wx.ID_ANY)
         self.tc4.SetValue("80")
         hbox2.Add(self.tc4, 1, wx.ALIGN_CENTER)
-
         self.b2 = wx.Button(self, wx.ID_ANY, "Resize")
         hbox2.Add(self.b2, 0, wx.LEFT | wx.RIGHT, 10)
         self.b2.Bind(wx.EVT_BUTTON, self.OnResize, id = self.b2.GetId())
-        
         self.cb1 = wx.CheckBox(self, wx.ID_ANY, "Disable text coloring")
         hbox2.Add(self.cb1, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 10)
-        
         vbox.Add(hbox2, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)
-        
+        # Terminal rendering.
         self.txtCtrlTerminal = wx.TextCtrl(self, ID_TERMINAL, 
                                            style = wx.TE_MULTILINE 
                                                    | wx.TE_DONTWRAP)
-        #!!avose: Default black background.
         self.txtCtrlTerminal.SetDefaultStyle(
             wx.TextAttr(wx.GREEN, wx.BLACK))
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL,
                        wx.FONTWEIGHT_NORMAL, False)
         self.txtCtrlTerminal.SetFont(font)
-        
         self.txtCtrlTerminal.Bind(wx.EVT_CHAR, self.OnTerminalChar,
                                   id = ID_TERMINAL)
-        
         self.txtCtrlTerminal.Bind(wx.EVT_KEY_DOWN, self.OnTerminalKeyDown,
                                   id = ID_TERMINAL)
-        
         self.txtCtrlTerminal.Bind(wx.EVT_KEY_UP, self.OnTerminalKeyUp,
                                   id = ID_TERMINAL)
-        
         vbox.Add(self.txtCtrlTerminal, 1, wx.EXPAND | wx.ALL)
-        #self.SetSizer(vbox)
-
-        #!!avose:
+        # OpenGL FDP Panel.
         self.glpanel = wx.Panel(self, 0)
-        self.canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(400,400))
+        self.fdp_canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(640,640))
         hbox0.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
         hbox0.Add(vbox, 2, wx.EXPAND | wx.RIGHT)
-
+        # Size and scrolling.
         self.SetSizer(hbox0)
-        
         self.termRows = 24
         self.termCols = 80
-        
         self.FillScreen()
-        
         self.linesScrolledUp = 0
         self.scrolledUpLinesLen = 0
-        
+        # Terminal Emulator.
         self.termEmulator = TermEmulator.V102Terminal(self.termRows,
                                                       self.termCols)
         self.termEmulator.SetCallback(self.termEmulator.CALLBACK_SCROLL_UP_SCREEN,
@@ -137,12 +111,16 @@ class glShell(wx.Frame):
                                       self.OnTermEmulatorUpdateWindowTitle)
         self.termEmulator.SetCallback(self.termEmulator.CALLBACK_UNHANDLED_ESC_SEQ,
                                       self.OnTermEmulatorUnhandledEscSeq)
-        
+        # State and update.
         self.isRunning = False
         self.UpdateUI()
-        
         self.Show(True)
-        
+        return
+    def AddProject(self,proj):
+        self.project = proj;
+        if self.fdp_canvas is not None:
+            self.fdp_canvas.AddProject(self.project)
+        return
     def FillScreen(self):
         """
         Fills the screen with blank lines so that we can update terminal
@@ -156,72 +134,60 @@ class glShell(wx.Frame):
             
         text = text.rstrip('\n')
         self.txtCtrlTerminal.SetValue(text)
-        
+        return
     def UpdateUI(self):
         self.tc1.Enable(not self.isRunning)
         self.tc2.Enable(not self.isRunning)
         self.b1.Enable(not self.isRunning)
         self.b2.Enable(self.isRunning)
         self.txtCtrlTerminal.Enable(self.isRunning)
-        
+        return
     def OnRun(self, event):
         path = self.tc1.GetValue()
         basename = os.path.basename(path)
         arglist = [ basename ]
-        
         arguments = self.tc2.GetValue()
         if arguments != "":
             for arg in arguments.split(' '):
                 arglist.append(arg)
-        
         self.termRows = int(self.tc3.GetValue())
         self.termCols = int(self.tc4.GetValue())
-        
         rows, cols = self.termEmulator.GetSize()
         if rows != self.termRows or cols != self.termCols:
             self.termEmulator.Resize (self.termRows, self.termCols)
-        
         processPid, processIO = pty.fork()
         if processPid == 0: # child process
             os.execl(path, *arglist)
-        
         print("Child process pid {}".format(processPid))
-        
         # Sets raw mode
         #tty.setraw(processIO)
-        
         # Sets the terminal window size
         fcntl.ioctl(processIO, termios.TIOCSWINSZ,
                     struct.pack("hhhh", self.termRows, self.termCols, 0, 0))
-        
         tcattrib = termios.tcgetattr(processIO)
         tcattrib[3] = tcattrib[3] & ~termios.ICANON
         termios.tcsetattr(processIO, termios.TCSAFLUSH, tcattrib)
-                    
         self.processPid = processPid
         self.processIO = processIO
         self.processOutputNotifierThread = threading.Thread(
-                                        target = self.__ProcessOuputNotifierRun)
+            target = self.__ProcessOuputNotifierRun)
         self.waitingForOutput = True
         self.stopOutputNotifier = False
         self.processOutputNotifierThread.start()
         self.isRunning = True
         self.UpdateUI()
-        
+        return
     def OnResize(self, event):        
         self.termRows = int(self.tc3.GetValue())
         self.termCols = int(self.tc4.GetValue())
-        
         # Resize emulator
         self.termEmulator.Resize(self.termRows, self.termCols)
-        
         # Resize terminal
         fcntl.ioctl(self.processIO, termios.TIOCSWINSZ,
                     struct.pack("hhhh", self.termRows, self.termCols, 0, 0))
-        
         self.FillScreen()
         self.UpdateDirtyLines(range(self.termRows))
-        
+        return
     def __ProcessIsAlive(self):
         try:
             pid, status = os.waitpid(self.processPid, os.WNOHANG)
@@ -229,9 +195,7 @@ class glShell(wx.Frame):
                 return False
         except:
             return False
-        
         return True
-    
     def __ProcessOuputNotifierRun(self):
         inpSet = [ self.processIO ]
         while (not self.stopOutputNotifier and self.__ProcessIsAlive()):
@@ -240,36 +204,29 @@ class glShell(wx.Frame):
                 if self.processIO in inpReady:
                     self.waitingForOutput = False
                     wx.CallAfter(self.ReadProcessOutput)
-                
         if not self.__ProcessIsAlive():
             self.isRunning = False
             wx.CallAfter(self.ReadProcessOutput)
             wx.CallAfter(self.UpdateUI)
             print("Process exited")
-            
         print("Notifier thread exited")
-        
+        return
     def SetTerminalRenditionStyle(self, style):
         fontStyle = wx.FONTSTYLE_NORMAL
         fontWeight = wx.FONTWEIGHT_NORMAL
         underline = False
-        
         if style & self.termEmulator.RENDITION_STYLE_BOLD:
             fontWeight = wx.FONTWEIGHT_BOLD
         elif style & self.termEmulator.RENDITION_STYLE_DIM:
             fontWeight = wx.FONTWEIGHT_LIGHT
-            
         if style & self.termEmulator.RENDITION_STYLE_ITALIC:
             fontStyle = wx.FONTSTYLE_ITALIC
-        
         if style & self.termEmulator.RENDITION_STYLE_UNDERLINE:
             underline = True
-        
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, fontStyle, fontWeight,
                        underline)
-        
         self.txtCtrlTerminal.SetFont(font)
-                    
+        return
     def SetTerminalRenditionForeground(self, fgcolor):
         if fgcolor != 0:
             if fgcolor == 1:
@@ -289,9 +246,8 @@ class glShell(wx.Frame):
             elif fgcolor == 8:
                 self.txtCtrlTerminal.SetForegroundColour((255, 255, 255))
         else:
-            #!!avose:
             self.txtCtrlTerminal.SetForegroundColour((0, 255, 0))
-
+        return
     def SetTerminalRenditionBackground(self, bgcolor):
         if bgcolor != 0:
             if bgcolor == 1:
@@ -311,66 +267,53 @@ class glShell(wx.Frame):
             elif bgcolor == 8:
                 self.txtCtrlTerminal.SetBackgroundColour((255, 255, 255))
         else:
-            #!!avose:
             self.txtCtrlTerminal.SetBackgroundColour((0, 0, 0))
-    
+        return
     def GetTextCtrlLineStart(self, lineNo):
         lineStart = self.scrolledUpLinesLen        
         lineStart += (self.termCols + 1) * (lineNo - self.linesScrolledUp)
         return lineStart
-        
     def UpdateCursorPos(self):
         row, col = self.termEmulator.GetCursorPos()
-        
         lineNo = self.linesScrolledUp + row
         insertionPoint = self.GetTextCtrlLineStart(lineNo)
         insertionPoint += col 
         self.txtCtrlTerminal.SetInsertionPoint(insertionPoint)
-        
+        return
     def UpdateDirtyLines(self, dirtyLines = None):
         text = ""
         curStyle = 0
         curFgColor = 0
         curBgColor = 0
-        
         self.SetTerminalRenditionStyle(curStyle)
         self.SetTerminalRenditionForeground(curFgColor)
         self.SetTerminalRenditionBackground(curBgColor)
-        
         screen = self.termEmulator.GetRawScreen()
         screenRows = self.termEmulator.GetRows()
         screenCols = self.termEmulator.GetCols()
         if dirtyLines == None:
             dirtyLines = self.termEmulator.GetDirtyLines()
-        
         disableTextColoring = self.cb1.IsChecked()
-        
         for row in dirtyLines:
             text = ""
-
             # finds the line starting and ending index
             lineNo = self.linesScrolledUp + row
             lineStart = self.GetTextCtrlLineStart(lineNo)
             #lineText = self.txtCtrlTerminal.GetLineText(lineNo)
             #lineEnd = lineStart + len(lineText)
             lineEnd = lineStart + self.termCols
-            
             # delete the line content
             self.txtCtrlTerminal.Replace(lineStart, lineEnd, "")
             self.txtCtrlTerminal.SetInsertionPoint(lineStart)
-            
             for col in range(screenCols):
                 style, fgcolor, bgcolor = self.termEmulator.GetRendition(row,
                                                                          col)
-                
                 if not disableTextColoring and (curStyle != style 
                                                 or curFgColor != fgcolor \
                                                 or curBgColor != bgcolor):
-                    
                     if text != "":
                         self.txtCtrlTerminal.WriteText(text)
                         text = ""
-                    
                     if curStyle != style:
                         curStyle = style
                         #print("Setting style {}".format(curStyle))
@@ -384,51 +327,43 @@ class glShell(wx.Frame):
                             # skip other styles since TextCtrl doesn't support
                             # multiple fonts(bold, italic and etc)
                             pass
-                        
                     if curFgColor != fgcolor:
                         curFgColor = fgcolor
                         #print("Setting foreground {}".format(curFgColor))
                         self.SetTerminalRenditionForeground(curFgColor)
-                        
                     if curBgColor != bgcolor:
                         curBgColor = bgcolor
                         #print("Setting background {}".format(curBgColor))
                         self.SetTerminalRenditionBackground(curBgColor)
-                
                 text += screen[row][col]
-            
             self.txtCtrlTerminal.WriteText(text)
-            
-        
+        return
     def OnTermEmulatorScrollUpScreen(self):
         blankLine = "\n"
-        
         for i in range(self.termEmulator.GetCols()):
             blankLine += ' '
-        
         #lineLen =  len(self.txtCtrlTerminal.GetLineText(self.linesScrolledUp))
         lineLen = self.termCols
         self.txtCtrlTerminal.AppendText(blankLine)
         self.linesScrolledUp += 1
         self.scrolledUpLinesLen += lineLen + 1
-        
+        return
     def OnTermEmulatorUpdateLines(self):
         self.UpdateDirtyLines()
         wx.YieldIfNeeded()
-        
+        return
     def OnTermEmulatorUpdateCursorPos(self):
         self.UpdateCursorPos()
-        
+        return
     def OnTermEmulatorUpdateWindowTitle(self, title):
         self.SetTitle(title)
-        
+        return
     def OnTermEmulatorUnhandledEscSeq(self, escSeq):
         print("Unhandled escape sequence: [{}".format(escSeq))
-        
+        return
     def ReadProcessOutput(self):
         #!!avose: bytes
         output = bytes("",'utf8')
-        
         try:
             while True:
                 data = os.read(self.processIO, 512)
@@ -439,38 +374,31 @@ class glShell(wx.Frame):
         except:
             #!!avose: bytes
             output = bytes("",'utf8')
-         
         #print("Received: ", end="")
         #PrintStringAsAscii(output)
         #print(output)
         #print("")
-
         self.termEmulator.ProcessInput(output.decode())
-
         # resets text control's foreground and background
         #!!avose:
         self.txtCtrlTerminal.SetForegroundColour((0, 255, 0))
         self.txtCtrlTerminal.SetBackgroundColour((0, 0, 0))
-        
         self.waitingForOutput = True
-        
+        return
     def OnTerminalKeyDown(self, event):
         #print("KeyDown {}".format(event.GetKeyCode()))
         event.Skip()
-
+        return
     def OnTerminalKeyUp(self, event):
         #print("KeyUp {}".format(event.GetKeyCode()))
         event.Skip()
-        
+        return
     def OnTerminalChar(self, event):
         if not self.isRunning:
             return
-            
         ascii = event.GetKeyCode()
         #print("ASCII = {}".format(ascii))
-        
         keystrokes = None
-        
         if ascii < 256:
              keystrokes = chr(ascii)
         elif ascii == wx.WXK_UP:
@@ -481,28 +409,24 @@ class glShell(wx.Frame):
             keystrokes = "\033[C"
         elif ascii == wx.WXK_LEFT:
             keystrokes = "\033[D"
-
         if keystrokes != None:
             #print("Sending:", end="")
             #PrintStringAsAscii(keystrokes)
             #print("")
             os.write(self.processIO, bytes(keystrokes,'utf-8'))
-                
+        return
     def OnClose(self, event):
         if self.isRunning:
             self.stopOutputNotifier = True
             self.processOutputNotifierThread.join(None)
-        
         event.Skip()
+        return
 
 if __name__ == '__main__':
-    project = glsp.glsProject()
-    project.forces_tick()
-    project.print()
+    proj_path = sys.argv[1] if len(sys.argv) == 2 else "."
+    project = glsp.glsProject(paths=[proj_path])
     app = wx.App(0);
-    termEmulatorDemo = glShell()
-    app.SetTopWindow(termEmulatorDemo)
-    #frame = wx.Frame(None,-1,'ball_wx',wx.DefaultPosition,wx.Size(400,400))
-    #canvas = fdpCanvas(frame)
-    #frame.Show()
+    gl_shell = glShell()
+    app.SetTopWindow(gl_shell)
+    gl_shell.AddProject(project)
     app.MainLoop()

@@ -2,6 +2,7 @@ from wx.glcanvas import GLCanvas
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
+from itertools import product
 import numpy as np
 import sys, math
 import wx
@@ -10,15 +11,21 @@ import wx
 class fdpNode():
     pos = np.array([0,0,0], dtype=float)
     frc = np.array([0,0,0], dtype=float)
-    id = None
+    id  = ""
     def __init__(self,id):
+        self.pos = np.random.random(size=3)
+        self.frc = np.array([0,0,0], dtype=float)
+        self.pos[2] = 0.0
         self.id = id
+        return
 
 class fdpGraph():
     nodes = {}
     edges = {}
     def __init__(self):
-        pass
+        self.nodes = {}
+        self.edges = {}
+        return
     def __contains__(self, key):
         if isinstance(key, tuple):
             tup = key
@@ -31,98 +38,136 @@ class fdpGraph():
             return key.id in self.nodes
         elif isinstance(key, str):
             return key in self.nodes
+        return
     def add_node(self,node):
         if node not in self:
             self.nodes[node.id] = node
+        return
     def add_edge(self,edge):
         for n in edge:
             self.add_node(n)
         if edge not in self:
             self.edges[(edge[0].id,edge[1].id)] = edge
+        return
     def compute_forces(self):
-        for ko in self.nodes:
-            for ki in self.nodes:
-                if ko != ki:
-                    a = self.nodes[ko]
-                    b = self.nodes[ki]
-                    d = np.subtract(b.pos,a.pos)
-                    a.frc -= d*d
-                    b.frc += d*d
-        for ko,ki in self.edges:
-            a = self.nodes[ko]
-            b = self.nodes[ki]
-            d = np.subtract(b.pos,a.pos)
-            a.frc += d
-            b.frc -= d
-    def apply_forces(self):
+        for k in self.nodes:
+            n = self.nodes[k]
+            n.pos[2] = 0
+        # Anti-gravity force between node pairs.
+        for k0,k1 in product(self.nodes,self.nodes):
+            if k0 == k1:
+                continue
+            a = self.nodes[k0]
+            b = self.nodes[k1]
+            v = np.subtract(b.pos,a.pos)
+            d = np.linalg.norm(v)
+            f = 0.1 * (v / (d*d))
+            a.frc -= f
+            b.frc += f
+        # Spring force for edges (non-linear).
+        for k0,k1 in self.edges:
+            a = self.nodes[k0]
+            b = self.nodes[k1]
+            v = np.subtract(b.pos,a.pos)
+            d = np.linalg.norm(v)
+            f = 0.1 * (v * d)
+            a.frc += f
+            b.frc -= f
+        return
+    def apply_forces(self,speed=1.0):
         for n in self.nodes:
             node = self.nodes[n]
-            node.pos += node.frc
+            node.pos += speed * node.frc
             node.frc *= 0
-
-class fdpCanvas(GLCanvas):
-    def __init__(self, parent, pos, size):
-        glattrs = wx.glcanvas.GLAttributes()
-        GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
-        wx.EVT_PAINT(self, self.OnPaint)
-        self.init = 0
+        return
+    def tick(self,speed=1.0):
+        self.compute_forces()
+        self.apply_forces(speed)
         return
 
+class fdpCanvas(GLCanvas):
+    init      = False
+    glctx     = None
+    quadratic = None
+    project   = None
+    fps       = 10
+    def __init__(self, parent, pos, size):
+        #glattrs = wx.glcanvas.GLAttributes()
+        GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
+        self.timer.Start(int(1000.0/self.fps))
+        self.init = 0
+        return
+    def AddProject(self,proj):
+        self.project = proj
+        return
     def OnPaint(self,event):
         if not self.init:
-            self.InitGL()
             self.glctx = wx.glcanvas.GLContext(self)
             self.SetCurrent(self.glctx)
             glutInit(sys.argv);
+            self.InitGL()
             self.init = 1
         self.SetCurrent(self.glctx)
         self.OnDraw()
         return
-
+    def Tick(self,event):
+        if self.project is not None and len(self.project.roots) > 0:
+            root = self.project.roots[0]
+            graph = root.graph
+            graph.tick(speed=(0.1/self.fps))
+        self.OnDraw()
+        return
     def OnDraw(self):
+        # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glPushMatrix()
-        color = [1.0,0.,0.,1.]
-        glMaterialfv(GL_FRONT,GL_DIFFUSE,color)
-        '''
-        glBegin(GL_LINE_LOOP)
-        radius = 0.25
-        for vertex in range(0, 100):
-            angle  = float(vertex) * 2.0 * np.pi / 100
-            glVertex3f(np.cos(angle)*radius, np.sin(angle)*radius, 0.0)
-        glEnd();
-        '''
-        glDisable(GL_LIGHTING)
-        glColor4fv(color)
-        gluSphere(self.quadratic,0.333,32,32)
-        glEnable(GL_LIGHTING)
+        # Skip lighting for now.
+        red = [1.0, 0.0, 0.0 ,1.0]
+        grn = [0.0, 1.0, 0.0 ,1.0]
+        # Draw the graph.
+        if self.project is not None and len(self.project.roots) > 0:
+            root = self.project.roots[0]
+            graph = root.graph
+            # Draw edges.
+            glColor4fv(grn)
+            glBegin(GL_LINES)
+            for e in graph.edges:
+                for n in e:
+                    glVertex3fv(graph.nodes[n].pos)
+            glEnd()
+            # Draw nodes.
+            for node in graph.nodes.values():
+                glColor4fv(red)
+                glPushMatrix()
+                glTranslatef(*node.pos)
+                gluSphere(self.quadratic,0.1,12,12)
+                glPopMatrix()
+        # Swap buffers to show the scene.
         glPopMatrix()
         self.SwapBuffers()
         return
-        
     def InitGL(self):
-        # set viewing projection
-        light_diffuse = [1.0, 1.0, 1.0, 1.0]
-        light_position = [1.0, 1.0, 1.0, 0.0]
-
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse)
-        glLightfv(GL_LIGHT0, GL_POSITION, light_position)
-
-        glEnable(GL_LIGHTING)
-        glEnable(GL_LIGHT0)
+        # Lighting.
+        glDisable(GL_LIGHTING)
+        # Clear color / depth.
         glEnable(GL_DEPTH_TEST)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClearDepth(1.0)
-
+        # Projection.
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(40.0, 1.0, 1.0, 30.0)
-
+        glOrtho(0.0, self.Size[0],
+                0.0, self.Size[1],
+                -0.01, 10.0)
+        # Model view.
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        gluLookAt(0.0, 0.0, 10.0,
-                  0.0, 0.0, 0.0,
-                  0.0, 1.0, 0.0)
+        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0.0)
+        glScalef(20.00, 20.0, 1.0)
+        # Get a reusable quadric.
         self.quadratic = gluNewQuadric()
         gluQuadricNormals(self.quadratic, GLU_SMOOTH)
         gluQuadricTexture(self.quadratic, GL_TRUE)
