@@ -36,6 +36,7 @@ class glShell(wx.Frame):
         self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
                           size = (1366, 768))
+        self.settings = glsSettings.glsSettings()
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.InitUI()
         return
@@ -74,19 +75,19 @@ class glShell(wx.Frame):
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
-        self.settings = None
+        self.settings_frame = None
         return
     def MenuHandler(self,event):
         id = event.GetId() 
         if id == wx.ID_EXIT:
             sys.exit()
         elif id == self.ID_SETTINGS:
-            if self.settings is None:
-                self.settings = glsSettings.SettingsFrame(self)
-                self.settings.Show()
-                self.settings.Raise()
+            if self.settings_frame is None:
+                self.settings_frame = glsSettings.SettingsFrame(self, self.settings)
+                self.settings_frame.Show()
+                self.settings_frame.Raise()
             else:
-                self.settings.Raise()
+                self.settings_frame.Raise()
         return
     def InitUI(self):
         self.InitMenuBar()
