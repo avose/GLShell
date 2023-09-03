@@ -14,7 +14,7 @@ import struct
 import tty
 from threading import Thread
 
-import fdpCanvas
+import glsGraphCanvas
 import glsProject as glsp
 import TermEmulator
 import glsSettings
@@ -105,7 +105,7 @@ class glShell(wx.Frame):
         box_gr_trm = wx.BoxSizer(wx.HORIZONTAL)
         # OpenGL FDP panel.
         self.glpanel = wx.Panel(self, 0)
-        self.fdp_canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(644,768))
+        self.fdp_canvas = glsGraphCanvas.glsGraphCanvas(self.glpanel, pos=(0,0), size=(644,768))
         box_gr_trm.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
         # Terminal rendering.
         self.txtCtrlTerminal = wx.TextCtrl(self, ID_TERMINAL, 

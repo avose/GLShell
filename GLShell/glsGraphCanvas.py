@@ -87,7 +87,9 @@ class fdpGraph():
         self.apply_forces(speed)
         return
 
-class fdpCanvas(GLCanvas):
+################################################################
+
+class glsGraphCanvas(GLCanvas):
     init      = False
     glctx     = None
     quadratic = None

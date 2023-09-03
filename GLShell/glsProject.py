@@ -1,7 +1,7 @@
 import os
 import sys
-from fdpCanvas import fdpNode
-from fdpCanvas import fdpGraph
+from glsGraphCanvas import fdpNode
+from glsGraphCanvas import fdpGraph
 
 class glsFSObj(fdpNode):
     name = ""
