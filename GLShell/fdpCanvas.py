@@ -7,8 +7,8 @@ import numpy as np
 import sys, math
 import wx
 
-from wxGLBuffer import wxGLBuffer
-from wxGLText import wxGLText
+from glsGLBuffer import glsGLBuffer
+from glsGLText import glsGLText
 
 class fdpNode():
     pos = np.array([0,0,0], dtype=float)
@@ -101,8 +101,8 @@ class fdpCanvas(GLCanvas):
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
         self.timer.Start(int(1000.0/self.fps))
-        self.buff = wxGLBuffer(self.Size[0],self.Size[1])
-        self.textbuff = wxGLText(self.buff,"test_text",wx.FontInfo(10).Bold().Underlined())
+        self.buff = glsGLBuffer(self.Size[0],self.Size[1])
+        self.textbuff = glsGLText(self.buff,"test_text",wx.FontInfo(10).Bold().Underlined())
         return
     def AddProject(self,proj):
         self.project = proj

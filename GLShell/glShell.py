@@ -96,13 +96,11 @@ class glShell(wx.Frame):
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Toolbar box.
-        self.tool_panel = wx.Panel(self)
-        self.tool_panel.SetBackgroundColour(wx.Colour(64,64,64))
         box_tool = wx.BoxSizer(wx.HORIZONTAL)
-        self.bt_run = wx.Button(self.tool_panel, wx.ID_ANY, "Run")
+        self.bt_run = wx.Button(self, wx.ID_ANY, "Run")
         self.bt_run.Bind(wx.EVT_BUTTON, self.OnRun, id = self.bt_run.GetId())
         box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
-        box_main.Add(self.tool_panel, 0, wx.ALIGN_RIGHT, wx.TOP | wx.BOTTOM, 0)
+        box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
         # Graph and Terminal side-by-side.
         box_gr_trm = wx.BoxSizer(wx.HORIZONTAL)
         # OpenGL FDP panel.
@@ -215,8 +213,9 @@ class glShell(wx.Frame):
         # Resize emulator
         self.termEmulator.Resize(self.termRows, self.termCols)
         # Resize terminal
-        fcntl.ioctl(self.processIO, termios.TIOCSWINSZ,
-                    struct.pack("hhhh", self.termRows, self.termCols, 0, 0))
+        if hasattr(self, 'processIO'):
+            fcntl.ioctl(self.processIO, termios.TIOCSWINSZ,
+                        struct.pack("hhhh", self.termRows, self.termCols, 0, 0))
         self.FillScreen()
         self.UpdateDirtyLines(range(self.termRows))
         return

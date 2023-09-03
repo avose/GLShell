@@ -1,8 +1,8 @@
 import wx
 import numpy as np
-from wxGLBuffer import wxGLBuffer
+from glsGLBuffer import glsGLBuffer
 
-class wxGLText():
+class glsGLText():
     buff     = None
     text     = None
     font     = None
@@ -10,12 +10,12 @@ class wxGLText():
     width    = 0
     height   = 0
     def __init__(self,buff,text=None,fontinfo=None):
-        if not isinstance(buff, wxGLBuffer):
-            raise Exception("wxGLText(): Buffer must have type wxGLBuffer.")
+        if not isinstance(buff, glsGLBuffer):
+            raise Exception("glsGLText(): Buffer must have type glsGLBuffer.")
         self.buff = buff
         if fontinfo is not None:
             if not isinstance(fontinfo, wx.FontInfo):
-                raise Exception("wxGLText(): Fontinfo must have type wx.FontInfo.")
+                raise Exception("glsGLText(): Fontinfo must have type wx.FontInfo.")
             self.SetFont(fontinfo)
         if text is not None:
             self.SetText(text)

@@ -1,7 +1,7 @@
 import wx
 import numpy as np
 
-class wxGLBuffer():
+class glsGLBuffer():
     dc     = None
     bitmap = None
     buff    = None
