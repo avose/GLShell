@@ -16,7 +16,6 @@ from threading import Thread
 
 import fdpCanvas
 import glsProject as glsp
-sys.path.append('../TermEmulator')
 import TermEmulator
 
 ID_TERMINAL = 1
