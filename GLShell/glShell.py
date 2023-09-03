@@ -91,17 +91,24 @@ class glShell(wx.Frame):
                 self.settings_frame.Raise()
         return
     def InitUI(self):
+        # Setup menu bar.
         self.InitMenuBar()
-        hbox0 = wx.BoxSizer(wx.HORIZONTAL)
-        vbox = wx.BoxSizer(wx.VERTICAL)
-        # HBox1.
-        hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.b1 = wx.Button(self, wx.ID_ANY, "Run")
-        hbox1.Add(self.b1, 0, wx.LEFT | wx.RIGHT, 10)
-        self.b1.Bind(wx.EVT_BUTTON, self.OnRun, id = self.b1.GetId())
-        self.b2 = wx.Button(self, wx.ID_ANY, "Resize")
-        hbox1.Add(self.b2, 0, wx.LEFT | wx.RIGHT, 10)
-        self.b2.Bind(wx.EVT_BUTTON, self.OnResize, id = self.b2.GetId())
+        # Main box.
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        # Toolbar box.
+        self.tool_panel = wx.Panel(self)
+        self.tool_panel.SetBackgroundColour(wx.Colour(64,64,64))
+        box_tool = wx.BoxSizer(wx.HORIZONTAL)
+        self.bt_run = wx.Button(self.tool_panel, wx.ID_ANY, "Run")
+        self.bt_run.Bind(wx.EVT_BUTTON, self.OnRun, id = self.bt_run.GetId())
+        box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
+        box_main.Add(self.tool_panel, 0, wx.ALIGN_RIGHT, wx.TOP | wx.BOTTOM, 0)
+        # Graph and Terminal side-by-side.
+        box_gr_trm = wx.BoxSizer(wx.HORIZONTAL)
+        # OpenGL FDP panel.
+        self.glpanel = wx.Panel(self, 0)
+        self.fdp_canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(644,768))
+        box_gr_trm.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
         # Terminal rendering.
         self.txtCtrlTerminal = wx.TextCtrl(self, ID_TERMINAL, 
                                            style = wx.TE_MULTILINE 
@@ -117,16 +124,10 @@ class glShell(wx.Frame):
                                   id = ID_TERMINAL)
         self.txtCtrlTerminal.Bind(wx.EVT_KEY_UP, self.OnTerminalKeyUp,
                                   id = ID_TERMINAL)
-        # Put the buttons on the bottom.
-        vbox.Add(self.txtCtrlTerminal, 1, wx.EXPAND | wx.ALL)
-        vbox.Add(hbox1, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)        
-        # OpenGL FDP Panel.
-        self.glpanel = wx.Panel(self, 0)
-        self.fdp_canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(640,640))
-        hbox0.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
-        hbox0.Add(vbox, 2, wx.EXPAND | wx.RIGHT)
+        box_gr_trm.Add(self.txtCtrlTerminal, 1, wx.EXPAND | wx.ALL);
+        box_main.Add(box_gr_trm, 0, wx.TOP | wx.BOTTOM, 0)       
         # Size and scrolling.
-        self.SetSizer(hbox0)
+        self.SetSizerAndFit(box_main)
         self.termRows = self.settings.term_rows
         self.termCols = self.settings.term_cols
         self.FillScreen()
@@ -170,8 +171,7 @@ class glShell(wx.Frame):
         self.txtCtrlTerminal.SetValue(text)
         return
     def UpdateUI(self):
-        self.b1.Enable(not self.isRunning)
-        self.b2.Enable(self.isRunning)
+        self.bt_run.Enable(not self.isRunning)
         self.txtCtrlTerminal.Enable(self.isRunning)
         return
     def OnRun(self, event):

@@ -153,6 +153,7 @@ class SettingsFrame(wx.Frame):
         self.tab_term.Save()
         self.tab_graph.Save()
         self.parent.settings.Save()
+        self.parent.OnResize(event)
         return
     def OnOk(self, event):
         self.OnSave(event)
