@@ -11,11 +11,11 @@ class wxGLText():
     height   = 0
     def __init__(self,buff,text=None,fontinfo=None):
         if not isinstance(buff, wxGLBuffer):
-            raise Exception("wxGLTextWriter(): Buffer must have type wxGLTextWriter.")
+            raise Exception("wxGLText(): Buffer must have type wxGLBuffer.")
         self.buff = buff
         if fontinfo is not None:
             if not isinstance(fontinfo, wx.FontInfo):
-                raise Exception("wxGLTextWriter(): Fontinfo must have type wx.FontInfo.")
+                raise Exception("wxGLText(): Fontinfo must have type wx.FontInfo.")
             self.SetFont(fontinfo)
         if text is not None:
             self.SetText(text)
