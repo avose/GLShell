@@ -1,14 +1,38 @@
 import os
 import wx
+import json
 
 ################################################################
 
 class glsSettings():
+    path       = "~/.glshell"
     shell_path = "/bin/bash"
     shell_args = "-l"
     term_rows  = 24
     term_cols  = 80
     def __init__(self):
+        return
+    def Load(self,path=None):
+        if path is not None:
+            self.path = path
+        conf_path = os.path.abspath(os.path.expanduser(self.path))
+        with open(conf_path,"r") as conf:
+            data = json.load(conf)
+            self.shell_path = data['shell_path']
+            self.shell_args = data['shell_args']
+            self.term_rows  = data['term_rows']
+            self.term_cols  = data['term_cols']
+        return
+    def Save(self,path=None):
+        if path is not None:
+            self.path = path
+        conf_path = os.path.abspath(os.path.expanduser(self.path))
+        with open(conf_path,"w") as conf:
+            data = {'shell_path': self.shell_path,
+                    'shell_args': self.shell_args,
+                    'term_rows':  self.term_rows,
+                    'term_cols':  self.term_cols}
+            json.dump(data, conf, indent=2)
         return
 
 ################################################################
@@ -103,21 +127,34 @@ class SettingsFrame(wx.Frame):
         # Create buttons.
         row_bottom = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_cancel = wx.Button(p, wx.ID_ANY, "Cancel")
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.Cancel)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         row_bottom.Add(self.btn_cancel, 1, wx.RIGHT)
+        self.btn_load = wx.Button(p, wx.ID_ANY, "Load")
+        self.btn_load.Bind(wx.EVT_BUTTON, self.OnLoad)
+        row_bottom.Add(self.btn_load, 1, wx.RIGHT)
+        self.btn_save = wx.Button(p, wx.ID_ANY, "Save")
+        self.btn_save.Bind(wx.EVT_BUTTON, self.OnSave)
+        row_bottom.Add(self.btn_save, 1, wx.RIGHT)
         self.btn_ok = wx.Button(p, wx.ID_ANY, "Ok")
-        self.btn_ok.Bind(wx.EVT_BUTTON, self.Save)
+        self.btn_ok.Bind(wx.EVT_BUTTON, self.OnOk)
         row_bottom.Add(self.btn_ok, 1, wx.RIGHT)
         vbox.Add(row_bottom, 1, wx.ALIGN_RIGHT)
         # Set vertical box as panel sizer.
         p.SetSizer(vbox)
         return
-    def Save(self, event):
+    def OnLoad(self, event):
+        self.parent.settings.Load()
+        return
+    def OnSave(self, event):
         self.tab_term.Save()
         self.tab_graph.Save()
+        self.parent.settings.Save()
+        return
+    def OnOk(self, event):
+        self.OnSave(event)
         self.OnClose(event)
         return
-    def Cancel(self, event):
+    def OnCancel(self, event):
         self.OnClose(event)
         return
     def OnClose(self, event):
