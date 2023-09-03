@@ -10,6 +10,7 @@ class glsSettings():
     shell_args = "-l"
     term_rows  = 24
     term_cols  = 80
+    term_color = True
     def __init__(self):
         return
     def Load(self,path=None):
@@ -18,10 +19,11 @@ class glsSettings():
         conf_path = os.path.abspath(os.path.expanduser(self.path))
         with open(conf_path,"r") as conf:
             data = json.load(conf)
-            self.shell_path = data['shell_path']
-            self.shell_args = data['shell_args']
-            self.term_rows  = data['term_rows']
-            self.term_cols  = data['term_cols']
+            self.shell_path = data['shell_path'] if 'shell_path' in data else self.shell_path
+            self.shell_args = data['shell_args'] if 'shell_args' in data else self.shell_args
+            self.term_rows  = data['term_rows']  if 'term_rows'  in data else self.term_rows
+            self.term_cols  = data['term_cols']  if 'term_cols'  in data else self.term_cols
+            self.term_color = data['term_color'] if 'term_color' in data else self.term_color
         return
     def Save(self,path=None):
         if path is not None:
@@ -31,7 +33,8 @@ class glsSettings():
             data = {'shell_path': self.shell_path,
                     'shell_args': self.shell_args,
                     'term_rows':  self.term_rows,
-                    'term_cols':  self.term_cols}
+                    'term_cols':  self.term_cols,
+                    'term_color': self.term_color}
             json.dump(data, conf, indent=2)
         return
 
@@ -78,8 +81,9 @@ class TabTerminal(wx.Panel):
         vbox.Add(row2, 0, wx.EXPAND | wx.VERTICAL | wx.BOTTOM, 5)
         # Row three.
         row3 = wx.BoxSizer(wx.HORIZONTAL)
-        self.cb_txtclr = wx.CheckBox(self, wx.ID_ANY, "Disable Text Color")
-        row3.Add(self.cb_txtclr, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 10)
+        self.cb_termcolor = wx.CheckBox(self, wx.ID_ANY, "Support Text Color")
+        self.cb_termcolor.SetValue(settings.term_color)
+        row3.Add(self.cb_termcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 10)
         vbox.Add(row3, 0, wx.EXPAND | wx.VERTICAL | wx.BOTTOM, 5)
         # Set vertical box as panel sizer.
         self.SetSizer(vbox)
@@ -90,7 +94,7 @@ class TabTerminal(wx.Panel):
         self.settings.shell_args = self.tc_shellargs.GetValue()
         self.settings.term_rows  = int(self.tc_termrows.GetValue())
         self.settings.term_cols  = int(self.tc_termcols.GetValue())
-        self.settings.term_color = self.cb_txtclr.IsChecked()
+        self.settings.term_color = self.cb_termcolor.IsChecked()
         return
 
 class TabGraph(wx.Panel):

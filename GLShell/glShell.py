@@ -37,6 +37,7 @@ class glShell(wx.Frame):
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
                           size = (1366, 768))
         self.settings = glsSettings.glsSettings()
+        self.settings.Load()
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.InitUI()
         return
@@ -95,37 +96,12 @@ class glShell(wx.Frame):
         vbox = wx.BoxSizer(wx.VERTICAL)
         # HBox1.
         hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.st1 = wx.StaticText(self, wx.ID_ANY, "Program path:")
-        hbox1.Add(self.st1, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        self.tc1 = wx.TextCtrl(self, wx.ID_ANY)
-        self.tc1.SetValue("/bin/bash")
-        hbox1.Add(self.tc1, 1, wx.ALIGN_CENTER)
-        self.st2 = wx.StaticText(self, wx.ID_ANY, "Arguments:")
-        hbox1.Add(self.st2, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        self.tc2 = wx.TextCtrl(self, wx.ID_ANY)
-        hbox1.Add(self.tc2, 1, wx.ALIGN_CENTER)
         self.b1 = wx.Button(self, wx.ID_ANY, "Run")
         hbox1.Add(self.b1, 0, wx.LEFT | wx.RIGHT, 10)
         self.b1.Bind(wx.EVT_BUTTON, self.OnRun, id = self.b1.GetId())
-        vbox.Add(hbox1, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)
-        # HBox2.
-        hbox2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.st3 = wx.StaticText(self, wx.ID_ANY, "Terminal Size, Rows:")
-        hbox2.Add(self.st3, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        self.tc3 = wx.TextCtrl(self, wx.ID_ANY)
-        self.tc3.SetValue("24")
-        hbox2.Add(self.tc3, 1, wx.ALIGN_CENTER)
-        self.st4 = wx.StaticText(self, wx.ID_ANY, "Columns:")
-        hbox2.Add(self.st4, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
-        self.tc4 = wx.TextCtrl(self, wx.ID_ANY)
-        self.tc4.SetValue("80")
-        hbox2.Add(self.tc4, 1, wx.ALIGN_CENTER)
         self.b2 = wx.Button(self, wx.ID_ANY, "Resize")
-        hbox2.Add(self.b2, 0, wx.LEFT | wx.RIGHT, 10)
+        hbox1.Add(self.b2, 0, wx.LEFT | wx.RIGHT, 10)
         self.b2.Bind(wx.EVT_BUTTON, self.OnResize, id = self.b2.GetId())
-        self.cb1 = wx.CheckBox(self, wx.ID_ANY, "Disable text coloring")
-        hbox2.Add(self.cb1, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 10)
-        vbox.Add(hbox2, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)
         # Terminal rendering.
         self.txtCtrlTerminal = wx.TextCtrl(self, ID_TERMINAL, 
                                            style = wx.TE_MULTILINE 
@@ -141,7 +117,9 @@ class glShell(wx.Frame):
                                   id = ID_TERMINAL)
         self.txtCtrlTerminal.Bind(wx.EVT_KEY_UP, self.OnTerminalKeyUp,
                                   id = ID_TERMINAL)
+        # Put the buttons on the bottom.
         vbox.Add(self.txtCtrlTerminal, 1, wx.EXPAND | wx.ALL)
+        vbox.Add(hbox1, 0, wx.EXPAND | wx.HORIZONTAL | wx.TOP | wx.BOTTOM, 5)        
         # OpenGL FDP Panel.
         self.glpanel = wx.Panel(self, 0)
         self.fdp_canvas = fdpCanvas.fdpCanvas(self.glpanel, pos=(0,0), size=(640,640))
@@ -149,8 +127,8 @@ class glShell(wx.Frame):
         hbox0.Add(vbox, 2, wx.EXPAND | wx.RIGHT)
         # Size and scrolling.
         self.SetSizer(hbox0)
-        self.termRows = 24
-        self.termCols = 80
+        self.termRows = self.settings.term_rows
+        self.termCols = self.settings.term_cols
         self.FillScreen()
         self.linesScrolledUp = 0
         self.scrolledUpLinesLen = 0
@@ -192,22 +170,20 @@ class glShell(wx.Frame):
         self.txtCtrlTerminal.SetValue(text)
         return
     def UpdateUI(self):
-        self.tc1.Enable(not self.isRunning)
-        self.tc2.Enable(not self.isRunning)
         self.b1.Enable(not self.isRunning)
         self.b2.Enable(self.isRunning)
         self.txtCtrlTerminal.Enable(self.isRunning)
         return
     def OnRun(self, event):
-        path = self.tc1.GetValue()
+        path = self.settings.shell_path
         basename = os.path.basename(path)
         arglist = [ basename ]
-        arguments = self.tc2.GetValue()
+        arguments = self.settings.shell_args
         if arguments != "":
             for arg in arguments.split(' '):
                 arglist.append(arg)
-        self.termRows = int(self.tc3.GetValue())
-        self.termCols = int(self.tc4.GetValue())
+        self.termRows = self.settings.term_rows
+        self.termCols = self.settings.term_cols
         rows, cols = self.termEmulator.GetSize()
         if rows != self.termRows or cols != self.termCols:
             self.termEmulator.Resize (self.termRows, self.termCols)
@@ -234,8 +210,8 @@ class glShell(wx.Frame):
         self.UpdateUI()
         return
     def OnResize(self, event):        
-        self.termRows = int(self.tc3.GetValue())
-        self.termCols = int(self.tc4.GetValue())
+        self.termRows = self.settings.term_rows
+        self.termCols = self.settings.term_cols
         # Resize emulator
         self.termEmulator.Resize(self.termRows, self.termCols)
         # Resize terminal
@@ -349,7 +325,7 @@ class glShell(wx.Frame):
         screenCols = self.termEmulator.GetCols()
         if dirtyLines == None:
             dirtyLines = self.termEmulator.GetDirtyLines()
-        disableTextColoring = self.cb1.IsChecked()
+        disableTextColoring = not self.settings.term_color
         for row in dirtyLines:
             text = ""
             # finds the line starting and ending index
