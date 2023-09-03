@@ -35,6 +35,46 @@ class glShell(wx.Frame):
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.InitUI()
+        return
+    def InitMenuBar(self):
+        menubar = wx.MenuBar() 
+        # File menue.
+        fileMenu = wx.Menu() 
+        newitem = wx.MenuItem(fileMenu, wx.ID_NEW, text = "New", kind = wx.ITEM_NORMAL) 
+        fileMenu.Append(newitem)
+        openitem = wx.MenuItem(fileMenu, wx.ID_OPEN, text = "Open", kind = wx.ITEM_NORMAL) 
+        fileMenu.Append(openitem) 
+        saveitem = wx.MenuItem(fileMenu, wx.ID_SAVE, text = "Save", kind = wx.ITEM_NORMAL) 
+        fileMenu.Append(saveitem) 
+        saveasitem = wx.MenuItem(fileMenu, wx.ID_SAVEAS, text = "Save as", kind = wx.ITEM_NORMAL) 
+        fileMenu.Append(saveasitem) 
+        closeitem = wx.MenuItem(fileMenu, wx.ID_CLOSE, text = "Close", kind = wx.ITEM_NORMAL) 
+        fileMenu.Append(closeitem) 
+        fileMenu.AppendSeparator()
+        quit = wx.MenuItem(fileMenu, wx.ID_EXIT, '&Quit') 
+        fileMenu.Append(quit) 
+        menubar.Append(fileMenu, '&File')
+        # Edit menue.
+        editMenu = wx.Menu() 
+        copyItem = wx.MenuItem(editMenu, wx.ID_COPY, text = "Copy", kind = wx.ITEM_NORMAL)
+        editMenu.Append(copyItem) 
+        cutItem = wx.MenuItem(editMenu, wx.ID_CUT, text = "Cut", kind = wx.ITEM_NORMAL) 
+        editMenu.Append(cutItem) 
+        pasteItem = wx.MenuItem(editMenu, wx.ID_PASTE, text = "Paste", kind = wx.ITEM_NORMAL) 
+        editMenu.Append(pasteItem) 
+        menubar.Append(editMenu, '&Edit')
+        # Connect menus to menu bar.
+        self.SetMenuBar(menubar)
+        self.Bind(wx.EVT_MENU, self.MenuHandler)
+        return
+    def MenuHandler(self,event):
+        id = event.GetId() 
+        if id == wx.ID_EXIT:
+            sys.exit()
+        return
+    def InitUI(self):
+        self.InitMenuBar()
         hbox0 = wx.BoxSizer(wx.HORIZONTAL)
         vbox = wx.BoxSizer(wx.VERTICAL)
         # HBox1.

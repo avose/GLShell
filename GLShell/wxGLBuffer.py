@@ -12,7 +12,7 @@ class wxGLBuffer():
         self.height = h
         self.buff = np.zeros((self.width,self.height,4), np.uint8)
         self.dc = wx.MemoryDC()
-        self.bitmap = wx.EmptyBitmap(self.width, self.height, 32)
+        self.bitmap = wx.Bitmap(self.width, self.height, 32)
         self.dc.SelectObject(self.bitmap)
         return
     def Clear(self):
