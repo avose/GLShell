@@ -103,8 +103,6 @@ class glsGraphCanvas(GLCanvas):
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
         self.timer.Start(int(1000.0/self.fps))
-        self.buff = glsGLBuffer(self.Size[0],self.Size[1])
-        self.textbuff = glsGLText(self.buff,"test_text",wx.FontInfo(10).Bold().Underlined())
         return
     def AddProject(self,proj):
         self.project = proj
@@ -115,6 +113,14 @@ class glsGraphCanvas(GLCanvas):
             self.SetCurrent(self.glctx)
             glutInit(sys.argv);
             self.InitGL()
+            #
+            self.buff = glsGLBuffer(160,32)
+            self.textbuff = glsGLText(self.buff,"Example Text!",
+                                      wx.FontInfo(12),(255,255,0,255))
+            print(self.textbuff.width,self.textbuff.height)
+            self.buff.SyncBuffer()
+            self.buff.SyncTexture()
+            #
             self.init = True
         self.SetCurrent(self.glctx)
         self.OnDraw()
@@ -129,8 +135,11 @@ class glsGraphCanvas(GLCanvas):
     def OnDraw(self):
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        self.textbuff.DrawGL([100,100,0])
+        # Scale for the FDP graph.
         glPushMatrix()
-        # Skip lighting for now.
+        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0.0)
+        glScalef(20.00, 20.0, 1.0)
         red = [1.0, 0.0, 0.0 ,1.0]
         grn = [0.0, 1.0, 0.0 ,1.0]
         # Draw the graph.
@@ -171,8 +180,6 @@ class glsGraphCanvas(GLCanvas):
         # Model view.
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0.0)
-        glScalef(20.00, 20.0, 1.0)
         # Get a reusable quadric.
         self.quadratic = gluNewQuadric()
         gluQuadricNormals(self.quadratic, GLU_SMOOTH)
