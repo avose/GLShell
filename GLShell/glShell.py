@@ -17,6 +17,7 @@ from threading import Thread
 import fdpCanvas
 import glsProject as glsp
 import TermEmulator
+import glsSettings
 
 ID_TERMINAL = 1
 
@@ -31,7 +32,8 @@ def PrintStringAsAscii(s):
 
 class glShell(wx.Frame):
     fdp_canvas = None
-    def __init__(self):
+    def __init__(self,app):
+        self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -62,16 +64,29 @@ class glShell(wx.Frame):
         cutItem = wx.MenuItem(editMenu, wx.ID_CUT, text = "Cut", kind = wx.ITEM_NORMAL) 
         editMenu.Append(cutItem) 
         pasteItem = wx.MenuItem(editMenu, wx.ID_PASTE, text = "Paste", kind = wx.ITEM_NORMAL) 
-        editMenu.Append(pasteItem) 
+        editMenu.Append(pasteItem)
+        editMenu.AppendSeparator()
+        self.ID_SETTINGS = 1337
+        settingsItem = wx.MenuItem(editMenu, self.ID_SETTINGS, text = "Settings",
+                                   kind = wx.ITEM_NORMAL) 
+        editMenu.Append(settingsItem) 
         menubar.Append(editMenu, '&Edit')
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
+        self.settings = None
         return
     def MenuHandler(self,event):
         id = event.GetId() 
         if id == wx.ID_EXIT:
             sys.exit()
+        elif id == self.ID_SETTINGS:
+            if self.settings is None:
+                self.settings = glsSettings.SettingsFrame(self)
+                self.settings.Show()
+                self.settings.Raise()
+            else:
+                self.settings.Raise()
         return
     def InitUI(self):
         self.InitMenuBar()
@@ -466,7 +481,7 @@ if __name__ == '__main__':
     proj_path = sys.argv[1] if len(sys.argv) == 2 else "."
     project = glsp.glsProject(paths=[proj_path])
     app = wx.App(0);
-    gl_shell = glShell()
+    gl_shell = glShell(app)
     app.SetTopWindow(gl_shell)
     gl_shell.AddProject(project)
     app.MainLoop()
