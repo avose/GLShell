@@ -39,6 +39,8 @@ class glsGLText():
             raise Exception("glsGLText(): Buffer must have type glsGLBuffer.")
         self.buff = buff
         self.buff.dc.SetTextForeground([255,255,255])
+        self.buff.dc.SetTextBackground(wx.NullColour)
+        self.buff.dc.SetBackgroundMode(wx.TRANSPARENT)
         if not isinstance(fontinfo, wx.FontInfo):
             raise Exception("glsGLText(): Fontinfo must have type wx.FontInfo.")
         self.SetFont(fontinfo)
@@ -76,11 +78,18 @@ class glsGLText():
     def DrawGL(self,pos,text=None,center=False):
         if text is not None:
             self.DrawDC(text)
-        ctr = 0.5 if center else 1.0
-        offsets = [ [0,                   0,                    0],
-                    [0,                   ctr*self.buff.height, 0],
-                    [ctr*self.buff.width, ctr*self.buff.height, 0],
-                    [ctr*self.buff.width, 0,                    0] ]
+        if center:
+            half_width  = self.buff.width/2.0
+            half_height = self.buff.height/2.0
+            offsets = [ [-half_width, -half_height, 0],
+                        [-half_width,  half_height, 0],
+                        [ half_width,  half_height, 0],
+                        [ half_width, -half_height, 0] ]
+        else:
+            offsets = [ [0,               0,                0],
+                        [0,               self.buff.height, 0],
+                        [self.buff.width, self.buff.height, 0],
+                        [self.buff.width, 0,                0] ]
         pos = np.array(pos, dtype=np.single)
         offsets = np.array(offsets, dtype=np.single)
         glEnable(GL_TEXTURE_2D)

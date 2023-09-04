@@ -17,12 +17,12 @@ class glsGLBuffer():
         self.buff = np.zeros((self.width,self.height,4), np.uint8)
         self.dc = wx.MemoryDC()
         self.bitmap = wx.Bitmap(self.width, self.height, 32)
+        self.bitmap.UseAlpha(True)
         self.dc.SelectObject(self.bitmap)
         return
     def Clear(self):
-        self.dc.SetBrush(wx.Brush('#000000'))
-        self.dc.DrawRectangle(0, 0, self.width, self.height)
         self.buff.fill(0)
+        self.SyncDC()
         return
     def SyncBuffer(self):
         self.dc.SelectObject(wx.NullBitmap)

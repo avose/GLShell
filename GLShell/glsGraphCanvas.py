@@ -138,11 +138,8 @@ class glsGraphCanvas(GLCanvas):
     def OnDraw(self):
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        self.textbuff.DrawGL([100,100,0])
         # Scale for the FDP graph.
         glPushMatrix()
-        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0.0)
-        glScalef(20.00, 20.0, 1.0)
         red = [1.0, 0.0, 0.0 ,1.0]
         grn = [0.0, 1.0, 0.0 ,1.0]
         # Draw the graph.
@@ -154,15 +151,22 @@ class glsGraphCanvas(GLCanvas):
             glBegin(GL_LINES)
             for e in graph.edges:
                 for n in e:
-                    glVertex3fv(graph.nodes[n].pos)
+                    pos = np.array(graph.nodes[n].pos)
+                    pos[0] = pos[0]*20.0 + self.Size[0]/2.0
+                    pos[1] = pos[1]*20.0 + self.Size[1]/2.0
+                    glVertex3fv(pos)
             glEnd()
             # Draw nodes.
             for node in graph.nodes.values():
                 glColor4fv(red)
                 glPushMatrix()
-                glTranslatef(*node.pos)
-                gluSphere(self.quadratic,0.1,12,12)
+                pos = np.array(node.pos)
+                pos[0] = pos[0]*20.0 + self.Size[0]/2.0
+                pos[1] = pos[1]*20.0 + self.Size[1]/2.0
+                glTranslatef(*pos)
+                gluSphere(self.quadratic,0.1*20.0,12,12)
                 glPopMatrix()
+                self.textbuff.DrawGL(pos,center=True)
         # Swap buffers to show the scene.
         glPopMatrix()
         self.SwapBuffers()
@@ -174,6 +178,8 @@ class glsGraphCanvas(GLCanvas):
         glEnable(GL_DEPTH_TEST)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClearDepth(1.0)
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         # Projection.
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
