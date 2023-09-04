@@ -42,6 +42,7 @@ class glsRoot(glsFSObj):
         for root, dirs, files in os.walk(self.path):
             root_node = glsDir(root)
             for name in files:
+                break
                 node = glsFile(os.path.join(root, name))
                 self.files.append(node)
                 self.graph.add_node(node)
@@ -64,7 +65,7 @@ class glsProject:
     def add_root(self,path):
         root = glsRoot(path)
         self.roots.append(root)
-        thread = glsFDPThread(root.graph,0.1)
+        thread = glsFDPThread(root.graph,speed=0.01)
         self.threads.append(thread)
         thread.start()
         return

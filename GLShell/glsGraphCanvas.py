@@ -146,9 +146,8 @@ class glsGraphCanvas(GLCanvas):
         glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
         # Draw the graph.
         if self.project is not None and len(self.project.roots) > 0:
-            root    = self.project.roots[0]
             gthread = self.project.threads[0]
-            graph   = root.graph
+            graph   = gthread.get_graph()
             # Draw graph while holding the lock.
             with gthread.lock:
                 # Draw edges.
