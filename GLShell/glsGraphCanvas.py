@@ -91,13 +91,18 @@ class fdpGraph():
 ################################################################
 
 class glsGraphCanvas(GLCanvas):
-    init      = False
-    glctx     = None
-    quadratic = None
-    project   = None
-    textbuff  = None
-    textsizer = None
-    fps       = 10
+    init       = False
+    glctx      = None
+    quadratic  = None
+    project    = None
+    textbuff   = None
+    textsizer  = None
+    fps        = 10
+    mouse_down = [False, False, False, False]
+    mouse_pos  = np.array([0, 0],dtype=np.single)
+    translate  = np.array([0, 0],dtype=np.single)
+    rotate     = np.array([0, 0],dtype=np.single)
+    zoom       = 20.0
     def __init__(self, parent, pos, size):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
@@ -106,6 +111,44 @@ class glsGraphCanvas(GLCanvas):
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
         self.timer.Start(int(1000.0/self.fps))
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
+        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        self.Bind(wx.EVT_MOTION, self.OnMove)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        return
+    def OnLeftDown(self,event):
+        self.mouse_pos = event.GetPosition()
+        self.mouse_down[0] = True
+        return
+    def OnLeftUp(self,event):
+        self.OnMove(event)
+        self.mouse_down[0] = False
+        return
+    def OnRightDown(self,event):
+        self.mouse_pos = event.GetPosition()
+        self.mouse_down[3] = True
+        return
+    def OnRightUp(self,event):
+        self.OnMove(event)
+        self.mouse_down[3] = False
+        return
+    def OnMove(self,event):
+        pos = event.GetPosition()
+        if self.mouse_down[0]:
+            self.translate += (-(self.mouse_pos[0] - pos[0]),
+                                (self.mouse_pos[1] - pos[1]))
+        if self.mouse_down[3]:
+            self.rotate += ((self.mouse_pos[0] - pos[0])*0.3,
+                            (self.mouse_pos[1] - pos[1])*0.3)
+        self.mouse_pos = pos
+        return
+    def OnWheel(self,event):
+        if event.GetWheelRotation() < 0:
+            self.zoom -= 1
+        else:
+            self.zoom += 1
         return
     def AddProject(self,proj):
         self.project = proj
@@ -116,14 +159,12 @@ class glsGraphCanvas(GLCanvas):
             self.SetCurrent(self.glctx)
             glutInit(sys.argv);
             self.InitGL()
-            #
-            text = "Example Text!"
-            finfo = wx.FontInfo(12)
+            text = "string with length of max length for file and directory names"
+            finfo = wx.FontInfo(11)
             self.textsizer.SetFont(finfo)
             tw,th = self.textsizer.TextSize(text)
             buff = glsGLBuffer(tw,th)
             self.textbuff = glsGLText(buff,finfo,(255,255,0,255),text)
-            #
             self.init = True
         self.SetCurrent(self.glctx)
         self.OnDraw()
@@ -138,8 +179,13 @@ class glsGraphCanvas(GLCanvas):
     def OnDraw(self):
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        # Scale for the FDP graph.
+        # Apply zoom and rotation.
         glPushMatrix()
+        glTranslatef(*self.translate, 0)
+        # !!avose: Rotation need to be fixed to not rotate text!!
+        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
+        glRotatef(self.rotate[0], 0, 0, 1)
+        glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
         red = [1.0, 0.0, 0.0 ,1.0]
         grn = [0.0, 1.0, 0.0 ,1.0]
         # Draw the graph.
@@ -152,8 +198,8 @@ class glsGraphCanvas(GLCanvas):
             for e in graph.edges:
                 for n in e:
                     pos = np.array(graph.nodes[n].pos)
-                    pos[0] = pos[0]*20.0 + self.Size[0]/2.0
-                    pos[1] = pos[1]*20.0 + self.Size[1]/2.0
+                    pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
+                    pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
                     glVertex3fv(pos)
             glEnd()
             # Draw nodes.
@@ -161,12 +207,12 @@ class glsGraphCanvas(GLCanvas):
                 glColor4fv(red)
                 glPushMatrix()
                 pos = np.array(node.pos)
-                pos[0] = pos[0]*20.0 + self.Size[0]/2.0
-                pos[1] = pos[1]*20.0 + self.Size[1]/2.0
+                pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
+                pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
                 glTranslatef(*pos)
                 gluSphere(self.quadratic,0.1*20.0,12,12)
                 glPopMatrix()
-                self.textbuff.DrawGL(pos,center=True)
+                self.textbuff.DrawGL(pos,text=node.name,center=True)
         # Swap buffers to show the scene.
         glPopMatrix()
         self.SwapBuffers()
