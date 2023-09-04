@@ -42,7 +42,6 @@ class glsRoot(glsFSObj):
         for root, dirs, files in os.walk(self.path):
             root_node = glsDir(root)
             for name in files:
-                break
                 node = glsFile(os.path.join(root, name))
                 self.files.append(node)
                 self.graph.add_node(node)
