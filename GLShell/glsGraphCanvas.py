@@ -6,6 +6,7 @@ from itertools import product
 import numpy as np
 import sys, math
 import wx
+import datetime
 
 from glsGLBuffer import glsGLBuffer
 from glsGLText import glsGLTextSizer
@@ -30,6 +31,8 @@ class glsGraphCanvas(GLCanvas):
     translate  = np.array([0, 0],dtype=np.single)
     rotate     = np.array([0, 0],dtype=np.single)
     zoom       = 20.0
+    time_draw  = datetime.timedelta(0, 1, 0)
+    time_fdp   = datetime.timedelta(0, 1, 0)
     def __init__(self, parent, pos, size):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
@@ -87,25 +90,49 @@ class glsGraphCanvas(GLCanvas):
             glutInit(sys.argv);
             self.InitGL()
             text = "string with length of max length for file and directory names"
-            finfo = wx.FontInfo(11)
+            finfo = wx.FontInfo(10).FaceName("Monospace")
             self.textsizer.SetFont(finfo)
             tw,th = self.textsizer.TextSize(text)
             buff = glsGLBuffer(tw,th)
             self.textbuff = glsGLText(buff,finfo,(255,255,0,255),text)
             self.init = True
         self.SetCurrent(self.glctx)
+        start = datetime.datetime.now()
         self.OnDraw()
+        self.time_draw = datetime.datetime.now() - start
         return
     def Tick(self,event):
         if self.project is not None and len(self.project.roots) > 0:
             root = self.project.roots[0]
             graph = root.graph
+            start = datetime.datetime.now()
             graph.tick(speed=(0.1/self.fps))
+            self.time_fdp = datetime.datetime.now() - start
         self.OnDraw()
         return
     def OnDraw(self):
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        red = [1.0, 0.0, 0.0 ,1.0]
+        grn = [0.0, 1.0, 0.0 ,1.0]
+        blu = [0.0, 0.0, 1.0 ,1.0]
+        ylw = [1.0, 1.0, 0.0 ,1.0]
+        # Draw stats.
+        self.textbuff.SetColor(grn)
+        fps_fdp = 1.0 / self.time_fdp.total_seconds()
+        fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
+        fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_fdp)
+        fps_ogl = 1.0 / self.time_draw.total_seconds()
+        fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
+        fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_ogl)
+        fps_tot = 1.0 / (self.time_draw.total_seconds() +
+                         self.time_fdp.total_seconds())
+        fps_tot = "FPS(tot): %.2f"%(fps_tot)
+        fps_pos = [0, self.Size[1]-3*self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_tot)
+        self.textbuff.SetColor(ylw)
         # Apply zoom and rotation.
         glPushMatrix()
         glTranslatef(*self.translate, 0)
@@ -113,9 +140,6 @@ class glsGraphCanvas(GLCanvas):
         glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
         glRotatef(self.rotate[0], 0, 0, 1)
         glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
-        red = [1.0, 0.0, 0.0 ,1.0]
-        grn = [0.0, 1.0, 0.0 ,1.0]
-        blu = [0.0, 0.0, 1.0 ,1.0]
         # Draw the graph.
         if self.project is not None and len(self.project.roots) > 0:
             root = self.project.roots[0]
