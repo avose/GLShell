@@ -31,7 +31,6 @@ def PrintStringAsAscii(s):
     return
 
 class glShell(wx.Frame):
-    fdp_canvas = None
     def __init__(self,app):
         self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
@@ -450,6 +449,9 @@ class glShell(wx.Frame):
         if self.isRunning:
             self.stopOutputNotifier = True
             self.processOutputNotifierThread.join(None)
+        for t in self.project.threads:
+            t.stop()
+            t.join()
         event.Skip()
         return
 

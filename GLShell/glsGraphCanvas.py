@@ -25,14 +25,14 @@ class glsGraphCanvas(GLCanvas):
     project    = None
     textbuff   = None
     textsizer  = None
-    fps        = 10
+    fps        = 20
     mouse_down = [False, False, False, False]
     mouse_pos  = np.array([0, 0],dtype=np.single)
     translate  = np.array([0, 0],dtype=np.single)
     rotate     = np.array([0, 0],dtype=np.single)
     zoom       = 20.0
-    time_draw  = datetime.timedelta(0, 1, 0)
-    time_fdp   = datetime.timedelta(0, 1, 0)
+    time_draw  = 1
+    time_fdp   = 1
     def __init__(self, parent, pos, size):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
@@ -90,7 +90,7 @@ class glsGraphCanvas(GLCanvas):
             glutInit(sys.argv);
             self.InitGL()
             text = "string with length of max length for file and directory names"
-            finfo = wx.FontInfo(10).FaceName("Monospace")
+            finfo = wx.FontInfo(10).FaceName("Monospace").Bold()
             self.textsizer.SetFont(finfo)
             tw,th = self.textsizer.TextSize(text)
             buff = glsGLBuffer(tw,th)
@@ -100,15 +100,11 @@ class glsGraphCanvas(GLCanvas):
         start = datetime.datetime.now()
         self.OnDraw()
         self.time_draw = datetime.datetime.now() - start
+        self.time_draw = self.time_draw.total_seconds()
         return
     def Tick(self,event):
-        if self.project is not None and len(self.project.roots) > 0:
-            root = self.project.roots[0]
-            graph = root.graph
-            start = datetime.datetime.now()
-            graph.tick(speed=(0.1/self.fps))
-            self.time_fdp = datetime.datetime.now() - start
-        self.OnDraw()
+        if self.init:
+            self.OnDraw()
         return
     def OnDraw(self):
         # Clear buffer.
@@ -119,16 +115,24 @@ class glsGraphCanvas(GLCanvas):
         ylw = [1.0, 1.0, 0.0 ,1.0]
         # Draw stats.
         self.textbuff.SetColor(grn)
-        fps_fdp = 1.0 / self.time_fdp.total_seconds()
+        if self.project is not None and len(self.project.roots) > 0:
+            gthread = self.project.threads[0]
+            self.time_fdp = gthread.get_time()
+            if self.time_fdp == 0:
+                fps_fdp = 0
+            else:
+                fps_fdp = 1.0 / self.time_fdp
+        else:
+            fps_fdp = 0.0
         fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
         fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_fdp)
-        fps_ogl = 1.0 / self.time_draw.total_seconds()
+        fps_ogl = 1.0 / self.time_draw
         fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
         fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_ogl)
-        fps_tot = 1.0 / (self.time_draw.total_seconds() +
-                         self.time_fdp.total_seconds())
+        fps_tot = 1.0 / (self.time_draw +
+                         self.time_fdp)
         fps_tot = "FPS(tot): %.2f"%(fps_tot)
         fps_pos = [0, self.Size[1]-3*self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_tot)
@@ -142,37 +146,43 @@ class glsGraphCanvas(GLCanvas):
         glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
         # Draw the graph.
         if self.project is not None and len(self.project.roots) > 0:
-            root = self.project.roots[0]
-            graph = root.graph
-            # Draw edges.
-            glColor4fv(grn)
-            glBegin(GL_LINES)
-            for e in graph.edges:
-                for n in e:
-                    pos = np.array(graph.nodes[n].pos)
+            root    = self.project.roots[0]
+            gthread = self.project.threads[0]
+            graph   = root.graph
+            # Draw graph while holding the lock.
+            with gthread.lock:
+                # Draw edges.
+                glColor4fv(grn)
+                glBegin(GL_LINES)
+                for e in graph.edges:
+                    for n in e:
+                        pos = np.array(graph.nodes[n].pos)
+                        pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
+                        pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
+                        glVertex3fv(pos)
+                glEnd()
+                # Draw nodes.
+                for node in graph.nodes.values():
+                    glPushMatrix()
+                    pos = np.array(node.pos)
                     pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
                     pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
-                    glVertex3fv(pos)
-            glEnd()
-            # Draw nodes.
-            for node in graph.nodes.values():
-                glPushMatrix()
-                pos = np.array(node.pos)
-                pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
-                pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
-                glTranslatef(*pos)
-                if isinstance(node, glsDir):
-                    glColor4fv(red)
-                    size = 10.0
-                else:
-                    glColor4fv(blu)
-                    size = 8.0
-                glPointSize(size)
-                glBegin(GL_POINTS)
-                glVertex3fv([0,0,0])
-                glEnd()
-                glPopMatrix()
-                self.textbuff.DrawGL(pos,text=node.name,center=True)
+                    glTranslatef(*pos)
+                    if isinstance(node, glsDir):
+                        glColor4fv(red)
+                        self.textbuff.SetColor([1,0,1,1])
+                        size = 10.0
+                    else:
+                        glColor4fv(blu)
+                        self.textbuff.SetColor(ylw)
+                        size = 8.0
+                    glPointSize(size)
+                    glBegin(GL_POINTS)
+                    glVertex3fv([0,0,0])
+                    glEnd()
+                    glPopMatrix()
+                    pos[1] += 10
+                    self.textbuff.DrawGL(pos,text=node.name,center=True)
         # Swap buffers to show the scene.
         glPopMatrix()
         self.SwapBuffers()

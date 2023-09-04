@@ -2,6 +2,7 @@ import os
 import sys
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
+from glsFDP import glsFDPThread
 
 class glsFSObj(fdpNode):
     name = ""
@@ -53,7 +54,8 @@ class glsRoot(glsFSObj):
         return
 
 class glsProject:
-    roots = []
+    threads = []
+    roots   = []
     def __init__(self, paths=["."]):
         self.roots = []
         for p in paths:
@@ -62,6 +64,9 @@ class glsProject:
     def add_root(self,path):
         root = glsRoot(path)
         self.roots.append(root)
+        thread = glsFDPThread(root.graph,0.1)
+        self.threads.append(thread)
+        thread.start()
         return
     def forces_tick(self):
         for r in self.roots:
