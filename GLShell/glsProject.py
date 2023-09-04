@@ -1,7 +1,7 @@
 import os
 import sys
-from glsGraphCanvas import fdpNode
-from glsGraphCanvas import fdpGraph
+from glsFDP import fdpNode
+from glsFDP import fdpGraph
 
 class glsFSObj(fdpNode):
     name = ""
@@ -33,6 +33,7 @@ class glsRoot(glsFSObj):
     dirs  = []
     graph = fdpGraph()
     def __init__(self, path="."):
+        path = os.path.abspath(path)
         super().__init__(path)
         self.files = []
         self.dirs  = []
