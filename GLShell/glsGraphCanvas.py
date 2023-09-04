@@ -8,6 +8,7 @@ import sys, math
 import wx
 
 from glsGLBuffer import glsGLBuffer
+from glsGLText import glsGLTextSizer
 from glsGLText import glsGLText
 
 class fdpNode():
@@ -95,10 +96,12 @@ class glsGraphCanvas(GLCanvas):
     quadratic = None
     project   = None
     textbuff  = None
+    textsizer = None
     fps       = 10
     def __init__(self, parent, pos, size):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
+        self.textsizer = glsGLTextSizer()
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
@@ -114,12 +117,12 @@ class glsGraphCanvas(GLCanvas):
             glutInit(sys.argv);
             self.InitGL()
             #
-            self.buff = glsGLBuffer(160,32)
-            self.textbuff = glsGLText(self.buff,"Example Text!",
-                                      wx.FontInfo(12),(255,255,0,255))
-            print(self.textbuff.width,self.textbuff.height)
-            self.buff.SyncBuffer()
-            self.buff.SyncTexture()
+            text = "Example Text!"
+            finfo = wx.FontInfo(12)
+            self.textsizer.SetFont(finfo)
+            tw,th = self.textsizer.TextSize(text)
+            buff = glsGLBuffer(tw,th)
+            self.textbuff = glsGLText(buff,finfo,(255,255,0,255),text)
             #
             self.init = True
         self.SetCurrent(self.glctx)

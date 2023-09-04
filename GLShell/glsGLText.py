@@ -5,15 +5,36 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 
-class glsGLText():
-    buff     = None
-    text     = None
-    font     = None
+class glsGLTextSizer():
     fontinfo = None
-    color    = None
-    width    = 0
-    height   = 0
-    def __init__(self,buff,text=None,fontinfo=None,color=None):
+    font     = None
+    dc       = None
+    def __init__(self,fontinfo=None):
+        self.dc = wx.MemoryDC()
+        if fontinfo is not None:
+            self.SetFont(fontinfo)
+        return
+    def SetFont(self,fontinfo):
+        self.fontinfo = fontinfo
+        self.font = wx.Font(self.fontinfo)
+        self.dc.SetFont(self.font)
+        return
+    def TextSize(self,text):
+        return self.dc.GetTextExtent(text)
+
+class glsGLText():
+    buff       = None
+    text       = None
+    font       = None
+    fontinfo   = None
+    color      = None
+    width      = 0
+    height     = 0
+    tex_coords = [ [0.0, 1.0],
+                   [0.0, 0.0],
+                   [1.0, 0.0],
+                   [1.0, 1.0] ]
+    def __init__(self,buff,fontinfo,color=None,text=None):
         if not isinstance(buff, glsGLBuffer):
             raise Exception("glsGLText(): Buffer must have type glsGLBuffer.")
         self.buff = buff
@@ -36,25 +57,25 @@ class glsGLText():
         return
     def SetText(self,text):
         self.text = text
-        if self.font is not None:
-            self.width, self.height = self.buff.dc.GetTextExtent(self.text)
-        self.Draw()
+        self.width, self.height = self.buff.dc.GetTextExtent(self.text)
+        self.DrawDC()
         return
-    def Draw(self,text=None):
+    def SyncBuffer(self):
+        self.buff.SyncBuffer()
+        self.buff.SyncTexture()
+        return
+    def DrawDC(self,text=None):
         if text is not None:
             self.SetText(text)
         self.buff.Clear()
         self.buff.dc.DrawText(self.text,
                               int((self.buff.width-self.width)/2.0),
                               int((self.buff.height-self.height)/2.0))
+        self.SyncBuffer()
         return
     def DrawGL(self,pos,text=None,center=False):
         if text is not None:
-            self.Draw(text)
-        tex_coords = [ [0.0, 1.0],
-                       [0.0, 0.0],
-                       [1.0, 0.0],
-                       [1.0, 1.0] ]
+            self.DrawDC(text)
         ctr = 0.5 if center else 1.0
         offsets = [ [0,                   0,                    0],
                     [0,                   ctr*self.buff.height, 0],
@@ -66,7 +87,7 @@ class glsGLText():
         self.buff.BindTexture()
         glColor4fv(self.color)
         glBegin(GL_QUADS)
-        for off,coord in zip(offsets,tex_coords):
+        for off,coord in zip(offsets,self.tex_coords):
             glTexCoord2fv(coord);
             glVertex3fv(pos+off)
         glEnd()
