@@ -22,9 +22,15 @@ class fdpGraph():
     edges = {}
     nlist = []
     nndxs = {}
+    np_nodes = np.ndarray((0,3),dtype=np.single)
+    np_edges = np.ndarray((0,2),dtype=np.intc)
     def __init__(self):
         self.nodes = {}
         self.edges = {}
+        self.nlist = []
+        self.nndxs = {}
+        self.np_nodes = np.ndarray((0,3),dtype=np.single)
+        self.np_edges = np.ndarray((0,2),dtype=np.intc)
         return
     def __contains__(self, key):
         if isinstance(key, tuple):
@@ -44,70 +50,23 @@ class fdpGraph():
             self.nodes[node.id] = node
             self.nndxs[node.id] = len(self.nlist)
             self.nlist.append(node)
+            self.np_nodes = np.vstack( (self.np_nodes,node.pos) )
         return
     def add_edge(self,edge):
         for n in edge:
             self.add_node(n)
         if edge not in self:
             self.edges[(edge[0].id,edge[1].id)] = edge
-        return
-    def compute_forces(self):
-        for k in self.nodes:
-            n = self.nodes[k]
-            n.pos[2] = 0
-        # Anti-gravity force between node pairs.
-        for ai in range(len(self.nodes)):
-            for bi in range(ai+1,len(self.nodes)):
-                a = self.nlist[ai]
-                b = self.nlist[bi]
-                v = np.subtract(b.pos,a.pos)
-                d = np.linalg.norm(v)
-                f = 0.1 * (v / (d*d))
-                #f = (v / (d*d))
-                #if ai == bi-1:
-                #    print("n:",v,d,f)
-                a.frc -= f
-                b.frc += f
-        # Spring force for edges.
-        for k0,k1 in self.edges:
-            a = self.nodes[k0]
-            b = self.nodes[k1]
-            v = np.subtract(b.pos,a.pos)
-            d = np.linalg.norm(v)
-            f = 0.1 * (v * d)
-            a.frc += f
-            b.frc -= f
-            #print("e:",f)
-        return
-    def apply_forces(self,speed=0.1):
-        for n in self.nodes:
-            node = self.nodes[n]
-            node.pos += speed * node.frc
-            node.frc *= 0
-        return
-    def tick(self,speed=0.1):
-        self.compute_forces()
-        self.apply_forces(speed)
+            self.np_edges = np.vstack( (self.np_edges,
+                                        (self.nndxs[edge[0].id],self.nndxs[edge[1].id])) )
         return
     def set_np_nodes(self,np_nodes):
-        if np_nodes.shape[0] != len(self.nodes):
-            raise Exception("Process: Node count missmatch!")
-        for i,n in enumerate(self.nodes):
-            self.nodes[n].pos = np_nodes[i]
-        return np_nodes
+        self.np_nodes = np_nodes
+        return
     def get_np_nodes(self):
-        np_nodes = np.ndarray((len(self.nodes),3),
-                              dtype=np.single)
-        for i,n in enumerate(self.nlist):
-            np_nodes[i] = n.pos
-        return np_nodes
+        return self.np_nodes
     def get_np_edges(self):
-        np_edges = np.ndarray((len(self.edges),2),
-                              dtype=np.intc)
-        for i,e in enumerate(self.edges):
-            np_edges[i][0] = self.nndxs[e[0]]
-            np_edges[i][1] = self.nndxs[e[1]]
-        return np_edges
+        return self.np_edges
 
 ################################################################
     
@@ -117,6 +76,9 @@ class glsFDPProcess(Process):
     speed = 0.1
     nice  = 0
     steps = 10
+    nodes = None
+    edges = None
+    done  = False
     def __init__(self, in_q, out_q, speed, steps=10, nice=1):
         Process.__init__(self)
         self.in_q  = in_q
@@ -124,6 +86,8 @@ class glsFDPProcess(Process):
         self.nice  = nice
         self.speed = speed
         self.steps = steps
+        self.nodes = None
+        self.edges = None
         self.done  = False
         return
     def run(self):
@@ -131,36 +95,37 @@ class glsFDPProcess(Process):
             cmd, nodes, edges = self.in_q.get()
             if cmd == "stop":
                 break
+            if nodes is not None:
+                self.nodes = np.array(nodes)
+            if edges is not None:
+                self.edges = np.array(edges)
+            nodes = self.nodes
+            edges = self.edges
             start = datetime.datetime.now()
             for step in range(self.steps):
                 # See: https://sparrow.dev/pairwise-distance-in-numpy/
-                #vectors = nodes[:,None,:] - nodes[None,:,:]
-                #distances = np.linalg.norm(vectors, axis=-1)
-                #dist2 = np.square(distances)
-                forces = np.zeros_like(nodes)
-                for ai in range(nodes.shape[0]):
-                    for bi in range(ai+1,nodes.shape[0]):
-                        v = np.subtract(nodes[bi],nodes[ai])
-                        d = np.linalg.norm(v)
-                        f = 0.1 * (v / np.square(d))
-                        #v = vectors[ai][bi]
-                        #d = np.linalg.norm(v)
-                        #f = 0.1 * (v / dist2[ai][bi])
-                        forces[ai] -= f
-                        forces[bi] += f
+                vectors = nodes[:,None,:] - nodes[None,:,:]
+                dists = np.linalg.norm(vectors, axis=-1)
+                dists2 = np.square(dists)[:,:,np.newaxis]
+                forces = np.divide(np.transpose(vectors*0.1,axes=(1,0,2)),
+                                   dists2,
+                                   out=np.zeros_like(vectors), where=dists2!=0)
+                aforces = np.zeros_like(nodes)
+                for i in range(nodes.shape[0]):
+                    aforces[:] -= np.sum(forces[i,:],axis=0)
+                    aforces[i] += np.sum(forces[:,i],axis=0)
                 for e in range(len(edges)):
                     ai = edges[e][0]
                     bi = edges[e][1]
                     v = np.subtract(nodes[bi],nodes[ai])
                     d = np.linalg.norm(v)
                     f = 0.1 * (v * d)
-                    forces[ai] += f
-                    forces[bi] -= f
-                nodes += forces * self.speed
-                #nodes = np.array(nodes)
+                    aforces[ai] += f
+                    aforces[bi] -= f
+                nodes += aforces * self.speed
                 time = datetime.datetime.now() - start
                 time = time.total_seconds()
-            self.out_q.put([nodes,time/self.steps])
+            self.out_q.put([np.array(nodes),time/self.steps])
             sleep(self.nice/1000.0)
         return
 
@@ -176,12 +141,14 @@ class glsFDPThread(Thread):
     proc  = False
     in_q  = None
     out_q = None
+    first = True
     def __init__(self, graph, speed, nice=1, proc=True):
         Thread.__init__(self)
         self.graph = graph
         self.speed = speed
         self.nice  = nice
         self.done  = False
+        self.first = True
         self.lock  = Lock()
         if proc:
             self.in_q  = Queue()
@@ -192,9 +159,13 @@ class glsFDPThread(Thread):
     def run(self):
         while(not self.done):
             if self.proc:
-                with self.lock:
-                    nodes = self.graph.get_np_nodes()
-                    edges = self.graph.get_np_edges()
+                if self.first:
+                    with self.lock:
+                        nodes = self.graph.get_np_nodes()
+                        edges = self.graph.get_np_edges()
+                else:
+                    nodes = None
+                    edges = None
                 self.in_q.put(["run",nodes,edges])
                 data = False
                 while(not data):

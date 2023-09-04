@@ -77,9 +77,9 @@ class glsGraphCanvas(GLCanvas):
         return
     def OnWheel(self,event):
         if event.GetWheelRotation() < 0:
-            self.zoom -= 1
+            self.zoom *= 0.9
         else:
-            self.zoom += 1
+            self.zoom *= 1.1
         return
     def AddProject(self,proj):
         self.project = proj
@@ -139,17 +139,18 @@ class glsGraphCanvas(GLCanvas):
                 # Draw edges.
                 glColor4fv(grn)
                 glBegin(GL_LINES)
-                for e in graph.edges:
+                for ei in range(graph.np_edges.shape[0]):
+                    e = graph.np_edges[ei]
                     for n in e:
-                        pos = np.array(graph.nodes[n].pos)
+                        pos = np.array(graph.np_nodes[n])
                         pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
                         pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
                         glVertex3fv(pos)
                 glEnd()
                 # Draw nodes.
-                for node in graph.nodes.values():
+                for ni,node in enumerate(graph.nlist):
                     glPushMatrix()
-                    pos = np.array(node.pos)
+                    pos = np.array(graph.np_nodes[ni])
                     pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
                     pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
                     glTranslatef(*pos)
@@ -157,17 +158,20 @@ class glsGraphCanvas(GLCanvas):
                         glColor4fv(red)
                         self.textbuff.SetColor([1,0,1,1])
                         size = 10.0
+                        label = True
                     else:
                         glColor4fv(blu)
                         self.textbuff.SetColor(ylw)
                         size = 8.0
+                        label = True if self.zoom >= 10 else False
                     glPointSize(size)
                     glBegin(GL_POINTS)
                     glVertex3fv([0,0,0])
                     glEnd()
                     glPopMatrix()
-                    pos[1] += 10
-                    self.textbuff.DrawGL(pos,text=node.name,center=True)
+                    if label is True:
+                        pos[1] += 10
+                        self.textbuff.DrawGL(pos,text=node.name,center=True)
         glPopMatrix()
         # Draw stats.
         glColor4fv([0,0,0,0.75])

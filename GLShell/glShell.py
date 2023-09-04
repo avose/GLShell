@@ -33,7 +33,7 @@ def PrintStringAsAscii(s):
 class glShell(wx.Frame):
     def __init__(self,app):
         self.app = app
-        wx.Frame.__init__(self, None, wx.ID_ANY, "TermEmulator Demo", \
+        wx.Frame.__init__(self, None, wx.ID_ANY, "glShell", \
                           size = (1366, 768))
         self.settings = glsSettings.glsSettings()
         self.settings.Load()
