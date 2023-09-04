@@ -1,7 +1,6 @@
 from multiprocessing import Process, Queue
 from threading import Thread, Lock
 from queue import Empty
-from copy import deepcopy
 from time import sleep
 import numpy as np
 import sys, math

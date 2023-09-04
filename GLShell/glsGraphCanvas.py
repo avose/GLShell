@@ -25,7 +25,7 @@ class glsGraphCanvas(GLCanvas):
     project    = None
     textbuff   = None
     textsizer  = None
-    fps        = 20
+    fps_max    = 100
     mouse_down = [False, False, False, False]
     mouse_pos  = np.array([0, 0],dtype=np.single)
     translate  = np.array([0, 0],dtype=np.single)
@@ -36,11 +36,12 @@ class glsGraphCanvas(GLCanvas):
     def __init__(self, parent, pos, size):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, pos=pos, size=size)
+        self.parent = parent
         self.textsizer = glsGLTextSizer()
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.Tick, self.timer)
-        self.timer.Start(int(1000.0/self.fps))
+        self.Bind(wx.EVT_TIMER, self.TickEvent, self.timer)
+        self.timer.StartOnce()
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
@@ -102,9 +103,17 @@ class glsGraphCanvas(GLCanvas):
         self.time_draw = datetime.datetime.now() - start
         self.time_draw = self.time_draw.total_seconds()
         return
-    def Tick(self,event):
+    def PushFrames(self):
+        start = datetime.datetime.now()
         if self.init:
             self.OnDraw()
+        self.time_draw = (datetime.datetime.now() - start).total_seconds()
+        next_draw = 1000.0/self.fps_max - self.time_draw
+        next_draw = 5 if next_draw <= 5 else int(next_draw)
+        wx.CallLater(next_draw, self.PushFrames)
+        return
+    def TickEvent(self,event):
+        self.PushFrames()
         return
     def OnDraw(self):
         # Clear buffer.
@@ -113,29 +122,6 @@ class glsGraphCanvas(GLCanvas):
         grn = [0.0, 1.0, 0.0 ,1.0]
         blu = [0.0, 0.0, 1.0 ,1.0]
         ylw = [1.0, 1.0, 0.0 ,1.0]
-        # Draw stats.
-        self.textbuff.SetColor(grn)
-        if self.project is not None and len(self.project.roots) > 0:
-            gthread = self.project.threads[0]
-            self.time_fdp = gthread.get_time()
-            if self.time_fdp == 0:
-                fps_fdp = 0
-            else:
-                fps_fdp = 1.0 / self.time_fdp
-        else:
-            fps_fdp = 0.0
-        fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
-        fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_fdp)
-        fps_ogl = 1.0 / self.time_draw
-        fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
-        fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_ogl)
-        fps_tot = 1.0 / (self.time_draw +
-                         self.time_fdp)
-        fps_tot = "FPS(tot): %.2f"%(fps_tot)
-        fps_pos = [0, self.Size[1]-3*self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_tot)
         self.textbuff.SetColor(ylw)
         # Apply zoom and rotation.
         glPushMatrix()
@@ -182,8 +168,38 @@ class glsGraphCanvas(GLCanvas):
                     glPopMatrix()
                     pos[1] += 10
                     self.textbuff.DrawGL(pos,text=node.name,center=True)
-        # Swap buffers to show the scene.
         glPopMatrix()
+        # Draw stats.
+        glColor4fv([0,0,0,0.75])
+        glBegin(GL_QUADS)
+        glVertex3fv([0,   self.Size[1]-3*self.textbuff.height, 0])
+        glVertex3fv([0,   self.Size[1],                        0])
+        glVertex3fv([140, self.Size[1],                        0])
+        glVertex3fv([140, self.Size[1]-3*self.textbuff.height, 0])
+        glEnd()
+        self.textbuff.SetColor(grn)
+        if self.project is not None and len(self.project.roots) > 0:
+            gthread = self.project.threads[0]
+            self.time_fdp = gthread.get_time()
+            if self.time_fdp == 0:
+                fps_fdp = 0
+            else:
+                fps_fdp = 1.0 / self.time_fdp
+        else:
+            fps_fdp = 0.0
+        fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
+        fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_fdp)
+        fps_ogl = 1.0 / self.time_draw
+        fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
+        fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_ogl)
+        fps_tot = 1.0 / (self.time_draw +
+                         self.time_fdp)
+        fps_tot = "FPS(tot): %.2f"%(fps_tot)
+        fps_pos = [0, self.Size[1]-3*self.textbuff.height, 0]
+        self.textbuff.DrawGL(fps_pos, text=fps_tot)
+        # Swap buffers to show the scene.
         self.SwapBuffers()
         return
     def InitGL(self):
