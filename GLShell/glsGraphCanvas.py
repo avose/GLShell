@@ -176,10 +176,10 @@ class glsGraphCanvas(GLCanvas):
         # Draw stats.
         glColor4fv([0,0,0,0.75])
         glBegin(GL_QUADS)
-        glVertex3fv([0,   self.Size[1]-3*self.textbuff.height, 0])
+        glVertex3fv([0,   self.Size[1]-2*self.textbuff.height, 0])
         glVertex3fv([0,   self.Size[1],                        0])
         glVertex3fv([140, self.Size[1],                        0])
-        glVertex3fv([140, self.Size[1]-3*self.textbuff.height, 0])
+        glVertex3fv([140, self.Size[1]-2*self.textbuff.height, 0])
         glEnd()
         self.textbuff.SetColor(grn)
         if self.project is not None and len(self.project.roots) > 0:
@@ -198,11 +198,6 @@ class glsGraphCanvas(GLCanvas):
         fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
         fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_ogl)
-        fps_tot = 1.0 / (self.time_draw +
-                         self.time_fdp)
-        fps_tot = "FPS(tot): %.2f"%(fps_tot)
-        fps_pos = [0, self.Size[1]-3*self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_tot)
         # Swap buffers to show the scene.
         self.SwapBuffers()
         return

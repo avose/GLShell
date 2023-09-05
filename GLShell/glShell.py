@@ -19,6 +19,7 @@ import glsProject as glsp
 import TermEmulator
 import glsSettings
 
+VERSION = "0.0.1"
 ID_TERMINAL = 1
 
 def PrintStringAsAscii(s):
@@ -33,7 +34,8 @@ def PrintStringAsAscii(s):
 class glShell(wx.Frame):
     def __init__(self,app):
         self.app = app
-        wx.Frame.__init__(self, None, wx.ID_ANY, "glShell", \
+        wx.Frame.__init__(self, None, wx.ID_ANY,
+                          "glShell - "+VERSION,
                           size = (1366, 768))
         self.settings = glsSettings.glsSettings()
         self.settings.Load()
