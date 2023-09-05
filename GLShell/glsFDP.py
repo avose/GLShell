@@ -106,20 +106,23 @@ class glsFDPProcess(Process):
                 # See: https://sparrow.dev/pairwise-distance-in-numpy/
                 vectors = nodes[:,None,:] - nodes[None,:,:]
                 dists = np.linalg.norm(vectors, axis=-1)
+                vectors *= 0.1
                 dists2 = np.square(dists)[:,:,np.newaxis]
-                forces = np.divide(np.transpose(vectors*0.1,axes=(1,0,2)),
+                forces = np.divide(np.transpose(vectors,axes=(1,0,2)),
                                    dists2,
-                                   out=np.zeros_like(vectors), where=dists2!=0)
+                                   out=np.zeros_like(vectors),
+                                   where=dists2!=0)
                 aforces = np.zeros_like(nodes)
-                for i in range(nodes.shape[0]):
-                    aforces[:] -= np.sum(forces[i,:],axis=0)
-                    aforces[i] += np.sum(forces[:,i],axis=0)
+                af_rows = np.sum(forces,axis=0)
+                af_cols = np.sum(forces,axis=1)
+                aforces += af_rows - af_cols
+                eforces = vectors[edges[:,1], edges[:,0]] * dists[edges[:,1], edges[:,0], np.newaxis]
+                #aforces[edges[:,0]] += eforces
+                #aforces[edges[:,1]] -= eforces
                 for e in range(len(edges)):
                     ai = edges[e][0]
                     bi = edges[e][1]
-                    v = np.subtract(nodes[bi],nodes[ai])
-                    d = np.linalg.norm(v)
-                    f = 0.1 * (v * d)
+                    f = eforces[e]
                     aforces[ai] += f
                     aforces[bi] -= f
                 nodes += aforces * self.speed
