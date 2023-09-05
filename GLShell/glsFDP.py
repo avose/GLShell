@@ -117,14 +117,9 @@ class glsFDPProcess(Process):
                 af_cols = np.sum(forces,axis=1)
                 aforces += af_rows - af_cols
                 eforces = vectors[edges[:,1], edges[:,0]] * dists[edges[:,1], edges[:,0], np.newaxis]
-                #aforces[edges[:,0]] += eforces
-                #aforces[edges[:,1]] -= eforces
                 for e in range(len(edges)):
-                    ai = edges[e][0]
-                    bi = edges[e][1]
-                    f = eforces[e]
-                    aforces[ai] += f
-                    aforces[bi] -= f
+                    aforces[edges[e,0]] += eforces[e]
+                    aforces[edges[e,1]] -= eforces[e]
                 nodes += aforces * self.speed
                 time = datetime.datetime.now() - start
                 time = time.total_seconds()
