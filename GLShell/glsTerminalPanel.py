@@ -21,11 +21,12 @@ def PrintStringAsAscii(s):
     return
 
 class glsTerminalPanel(wx.Window):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, close_handler):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTerminalPanel, self).__init__(parent,style=style)
         self.settings = settings
+        self.close_handler = close_handler
         # Bind events.
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -34,6 +35,9 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
+        self.timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.MonitorTerminal, self.timer)
+        self.timer.StartOnce()
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
         self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
@@ -71,12 +75,13 @@ class glsTerminalPanel(wx.Window):
         if self.pid == 0:
             # Child process.
             os.execl(self.path, *arglist)
-        print("Child PID: %d"%(self.pid))
         fcntl.ioctl(self.io, termios.TIOCSWINSZ,
                     struct.pack("hhhh", self.rows, self.cols, 0, 0))
         tcattrib = termios.tcgetattr(self.io)
         tcattrib[3] = tcattrib[3] & ~termios.ICANON
         termios.tcsetattr(self.io, termios.TCSAFLUSH, tcattrib)
+        self.notified_parent_closed = False
+        self.child_output_notifier_thread_done = False
         self.child_output_notifier_thread = threading.Thread(
             target = self.ChildOuputNotifier)
         self.output_wait = True
@@ -110,7 +115,7 @@ class glsTerminalPanel(wx.Window):
         if not self.ChildIsAlive():
             self.child_running = False
             wx.CallAfter(self.ReadProcessOutput)
-            self.Close()
+        self.child_output_notifier_thread_done = True
         return
     def ReadProcessOutput(self):
         output = bytes("",'utf8')
@@ -195,9 +200,23 @@ class glsTerminalPanel(wx.Window):
     def OnTermUnhandledEscSeq(self, escSeq):
         print("Unhandled escape sequence: [{}".format(escSeq))
         return
-    def OnClose(self, event):
+    def MonitorTerminal(self, event=None):
+        # Monitor the state of the child process and tell parent when closed.
+        if self.child_output_notifier_thread_done == True:
+            if self.child_output_notifier_thread is not None:
+                self.child_output_notifier_thread.join()
+                self.child_output_notifier_thread = None
+            if self.notified_parent_closed == False:
+                self.close_handler(self)
+                self.notified_parent_closed = True
+        else:
+            wx.CallLater(10, self.MonitorTerminal)
+        return
+    def OnClose(self, event=None):
         self.stop_output_notifier = True
         return
     def OnDestroy(self, event):
         self.stop_output_notifier = True
+        if self.child_output_notifier_thread is not None:
+            self.child_output_notifier_thread.join()
         return

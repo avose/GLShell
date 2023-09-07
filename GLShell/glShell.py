@@ -86,7 +86,8 @@ class glShell(wx.Frame):
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Toolbar box.
         box_tool = wx.BoxSizer(wx.HORIZONTAL)
-        self.bt_run = wx.Button(self, wx.ID_ANY, "Tool Bar Button")
+        self.bt_run = wx.Button(self, wx.ID_ANY, "New Terminal")
+        self.bt_run.Bind(wx.EVT_BUTTON, self.OnNewTerm)
         box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
         box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
         # Graph and Terminal side-by-side.
@@ -96,14 +97,42 @@ class glShell(wx.Frame):
         self.fdp_canvas = glsGraphCanvas.glsGraphCanvas(self.glpanel, pos=(0,0), size=(644,768))
         box_gr_trm.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
         # Terminal rendering.
-        self.term_panel = glsTerminalPanel(self, self.settings)
-        box_gr_trm.Add(self.term_panel, 1, wx.EXPAND | wx.ALL);
+        self.term_notebook = wx.Notebook(self)
+        self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
+        self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
+        box_gr_trm.Add(self.term_notebook, 1, wx.EXPAND | wx.ALL);
         box_main.Add(box_gr_trm, 0, wx.TOP | wx.BOTTOM, 0)
+        self.term_monitor_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.MonitorTerminals, self.term_monitor_timer)
+        self.term_monitor_timer.StartOnce()
+        self.term_close_pending = []
         # Finalize UI layout.
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def AddProject(self,proj):
+    def OnNewTerm(self, event):
+        # Create a new terminal and add the tab to the notebook.
+        terminal = glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm)
+        self.term_tabs.append(terminal)
+        self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
+        return
+    def MonitorTerminals(self, event=None):
+        # Check for closed terminals and clean up their tabs.
+        for terminal in self.term_close_pending:
+            for i,t in enumerate(self.term_tabs):
+                if terminal == t:
+                    self.term_notebook.DeletePage(i)
+                    self.term_notebook.SendSizeEvent()
+                    self.term_tabs.remove(self.term_tabs[i])
+            self.term_close_pending.remove(terminal)
+        wx.CallLater(10, self.MonitorTerminals)
+        return
+    def OnCloseTerm(self, terminal):
+        # Add tab to closed terminal list.
+        if terminal not in self.term_close_pending:
+            self.term_close_pending.append(terminal)
+        return
+    def AddProject(self, proj):
         self.project = proj;
         if self.fdp_canvas is not None:
             self.fdp_canvas.AddProject(self.project)

@@ -105,12 +105,6 @@ class TabGraph(wx.Panel):
     def Save(self):
         return
 
-class PageDynamic(wx.Panel):
-    def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        wx.StaticText(self, -1, "This is a Dynamic object", (60, 60))
-        return
-
 class SettingsFrame(wx.Frame):
     def __init__(self, parent, settings,
                  size=(520, 240), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
@@ -165,8 +159,4 @@ class SettingsFrame(wx.Frame):
     def OnClose(self, event):
         self.parent.settings_frame = None
         self.Destroy()
-        return
-    def dynamic_tab(self, event):
-        dynamic_page = PageDynamic(self.nb)
-        self.nb.AddPage(dynamic_page, "Page Dynamic")
         return
