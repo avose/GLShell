@@ -67,7 +67,7 @@ class glShell(wx.Frame):
         self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.settings_frame = None
         return
-    def MenuHandler(self,event):
+    def MenuHandler(self, event):
         id = event.GetId() 
         if id == wx.ID_EXIT:
             sys.exit()

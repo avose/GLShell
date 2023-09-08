@@ -61,6 +61,7 @@ class glsTerminalPanel(wx.Window):
         self.settings = settings
         self.close_handler = close_handler
         # Bind events.
+        self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_CHAR, self.OnChar)
@@ -175,6 +176,13 @@ class glsTerminalPanel(wx.Window):
             pass
         self.output_wait = True
         return
+    def MenuHandler(self, event):
+        id = event.GetId() 
+        if id == wx.ID_COPY:
+            self.Copy()
+        elif id == wx.ID_PASTE:
+            self.Paste()
+        return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
             wx.TheClipboard.SetData(wx.TextDataObject(text))
@@ -188,13 +196,35 @@ class glsTerminalPanel(wx.Window):
         if success:
             return text_data.GetText()
         return None
-    def OnMiddleDown(self, event):
+    def GetSelectedText(self):
+        if self.sel_start is not None and self.sel_end is not None and self.sel_start != self.sel_end:
+            text = ""
+            screen = self.terminal.GetRawScreen()
+            start = self.sel_start[0]*self.cols + self.sel_start[1]
+            end   = self.sel_end[0]*self.cols + self.sel_end[1]
+            if start > end:
+                start, end = end, start
+            for i in range(end-start):
+                i += start
+                text += screen[int(i/self.cols)][i%self.cols]
+            return text
+        return None
+    def Copy(self):
+        text = self.GetSelectedText()
+        if text is not None:
+            self.WriteClipboard(text)
+            return text
+        return None
+    def Paste(self):
         text = self.ReadClipboard()
         if text is None:
             return
         os.write(self.io, bytes(text,'utf-8'))
         self.Refresh()
         wx.YieldIfNeeded()
+        return
+    def OnMiddleDown(self, event):
+        self.Paste()
         return
     def OnLeftDown(self, event):
         self.left_down = True
@@ -211,21 +241,10 @@ class glsTerminalPanel(wx.Window):
         self.sel_end = ( max(min(int(pos[1]/self.char_h),self.rows),0),
                          max(min(int(pos[0]/self.char_w),self.cols),0) )
         if self.sel_start == self.sel_end:
-            # Deselect.
             self.sel_start = None
             self.sel_end = None
         else:
-            # Save selection.
-            screen = self.terminal.GetRawScreen()
-            text = ""
-            start = self.sel_start[0]*self.cols + self.sel_start[1]
-            end   = self.sel_end[0]*self.cols + self.sel_end[1]
-            if start > end:
-                start, end = end, start
-            for i in range(end-start):
-                i += start
-                text += screen[int(i/self.cols)][i%self.cols]
-            self.WriteClipboard(text)
+            self.selected = self.Copy()
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -302,9 +321,9 @@ class glsTerminalPanel(wx.Window):
                 text += screen[row][col]
             self.DrawText(dc, text, row, col_start)
         # Draw the cursor.
-        self.pen = wx.Pen((255,0,0))
+        self.pen = wx.Pen((255,0,0,128))
         dc.SetPen(self.pen)
-        self.brush = wx.Brush((0,0,0), style=wx.TRANSPARENT)
+        self.brush = wx.Brush((255,0,0,64))
         dc.SetBrush(self.brush)
         dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
                          self.char_w, self.char_h)
@@ -364,10 +383,17 @@ class glsTerminalPanel(wx.Window):
         return
     def OnTermUpdateLines(self):
         self.Refresh()
+        text = self.GetSelectedText()
+        if text != self.selected:
+            self.sel_start = None
+            self.sel_end = None
+            self.selected = None
         wx.YieldIfNeeded()
         return
     def OnTermUpdateCursorPos(self):
-        self.cursos_pos = self.terminal.GetCursorPos()
+        self.cursor_pos = self.terminal.GetCursorPos()
+        self.Refresh()
+        wx.YieldIfNeeded()
         return
     def OnTermUpdateWindowTitle(self, title):
         return
