@@ -68,8 +68,16 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
-        wx.CallLater(10, self.MonitorTerminal)       
+        self.Bind(wx.EVT_MOTION, self.OnMove)
+        self.left_down = False
+        self.sel_start = None
+        self.sel_end = None
+        self.selected = None
+        wx.CallLater(10, self.MonitorTerminal)
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
         self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
@@ -82,6 +90,7 @@ class glsTerminalPanel(wx.Window):
         # Setup terminal emulator.
         self.rows = self.settings.term_rows
         self.cols = self.settings.term_cols
+        self.cursor_pos = (0,0)
         self.terminal = TermEmulator.V102Terminal(self.rows,
                                                   self.cols)
         self.terminal.SetCallback(self.terminal.CALLBACK_SCROLL_UP_SCREEN,
@@ -166,6 +175,68 @@ class glsTerminalPanel(wx.Window):
             pass
         self.output_wait = True
         return
+    def WriteClipboard(self, text):
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(text))
+            wx.TheClipboard.Close()
+        return
+    def ReadClipboard(self):
+        text_data = wx.TextDataObject()
+        if wx.TheClipboard.Open():
+            success = wx.TheClipboard.GetData(text_data)
+            wx.TheClipboard.Close()
+        if success:
+            return text_data.GetText()
+        return None
+    def OnMiddleDown(self, event):
+        text = self.ReadClipboard()
+        if text is None:
+            return
+        os.write(self.io, bytes(text,'utf-8'))
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
+    def OnLeftDown(self, event):
+        self.left_down = True
+        pos = event.GetPosition()
+        self.sel_start = ( max(min(int(pos[1]/self.char_h),self.rows),0),
+                           max(min(int(pos[0]/self.char_w),self.cols),0) )
+        self.sel_end = self.sel_start
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
+    def OnLeftUp(self, event):
+        self.left_down = False
+        pos = event.GetPosition()
+        self.sel_end = ( max(min(int(pos[1]/self.char_h),self.rows),0),
+                         max(min(int(pos[0]/self.char_w),self.cols),0) )
+        if self.sel_start == self.sel_end:
+            # Deselect.
+            self.sel_start = None
+            self.sel_end = None
+        else:
+            # Save selection.
+            screen = self.terminal.GetRawScreen()
+            text = ""
+            start = self.sel_start[0]*self.cols + self.sel_start[1]
+            end   = self.sel_end[0]*self.cols + self.sel_end[1]
+            if start > end:
+                start, end = end, start
+            for i in range(end-start):
+                i += start
+                text += screen[int(i/self.cols)][i%self.cols]
+            self.WriteClipboard(text)
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
+    def OnMove(self, event):
+        if self.left_down:
+            pos = event.GetPosition()
+            self.sel_end = ( max(min(int(pos[1]/self.char_h),self.rows),0),
+                             max(min(int(pos[0]/self.char_w),self.cols),0) )
+            self.Refresh()
+            wx.YieldIfNeeded()
+        return
     def OnRightDown(self, event):
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
         return
@@ -210,6 +281,7 @@ class glsTerminalPanel(wx.Window):
     def OnPaint(self, event):
         dc = wx.BufferedPaintDC(self)
         dc.Clear()
+        # Draw the screen text.
         screen = self.terminal.GetRawScreen()
         cur_style   = 0
         cur_fgcolor = 0
@@ -229,6 +301,33 @@ class glsTerminalPanel(wx.Window):
                     cur_bgcolor = self.SetTextBGColor(dc, cur_bgcolor, bgcolor)
                 text += screen[row][col]
             self.DrawText(dc, text, row, col_start)
+        # Draw the cursor.
+        self.pen = wx.Pen((255,0,0))
+        dc.SetPen(self.pen)
+        self.brush = wx.Brush((0,0,0), style=wx.TRANSPARENT)
+        dc.SetBrush(self.brush)
+        dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
+                         self.char_w, self.char_h)
+        # Draw the current selection.
+        if self.sel_start is not None and self.sel_end is not None:
+            self.pen = wx.Pen((0,0,0), style=wx.TRANSPARENT)
+            dc.SetPen(self.pen)
+            self.brush = wx.Brush((255,255,0,64))
+            dc.SetBrush(self.brush)
+            start = self.sel_start
+            end   = self.sel_end
+            if start[0]*self.cols+start[1] > end[0]*self.cols+end[1]:
+                start, end = end, start
+            cend = end[1] if start[0] == end[0] else self.cols
+            dc.DrawRectangle(start[1]*self.char_w, start[0]*self.char_h,
+                             (cend-start[1])*self.char_w, self.char_h)
+            for rmid in range(max(end[0]-start[0]-1,0)):
+                rmid += 1
+                dc.DrawRectangle(0, (start[0]+rmid)*self.char_h,
+                                 self.cols*self.char_w, self.char_h)
+            if end[0]-start[0] > 1:
+                dc.DrawRectangle(0, (end[0])*self.char_h,
+                                 end[1]*self.char_w, self.char_h)
         return
     def OnSize(self, event):
         self.rows = int(self.Size[1] / self.char_h)
@@ -268,7 +367,7 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnTermUpdateCursorPos(self):
-        row, col = self.terminal.GetCursorPos()
+        self.cursos_pos = self.terminal.GetCursorPos()
         return
     def OnTermUpdateWindowTitle(self, title):
         return
