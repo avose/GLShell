@@ -39,15 +39,13 @@ class glsGraphCanvas(GLCanvas):
         self.parent = parent
         self.textsizer = glsGLTextSizer()
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.TickEvent, self.timer)
-        self.timer.StartOnce()
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        wx.CallLater(10, self.PushFrames)
         return
     def OnLeftDown(self,event):
         self.mouse_pos = event.GetPosition()
@@ -111,9 +109,6 @@ class glsGraphCanvas(GLCanvas):
         next_draw = 1000.0/self.fps_max - self.time_draw
         next_draw = 5 if next_draw <= 5 else int(next_draw)
         wx.CallLater(next_draw, self.PushFrames)
-        return
-    def TickEvent(self,event):
-        self.PushFrames()
         return
     def OnDraw(self):
         # Clear buffer.

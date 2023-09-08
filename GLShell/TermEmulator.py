@@ -479,7 +479,8 @@ class V102Terminal:
                 if ch in self.printableChars:
                     self.__PushChar(ch)
                 else:
-                    print("WARNING: Unsupported character %s:%d" % (ch, ascii))
+                    #print("WARNING: Unsupported character %s:%d" % (ch, ascii))
+                    pass
                 index += 1
         
         # update the dirty lines
@@ -874,7 +875,8 @@ class V102Terminal:
                     # set default background color
                     self.curRendition &= 0xffff0fff
                 else:
-                    print("WARNING: Unsupported rendition %s" % irendition)
+                    #print("WARNING: Unsupported rendition %s" % irendition)
+                    pass
         else:
             # reset rendition
             self.curRendition = 0
