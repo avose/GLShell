@@ -35,7 +35,7 @@ class glsTermPanelPopupMenu(wx.Menu):
         return
 
 class glsTerminalPanel(wx.Window):
-    color_map_fg = ( ( 0,   255,   0),
+    color_map_fg = ( ( 192, 192, 192),
                      ( 0,   0,     0),
                      ( 255, 0,     0),
                      ( 0,   255,   0),
@@ -74,6 +74,8 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_MOTION, self.OnMove)
+        self.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
+        self.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
         self.left_down = False
         self.sel_start = None
         self.sel_end = None
@@ -81,7 +83,7 @@ class glsTerminalPanel(wx.Window):
         wx.CallLater(10, self.MonitorTerminal)
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
-        self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
+        self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
         self.font = wx.Font(self.fontinfo)
         dc = wx.MemoryDC()
         dc.SetFont(self.font)
@@ -176,6 +178,14 @@ class glsTerminalPanel(wx.Window):
             pass
         self.output_wait = True
         return
+    def OnSetFocus(self, event):
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
+    def OnKillFocus(self, event):
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
     def MenuHandler(self, event):
         id = event.GetId() 
         if id == wx.ID_COPY:
@@ -269,27 +279,27 @@ class glsTerminalPanel(wx.Window):
         return self.color_map_bg[0]
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
-            self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
+            self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
             if style & self.terminal.RENDITION_STYLE_UNDERLINE:
                 self.fontinfo = self.fontinfo.Underlined()
             if style & self.terminal.RENDITION_STYLE_BOLD:
                 self.fontinfo = self.fontinfo.Bold()
             if style & self.terminal.RENDITION_STYLE_INVERSE:
-                tcolor = bgcolor
-                bgcolor = fgcolor
-                fgcolor = tcolor
+                fgcolor, bgcolor = bgcolor, fgcolor
             self.font = wx.Font(self.fontinfo)
             dc.SetFont(self.font)
-            dc.SetTextForeground(self.GetFgColor(fgcolor))
+            dc.SetTextForeground(fgcolor)
             self.SetTextBGColor(dc, None, bgcolor)
         return style
     def SetTextFGColor(self, dc, cur_fgcolor, fgcolor):
         if cur_fgcolor != fgcolor:
-            dc.SetTextForeground(self.GetFgColor(fgcolor))
+            dc.SetTextForeground(fgcolor)
         return fgcolor
     def SetTextBGColor(self, dc, cur_bgcolor, bgcolor):
         if cur_bgcolor != bgcolor:
-            self.brush = wx.Brush(self.GetBgColor(bgcolor))
+            self.pen = wx.Pen(bgcolor)
+            dc.SetPen(self.pen)
+            self.brush = wx.Brush(bgcolor)
             dc.SetBrush(self.brush)
         return bgcolor
     def DrawText(self, dc, text, row, col):
@@ -303,14 +313,16 @@ class glsTerminalPanel(wx.Window):
         # Draw the screen text.
         screen = self.terminal.GetRawScreen()
         cur_style   = 0
-        cur_fgcolor = 0
-        cur_bgcolor = 0
+        cur_fgcolor = self.GetFgColor(0)
+        cur_bgcolor = self.GetBgColor(0)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
         for row in range(self.rows):
             col_start = 0
             text = ""
             for col in range(self.cols):
                 style, fgcolor, bgcolor = self.terminal.GetRendition(row, col)
+                fgcolor = self.GetFgColor(fgcolor)
+                bgcolor = self.GetBgColor(bgcolor)
                 if cur_style != style or cur_fgcolor != fgcolor or cur_bgcolor != bgcolor:
                     self.DrawText(dc, text, row, col_start)
                     col_start = col
@@ -323,7 +335,10 @@ class glsTerminalPanel(wx.Window):
         # Draw the cursor.
         self.pen = wx.Pen((255,0,0,128))
         dc.SetPen(self.pen)
-        self.brush = wx.Brush((255,0,0,64))
+        if self.HasFocus():
+            self.brush = wx.Brush((255,0,0,64))
+        else:
+            self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
         dc.SetBrush(self.brush)
         dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
                          self.char_w, self.char_h)

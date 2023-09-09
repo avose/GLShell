@@ -115,6 +115,7 @@ class glShell(wx.Frame):
         terminal = glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm)
         self.term_tabs.append(terminal)
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
+        self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
         return
     def MonitorTerminals(self, event=None):
         # Check for closed terminals and clean up their tabs.
