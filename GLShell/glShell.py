@@ -100,7 +100,7 @@ class glShell(wx.Frame):
         self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
         box_gr_trm.Add(self.term_notebook, 1, wx.EXPAND | wx.ALL)
-        box_main.Add(box_gr_trm, 0, wx.TOP | wx.BOTTOM, 0)
+        box_main.Add(box_gr_trm, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.term_monitor_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.MonitorTerminals, self.term_monitor_timer)
         self.term_monitor_timer.StartOnce()
