@@ -21,16 +21,20 @@ def PrintStringAsAscii(s):
     return
 
 class glsTermPanelPopupMenu(wx.Menu):
+    ID_NEW_TERM    = 1000
+    ID_SEARCH_TEXT = 1001
+    ID_SEARCH_FILE = 1002
     def __init__(self, parent):
         super(glsTermPanelPopupMenu, self).__init__()
-        self.parent = parent
-        item = wx.MenuItem(self, wx.ID_COPY,  'Copy')
+        item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
+        self.Append(item)
+        item = wx.MenuItem(self, wx.ID_COPY, 'Copy')
         self.Append(item)
         item = wx.MenuItem(self, wx.ID_PASTE, 'Paste')
         self.Append(item)
-        item = wx.MenuItem(self, wx.ID_ANY,   'Search Text')
+        item = wx.MenuItem(self, self.ID_SEARCH_TEXT, 'Search Text')
         self.Append(item)
-        item = wx.MenuItem(self, wx.ID_ANY,   'Search File')
+        item = wx.MenuItem(self, self.ID_SEARCH_FILE, 'Search File')
         self.Append(item)
         return
 
@@ -192,6 +196,8 @@ class glsTerminalPanel(wx.Window):
             self.Copy()
         elif id == wx.ID_PASTE:
             self.Paste()
+        elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
+            self.Parent.Parent.OnNewTerm(event)
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -240,6 +246,7 @@ class glsTerminalPanel(wx.Window):
         self.Paste()
         return
     def OnLeftDown(self, event):
+        self.SetFocus()
         self.left_down = True
         pos = event.GetPosition()
         self.sel_start = ( max(min(int(pos[1]/self.char_h),self.rows),0),
@@ -270,6 +277,7 @@ class glsTerminalPanel(wx.Window):
             wx.YieldIfNeeded()
         return
     def OnRightDown(self, event):
+        self.SetFocus()
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
         return
     def GetFgColor(self, color):
@@ -436,4 +444,65 @@ class glsTerminalPanel(wx.Window):
         self.stop_output_notifier = True
         if self.child_output_notifier_thread is not None:
             self.child_output_notifier_thread.join()
+        return
+
+################################################################
+
+class glsTermNotebook(wx.Window):
+    def __init__(self, parent, settings):
+        # Call super.
+        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        super(glsTermNotebook, self).__init__(parent,style=style)
+        self.settings = settings
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        self.term_notebook = wx.Notebook(self)
+        self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
+        self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
+        self.term_close_pending = []
+        wx.CallLater(10, self.MonitorTerminals)
+        box_main.Add(self.term_notebook, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
+        self.SetSizerAndFit(box_main)
+        self.Show(True)
+        return
+    def OnNewTerm(self, event):
+        # Create a new terminal and add the tab to the notebook.
+        terminal = glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm)
+        self.term_tabs.append(terminal)
+        self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
+        self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
+        return
+    def MonitorTerminals(self, event=None):
+        # Check for closed terminals and clean up their tabs.
+        for terminal in self.term_close_pending:
+            for i,t in enumerate(self.term_tabs):
+                if terminal == t:
+                    self.term_notebook.DeletePage(i)
+                    self.term_notebook.SendSizeEvent()
+                    self.term_tabs.remove(self.term_tabs[i])
+            self.term_close_pending.remove(terminal)
+        wx.CallLater(10, self.MonitorTerminals)
+        return
+    def OnCloseTerm(self, terminal):
+        # Add tab to closed terminal list.
+        if terminal not in self.term_close_pending:
+            self.term_close_pending.append(terminal)
+        return
+
+################################################################
+
+class glsTermsPanel(wx.Window):
+    def __init__(self, parent, settings):
+        # Call super.
+        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        super(glsTermsPanel, self).__init__(parent,style=style)
+        self.settings = settings
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
+        self.splitter.SetMinimumPaneSize(64)
+        self.notebooks = [ glsTermNotebook(self.splitter, self.settings),
+                           glsTermNotebook(self.splitter, self.settings) ]
+        self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
+        box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
+        self.SetSizerAndFit(box_main)
+        self.Show(True)
         return
