@@ -58,6 +58,10 @@ class glsTerminalPanel(wx.Window):
                      ( 0,   255, 255),
                      ( 255, 255, 255),
                      ( 255, 255, 255) )
+    shift_map = { ',':'<', '.':'>', '/':'?', ';':':', "'":'"', '[' :'{', ']':'}',
+                  '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
+                  '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
+                  '<':'<', '(':'(', ')':')' }
     def __init__(self, parent, settings, close_handler):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -85,6 +89,7 @@ class glsTerminalPanel(wx.Window):
         self.sel_end = None
         self.selected = None
         wx.CallLater(10, self.MonitorTerminal)
+        self.keys_down = {}
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
         self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
@@ -383,25 +388,62 @@ class glsTerminalPanel(wx.Window):
         struct.pack("hhhh", self.rows, self.cols, 0, 0))
         return
     def OnChar(self, event):
-        ascii = event.GetKeyCode()
-        keystrokes = None
-        if ascii < 256:
-             keystrokes = chr(ascii)
-        elif ascii == wx.WXK_UP:
-            keystrokes = "\033[A"
-        elif ascii == wx.WXK_DOWN:
-            keystrokes = "\033[B"
-        elif ascii == wx.WXK_RIGHT:
-            keystrokes = "\033[C"
-        elif ascii == wx.WXK_LEFT:
-            keystrokes = "\033[D"
-        if keystrokes != None:
-            os.write(self.io, bytes(keystrokes,'utf-8'))
         return
+    def KeyCodeToSequence(self, key):
+        seq = None
+        if key < 256:
+            ckey = chr(key)
+            if wx.WXK_ALT in self.keys_down:
+                seq = "\x1b"
+                if wx.WXK_SHIFT in self.keys_down:
+                    return seq + ckey
+                return seq + ckey.lower()
+            if wx.WXK_CONTROL in self.keys_down:
+                if key == wx.WXK_SPACE:
+                    return '\x00'
+                if wx.WXK_SHIFT in self.keys_down:
+                    if ckey >= 'A' and ckey <= 'Z':
+                        print('sending',chr(key))
+                        return chr(ord(chr(key))-0x40)
+                    if ckey == '-':
+                        return '\x1f'
+                    if ckey == ',' or ckey == '.':
+                        return 
+                else:
+                    if ckey >= 'A' and ckey <= 'Z':
+                        return chr(ord(chr(key).lower())-0x60)
+            else:
+                if wx.WXK_SHIFT in self.keys_down:
+                    if ckey in self.shift_map:
+                        return self.shift_map[ckey]
+                    else:
+                        return ckey
+                else:
+                    return ckey.lower()
+        else:
+            if key == wx.WXK_UP:
+                return "\x1b[A"
+            if key == wx.WXK_DOWN:
+                return "\x1b[B"
+            if key == wx.WXK_RIGHT:
+                return "\x1b[C"
+            if key == wx.WXK_LEFT:
+                return "\x1b[D"
+            if key == wx.WXK_ESCAPE:
+                return "\x1b"
+        return seq
     def OnKeyDown(self, event):
+        key = event.GetKeyCode()
+        self.keys_down[key] = True
+        seq = self.KeyCodeToSequence(key)
+        if seq is not None:
+            os.write(self.io, bytes(seq,'utf-8'))
         event.Skip()
         return
     def OnKeyUp(self, event):
+        key = event.GetKeyCode()
+        if key in self.keys_down:
+            del self.keys_down[event.GetKeyCode()]
         event.Skip()
         return
     def OnTermScrollUpScreen(self):
