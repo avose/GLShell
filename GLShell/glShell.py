@@ -8,7 +8,7 @@ import wx
 from threading import Thread
 
 from glsTerminalPanel import glsTerminalPanel
-import glsGraphCanvas
+from glsGraphPanel import glsGraphPanel
 import glsProject as glsp
 import glsSettings
 
@@ -93,14 +93,13 @@ class glShell(wx.Frame):
         # Graph and Terminal side-by-side.
         box_gr_trm = wx.BoxSizer(wx.HORIZONTAL)
         # OpenGL FDP panel.
-        self.glpanel = wx.Panel(self, 0)
-        self.fdp_canvas = glsGraphCanvas.glsGraphCanvas(self.glpanel, pos=(0,0), size=(644,768))
-        box_gr_trm.Add(self.glpanel, 1, wx.EXPAND | wx.ALL);
+        self.graph_panel = glsGraphPanel(self, self.settings, self.OnCloseGraph)
+        box_gr_trm.Add(self.graph_panel, 1, wx.EXPAND | wx.ALL)
         # Terminal rendering.
         self.term_notebook = wx.Notebook(self)
         self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
-        box_gr_trm.Add(self.term_notebook, 1, wx.EXPAND | wx.ALL);
+        box_gr_trm.Add(self.term_notebook, 1, wx.EXPAND | wx.ALL)
         box_main.Add(box_gr_trm, 0, wx.TOP | wx.BOTTOM, 0)
         self.term_monitor_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.MonitorTerminals, self.term_monitor_timer)
@@ -133,10 +132,12 @@ class glShell(wx.Frame):
         if terminal not in self.term_close_pending:
             self.term_close_pending.append(terminal)
         return
+    def OnCloseGraph(self, graph):
+        return
     def AddProject(self, proj):
         self.project = proj;
-        if self.fdp_canvas is not None:
-            self.fdp_canvas.AddProject(self.project)
+        if self.graph_panel is not None:
+            self.graph_panel.AddProject(self.project)
         return
     def OnClose(self, event):
         for t in self.project.threads:

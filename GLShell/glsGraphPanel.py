@@ -47,23 +47,23 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         wx.CallLater(10, self.PushFrames)
         return
-    def OnLeftDown(self,event):
+    def OnLeftDown(self, event):
         self.mouse_pos = event.GetPosition()
         self.mouse_down[0] = True
         return
-    def OnLeftUp(self,event):
+    def OnLeftUp(self, event):
         self.OnMove(event)
         self.mouse_down[0] = False
         return
-    def OnRightDown(self,event):
+    def OnRightDown(self, event):
         self.mouse_pos = event.GetPosition()
         self.mouse_down[3] = True
         return
-    def OnRightUp(self,event):
+    def OnRightUp(self, event):
         self.OnMove(event)
         self.mouse_down[3] = False
         return
-    def OnMove(self,event):
+    def OnMove(self, event):
         pos = event.GetPosition()
         if self.mouse_down[0]:
             self.translate += (-(self.mouse_pos[0] - pos[0]),
@@ -73,16 +73,16 @@ class glsGraphCanvas(GLCanvas):
                             (self.mouse_pos[1] - pos[1])*0.3)
         self.mouse_pos = pos
         return
-    def OnWheel(self,event):
+    def OnWheel(self, event):
         if event.GetWheelRotation() < 0:
             self.zoom *= 0.9
         else:
             self.zoom *= 1.1
         return
-    def AddProject(self,proj):
+    def AddProject(self, proj):
         self.project = proj
         return
-    def OnPaint(self,event):
+    def OnPaint(self, event):
         if not self.init:
             self.glctx = wx.glcanvas.GLContext(self)
             self.SetCurrent(self.glctx)
@@ -223,4 +223,19 @@ class glsGraphCanvas(GLCanvas):
         self.quadratic = gluNewQuadric()
         gluQuadricNormals(self.quadratic, GLU_SMOOTH)
         gluQuadricTexture(self.quadratic, GL_TRUE)
+        return
+
+class glsGraphPanel(wx.Window):
+    def __init__(self, parent, settings, close_handler):
+        # Call super.
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        super(glsGraphPanel, self).__init__(parent,style=style)
+        self.graph_canvas = glsGraphCanvas(self, pos=(0,0), size=(644,768))
+        box_main.Add(self.graph_canvas, 0, wx.ALIGN_LEFT | wx.ALL, 0)
+        self.SetSizerAndFit(box_main)
+        self.Show(True)
+        return
+    def AddProject(self, proj):
+        self.graph_canvas.AddProject(proj)
         return
