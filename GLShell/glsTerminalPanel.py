@@ -214,9 +214,12 @@ class glsTerminalPanel(wx.Window):
             end   = self.sel_end[0]*self.cols + self.sel_end[1]
             if start > end:
                 start, end = end, start
-            for i in range(end-start):
-                i += start
-                text += screen[int(i/self.cols)][i%self.cols]
+            for i in range(start, end):
+                row = int(i/self.cols)
+                col = i%self.cols
+                text += screen[row][col]
+                if col == self.cols-1:
+                    text += '\n'
             return text
         return None
     def Copy(self):
@@ -355,11 +358,10 @@ class glsTerminalPanel(wx.Window):
             cend = end[1] if start[0] == end[0] else self.cols
             dc.DrawRectangle(start[1]*self.char_w, start[0]*self.char_h,
                              (cend-start[1])*self.char_w, self.char_h)
-            for rmid in range(max(end[0]-start[0]-1,0)):
-                rmid += 1
+            for rmid in range(1,max(end[0]-start[0],0)):
                 dc.DrawRectangle(0, (start[0]+rmid)*self.char_h,
                                  self.cols*self.char_w, self.char_h)
-            if end[0]-start[0] > 1:
+            if end[0]-start[0] > 0:
                 dc.DrawRectangle(0, (end[0])*self.char_h,
                                  end[1]*self.char_w, self.char_h)
         return
@@ -399,7 +401,7 @@ class glsTerminalPanel(wx.Window):
     def OnTermUpdateLines(self):
         self.Refresh()
         text = self.GetSelectedText()
-        if text != self.selected:
+        if text != self.selected and self.left_down == False:
             self.sel_start = None
             self.sel_end = None
             self.selected = None
