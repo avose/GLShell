@@ -91,21 +91,21 @@ class glShell(wx.Frame):
         box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
         box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
         # Graph and Terminal side-by-side.
-        box_gr_trm = wx.BoxSizer(wx.HORIZONTAL)
+        self.splitter = wx.SplitterWindow(self, -1)
+        self.splitter.SetMinimumPaneSize(320)
         # OpenGL FDP panel.
-        self.graph_panel = glsGraphPanel(self, self.settings, self.OnCloseGraph)
-        box_gr_trm.Add(self.graph_panel, 1, wx.EXPAND | wx.ALL)
+        self.graph_panel = glsGraphPanel(self.splitter, self.settings, self.OnCloseGraph)
         # Terminal rendering.
-        self.term_notebook = wx.Notebook(self)
+        self.term_notebook = wx.Notebook(self.splitter)
         self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
-        box_gr_trm.Add(self.term_notebook, 1, wx.EXPAND | wx.ALL)
-        box_main.Add(box_gr_trm, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.term_monitor_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.MonitorTerminals, self.term_monitor_timer)
         self.term_monitor_timer.StartOnce()
         self.term_close_pending = []
         # Finalize UI layout.
+        box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
+        self.splitter.SplitVertically(self.graph_panel, self.term_notebook)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return

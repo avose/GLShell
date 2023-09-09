@@ -247,9 +247,9 @@ class glsGraphPanel(wx.Window):
         box_main = wx.BoxSizer(wx.VERTICAL)
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsGraphPanel, self).__init__(parent,style=style)
-        self.SetMinSize((4800,480))
+        self.SetMinSize((320,320))
         self.SetBackgroundColour((255,0,0))
-        self.graph_canvas = glsGraphCanvas(self, size=(480,480))
+        self.graph_canvas = glsGraphCanvas(self, size=(320,320))
         box_main.Add(self.graph_canvas, 1, wx.ALIGN_LEFT | wx.ALL | wx.EXPAND, 0)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.SetSizerAndFit(box_main)
