@@ -51,6 +51,10 @@ class V102Terminal:
     __ASCII_SPACE = 32      # Space
     __ASCII_CSI = 153       # Control Sequence Introducer
 
+    __ESCSEQ_ICH_SL = '@'   # [n] [ ] @: Without space: insert n blank characters,
+                            # default 1. With space: Shift left n columns(s),
+                            # default 1.
+    
     __ESCSEQ_CUU = 'A'      # n A: Moves the cursor up n(default 1) times.
     __ESCSEQ_CUD = 'B'      # n B: Moves the cursor down n(default 1) times.
     __ESCSEQ_CUF = 'C'      # n C: Moves the cursor forward n(default 1) times.
@@ -100,22 +104,23 @@ class V102Terminal:
                             # limit effect of scrolling to specified range of lines.
 
     # vt102 modes.
-    __MODE_KAM     = '2'    # Keyboard action
-    __MODE_IRM     = '4'    # Insert-replace
-    __MODE_SRM     = '12'   # Send-receive
-    __MODE_LMN     = '20'   # Linefeed / new line
-    __MODE_DECCKM  = '?1'   # Cursor key
-    __MODE_DECANM  = '?2'   # ANSI / VT52
-    __MODE_DECCOLM = '?3'   # Column
-    __MODE_DECSCLM = '?4'   # Scrolling
-    __MODE_DECSCNM = '?5'   # Screen
-    __MODE_DECOM   = '?6'   # Origin
-    __MODE_DECAWM  = '?7'   # Auto wrap
-    __MODE_DECARM  = '?8'   # Auto repeat
-    __MODE_DECPFF  = '?18'  # Print form feed
-    __MODE_DECPEX  = '?19'  # Print extent
+    MODE_KAM     = '2'    # Keyboard action
+    MODE_IRM     = '4'    # Insert-replace
+    MODE_SRM     = '12'   # Send-receive
+    MODE_LMN     = '20'   # Linefeed / new line
+    MODE_DECCKM  = '?1'   # Cursor key
+    MODE_DECANM  = '?2'   # ANSI / VT52
+    MODE_DECCOLM = '?3'   # Column
+    MODE_DECSCLM = '?4'   # Scrolling
+    MODE_DECSCNM = '?5'   # Screen
+    MODE_DECOM   = '?6'   # Origin
+    MODE_DECAWM  = '?7'   # Auto wrap
+    MODE_DECARM  = '?8'   # Auto repeat
+    MODE_DECPFF  = '?18'  # Print form feed
+    MODE_DECPEX  = '?19'  # Print extent
     # xterm modes.
-    __MODE_BRCKPST = '?2004'# Bracketed paste mode
+    MODE_DECTCEM = '?25'  # Show cursor
+    MODE_BRCKPST = '?2004'# Bracketed paste mode
 
     RENDITION_STYLE_BOLD = 1
     RENDITION_STYLE_DIM = 2
@@ -126,11 +131,12 @@ class V102Terminal:
     RENDITION_STYLE_INVERSE = 64
     RENDITION_STYLE_HIDDEN = 128
 
+    CALLBACK_UNHANDLED_ESC_SEQ = 0
     CALLBACK_SCROLL_UP_SCREEN = 1
     CALLBACK_UPDATE_LINES = 2
     CALLBACK_UPDATE_CURSOR_POS = 3
     CALLBACK_UPDATE_WINDOW_TITLE = 4
-    CALLBACK_UNHANDLED_ESC_SEQ = 5
+    CALLBACK_MODE_CHANGE = 5
 
     def __init__(self, rows, cols):
         """
@@ -161,7 +167,8 @@ class V102Terminal:
                               self.__ASCII_CSI :self.__OnCharCSI, }
 
         # escape sequence handlers
-        self.escSeqHandlers = { self.__ESCSEQ_CUU    :self.__OnEscSeqCUU,
+        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL :self.__OnEscSeqICH_SL,
+                                self.__ESCSEQ_CUU    :self.__OnEscSeqCUU,
                                 self.__ESCSEQ_CUD    :self.__OnEscSeqCUD,
                                 self.__ESCSEQ_CUF    :self.__OnEscSeqCUF,
                                 self.__ESCSEQ_CUB    :self.__OnEscSeqCUB,
@@ -176,21 +183,8 @@ class V102Terminal:
                                 self.__ESCSEQ_SCRL_RG:self.__OnEscSeqSCRL_RG}
 
         # terminal modes.
-        self.modes = { self.__MODE_KAM:    False,
-                       self.__MODE_IRM:    False,
-                       self.__MODE_SRM:    False,
-                       self.__MODE_LMN:    False,
-                       self.__MODE_DECCKM: False,
-                       self.__MODE_DECANM: False,
-                       self.__MODE_DECCOLM:False,
-                       self.__MODE_DECSCLM:False,
-                       self.__MODE_DECSCNM:False,
-                       self.__MODE_DECOM:  False,
-                       self.__MODE_DECAWM: False,
-                       self.__MODE_DECARM: False,
-                       self.__MODE_DECPFF: False,
-                       self.__MODE_DECPEX: False,
-                       self.__MODE_BRCKPST:False, }
+        self.modes = { self.MODE_DECTCEM:True,
+                       self.MODE_BRCKPST:False, }
 
         # defines the printable characters, only these characters are printed
         # on the terminal
@@ -230,13 +224,12 @@ class V102Terminal:
             self.isLineDirty.append(False)
 
         # initializes callbacks
-        self.callbacks = {
-                          self.CALLBACK_SCROLL_UP_SCREEN: None,
-                          self.CALLBACK_UPDATE_LINES: None,
-                          self.CALLBACK_UPDATE_CURSOR_POS: None,
-                          self.CALLBACK_UNHANDLED_ESC_SEQ: None,
-                          self.CALLBACK_UPDATE_WINDOW_TITLE: None,
-                         }
+        self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
+                           self.CALLBACK_UPDATE_LINES: None,
+                           self.CALLBACK_UPDATE_CURSOR_POS: None,
+                           self.CALLBACK_UNHANDLED_ESC_SEQ: None,
+                           self.CALLBACK_UPDATE_WINDOW_TITLE: None,
+                           self.CALLBACK_MODE_CHANGE: None, }
 
         # unparsed part of last input
         self.unparsedInput = None
@@ -475,6 +468,11 @@ class V102Terminal:
         any one of the following. None can be passed as callback function to
         reset the callback.
 
+        CALLBACK_UNHANDLED_ESC_SEQ
+            Called when ever a unsupported escape sequence encountered. The
+            unhandled escape sequence(escape sequence character and it
+            parameters) will be passed as a string.
+
         CALLBACK_SCROLL_UP_SCREEN
             Called before scrolling up the terminal screen.
 
@@ -491,10 +489,9 @@ class V102Terminal:
             Called when ever a window title escape sequence encountered. The
             terminal window title will be passed as a string.
 
-        CALLBACK_UNHANDLED_ESC_SEQ
-            Called when ever a unsupported escape sequence encountered. The
-            unhandled escape sequence(escape sequence character and it
-            parameters) will be passed as a string.
+        CALLBACK_MODE_CHANGE
+            Called whenever a terminal mode has changed. A dictionary of modes
+            and their settings (True/False) will be passed as an argument.
         """
         self.callbacks[event] = func
 
@@ -689,7 +686,7 @@ class V102Terminal:
         """
         Handler for horizontal tab character
         """
-        while True:
+        while self.curX + 1 < self.cols:
             self.curX += 1
             if self.curX % 8 == 0:
                 break
@@ -753,6 +750,26 @@ class V102Terminal:
         """
         if self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE] != None:
             self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE](params)
+
+    def __OnEscSeqICH_SL(self, params, end):
+        """
+        Handler for escape sequence ICH and SL
+        """
+        if ' ' in params:
+            # Escape sequence SL
+            plist = params.split(' ')
+            if len(plist) != 2:
+                if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
+                    self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+                return
+            count = int(plist[0]) if plist[0] != '' else 1
+            newX = self.curX + count
+            self.curX = newX if newX < self.cols else self.cols
+        else:
+            # Escape sequence ICH
+            count = int(params) if params != '' else 1
+            self.__PushChar(' ')
+        return
 
     def __OnEscSeqCUU(self, params, end):
         """
@@ -937,7 +954,8 @@ class V102Terminal:
 
     def __OnEscSeqSETCLRM(self, params, end):
         """
-        Handler for escape sequence SETM / CLRM
+        Handler for escape sequence SETM / CLRM.
+        Calls the mode change callback with the dictionary of modes.
         """
         if params == None:
             print("WARNING: SETM / CLRM without parameter")
@@ -946,19 +964,18 @@ class V102Terminal:
             print(params)
             if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
                 self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
-        else:
-            if end == 'h':
-                self.modes[params] = True
-            elif end == 'l':
-                self.modes[params] = False
-        # These modes, while set and cleared, are not actually supported.
-        if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-            self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            return
+        if end == 'h':
+            self.modes[params] = True
+        elif end == 'l':
+            self.modes[params] = False
+        if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
+            self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
         return
 
     def __OnEscSeqSCRL_RG(self, params, end):
         """
-        Handler for escape sequence SCRL_RG
+        Handler for escape sequence SCRL_RG.
         """
         if params == None:
             print("WARNING: SETM / CLRM without parameter")
@@ -978,6 +995,4 @@ class V102Terminal:
         self.scrollRegion = (row_start, row_end)
         self.curX = 0
         self.curY = 0
-        if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-            self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
         return

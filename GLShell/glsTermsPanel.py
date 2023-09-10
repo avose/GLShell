@@ -112,8 +112,11 @@ class glsTerminalPanel(wx.Window):
         self.rows = int((self.Size[1]-10) / self.char_h)
         self.cols = int((self.Size[0]-10) / self.char_w)
         self.cursor_pos = (0,0)
+        self.modes = {}
         self.terminal = TermEmulator.V102Terminal(self.rows,
                                                   self.cols)
+        self.terminal.SetCallback(self.terminal.CALLBACK_UNHANDLED_ESC_SEQ,
+                                  self.OnTermUnhandledEscSeq)
         self.terminal.SetCallback(self.terminal.CALLBACK_SCROLL_UP_SCREEN,
                                   self.OnTermScrollUpScreen)
         self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_LINES,
@@ -122,8 +125,8 @@ class glsTerminalPanel(wx.Window):
                                   self.OnTermUpdateCursorPos)
         self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_WINDOW_TITLE,
                                   self.OnTermUpdateWindowTitle)
-        self.terminal.SetCallback(self.terminal.CALLBACK_UNHANDLED_ESC_SEQ,
-                                  self.OnTermUnhandledEscSeq)
+        self.terminal.SetCallback(self.terminal.CALLBACK_MODE_CHANGE,
+                                  self.OnTermModeChange)
         # Start child process.
         self.path = self.settings.shell_path
         basename = os.path.basename(self.path)
@@ -260,6 +263,8 @@ class glsTerminalPanel(wx.Window):
         text = self.ReadClipboard()
         if text is None:
             return
+        if self.terminal.MODE_BRCKPST in self.modes and self.modes[self.terminal.MODE_BRCKPST]:
+            text = '\x1b[200~' + text + '\x1b[201~'
         os.write(self.io, bytes(text,'utf-8'))
         self.Refresh()
         wx.YieldIfNeeded()
@@ -425,15 +430,22 @@ class glsTerminalPanel(wx.Window):
             self.DrawText(dc, text, row, col_start)
         # Draw the cursor.
         if scroll == 0:
-            self.pen = wx.Pen((255,0,0,128))
-            dc.SetPen(self.pen)
-            if self.HasFocus():
-                self.brush = wx.Brush((255,0,0,64))
+            if self.terminal.MODE_DECTCEM in self.modes and self.modes[self.terminal.MODE_DECTCEM]:
+                self.pen = wx.Pen((255,0,0,128))
+                if self.HasFocus():
+                    self.brush = wx.Brush((255,0,0,64))
+                else:
+                    self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
             else:
-                self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
-        dc.SetBrush(self.brush)
-        dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
-                         self.char_w, self.char_h)
+                self.pen = wx.Pen((255,0,0,64))
+                if self.HasFocus():
+                    self.brush = wx.Brush((255,0,0,32))
+                else:
+                    self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
+            dc.SetPen(self.pen)
+            dc.SetBrush(self.brush)
+            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
+                             self.char_w, self.char_h)
         # Draw the current selection.
         if self.sel_start is not None and self.sel_end is not None:
             self.pen = wx.Pen((0,0,0), style=wx.TRANSPARENT)
@@ -568,6 +580,9 @@ class glsTerminalPanel(wx.Window):
                 break
             text += c
         self.callback_title(self, text)
+        return
+    def OnTermModeChange(self, modes):
+        self.modes = dict(modes)
         return
     def OnTermUnhandledEscSeq(self, escSeq):
         print("Unhandled escape sequence: [{}".format(escSeq))
