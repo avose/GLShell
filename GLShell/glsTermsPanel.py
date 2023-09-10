@@ -63,20 +63,14 @@ class glsTerminalPanel(wx.Window):
                   '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
                   '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
                   '<':'<', '(':'(', ')':')' }
-    def __init__(self, parent, settings, callback_close, callback_title):
+    def __init__(self, parent, settings, callback_close, callback_title, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTerminalPanel, self).__init__(parent,style=style)
+        self.SetMinSize(min_size)
         self.settings = settings
         self.callback_close = callback_close
         self.callback_title = callback_title
-        # Add scrollbar.
-        self.scrollbar = wx.ScrollBar(self, pos=(self.Size[0]-10,0),
-                                      size=(10,self.Size[1]), style=wx.SB_VERTICAL)
-        self.scrollbar.Bind(wx.EVT_SCROLL, self.OnScroll)
-        self.scrolled_text = []
-        self.scrolled_rendition = []
-        self.max_scroll_history = 10000
         # Bind events.
         self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -109,8 +103,8 @@ class glsTerminalPanel(wx.Window):
         self.char_w = w
         self.char_h = h
         # Setup terminal emulator.
-        self.rows = self.settings.term_rows
-        self.cols = self.settings.term_cols
+        self.rows = int((self.Size[1]-10) / self.char_h)
+        self.cols = int((self.Size[0]-10) / self.char_w)
         self.cursor_pos = (0,0)
         self.terminal = TermEmulator.V102Terminal(self.rows,
                                                   self.cols)
@@ -150,6 +144,15 @@ class glsTerminalPanel(wx.Window):
         self.stop_output_notifier = False
         self.child_output_notifier_thread.start()
         self.child_running = True
+        # Add scrollbar.
+        self.scrollbar = wx.ScrollBar(self, pos=(self.Size[0]-10,0),
+                                      size=(10,self.Size[1]), style=wx.SB_VERTICAL)
+        self.scrollbar.Bind(wx.EVT_SCROLL, self.OnScroll)
+        self.scrolled_text = []
+        self.scrolled_rendition = []
+        self.max_scroll_history = 10000
+        print('hello',self.Size)
+        self.UpdateScrollbar()
         return
     def ChildIsAlive(self):
         try:
@@ -333,7 +336,7 @@ class glsTerminalPanel(wx.Window):
     def OnPaint(self, event):
         dc = wx.BufferedPaintDC(self)
         dc.Clear()
-        scroll = self.scrollbar.GetThumbPosition()
+        scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
         # Draw the screen text.
         screen = self.terminal.GetRawScreen()
         rendition = self.terminal.GetRawScreenRendition()
@@ -349,10 +352,10 @@ class glsTerminalPanel(wx.Window):
         cur_fgcolor = self.GetFgColor(0)
         cur_bgcolor = self.GetBgColor(0)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
-        for row in range(self.rows):
+        for row in range(len(screen)):
             col_start = 0
             text = ""
-            for col in range(self.cols):
+            for col in range(min(len(screen[row]),self.cols)):
                 rend = rendition[row][col]
                 style = rend & 0x000000ff
                 fgcolor = (rend & 0x00000f00) >> 8
@@ -399,9 +402,10 @@ class glsTerminalPanel(wx.Window):
                 dc.DrawRectangle(0, (end[0])*self.char_h,
                                  end[1]*self.char_w, self.char_h)
         return
-    def UpdateScrollbar(self):
+    def UpdateScrollbar(self, new_lines=0):
         self.scrollbar.SetSize(self.Size[0]-10, 0, 10, self.Size[1])
-        self.scrollbar.SetScrollbar(0, self.rows, self.rows+len(self.scrolled_text),
+        self.scrollbar.SetScrollbar(self.scrollbar.GetThumbPosition()+new_lines, self.rows,
+                                    self.rows+len(self.scrolled_text),
                                     10, refresh=True)
         return
     def OnScroll(self, event):
@@ -409,9 +413,10 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnSize(self, event):
-        self.UpdateScrollbar()
         self.rows = int((self.Size[1]-10) / self.char_h)
         self.cols = int((self.Size[0]-10) / self.char_w)
+        self.UpdateScrollbar()
+        # Update terminal size.
         rows, cols = self.terminal.GetSize()
         if rows != self.rows or cols != self.cols:
             self.terminal.Resize(self.rows, self.cols)
@@ -488,7 +493,7 @@ class glsTerminalPanel(wx.Window):
             self.scrolled_rendition.pop(0)
         self.scrolled_text.append(text)
         self.scrolled_rendition.append(rend)
-        self.UpdateScrollbar()
+        self.UpdateScrollbar(new_lines=1)
         return
     def OnTermUpdateLines(self):
         self.Refresh()
@@ -534,15 +539,17 @@ class glsTerminalPanel(wx.Window):
 ################################################################
 
 class glsTermNotebook(wx.Window):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, min_term_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent,style=style)
         self.settings = settings
+        self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.term_notebook = wx.Notebook(self)
         self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings,
-                                            self.OnTermClose, self.OnTermTitle) ]
+                                            self.OnTermClose, self.OnTermTitle,
+                                            self.min_term_size) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
         self.term_close_pending = []
         wx.CallLater(10, self.MonitorTerminals)
@@ -553,7 +560,8 @@ class glsTermNotebook(wx.Window):
     def OnNewTerm(self, event):
         # Create a new terminal and add the tab to the notebook.
         terminal = glsTerminalPanel(self.term_notebook, self.settings,
-                                    self.OnTermClose, self.OnTermTitle)
+                                    self.OnTermClose, self.OnTermTitle,
+                                    self.min_term_size)
         self.term_tabs.append(terminal)
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
         self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
@@ -583,16 +591,16 @@ class glsTermNotebook(wx.Window):
 ################################################################
 
 class glsTermsPanel(wx.Window):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, min_term_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.settings = settings
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
-        self.splitter.SetMinimumPaneSize(64)
-        self.notebooks = [ glsTermNotebook(self.splitter, self.settings),
-                           glsTermNotebook(self.splitter, self.settings) ]
+        self.splitter.SetMinimumPaneSize(min_term_size[0])
+        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size),
+                           glsTermNotebook(self.splitter, self.settings, min_term_size), ]
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
