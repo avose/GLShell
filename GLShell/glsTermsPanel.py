@@ -62,12 +62,13 @@ class glsTerminalPanel(wx.Window):
                   '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
                   '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
                   '<':'<', '(':'(', ')':')' }
-    def __init__(self, parent, settings, close_handler):
+    def __init__(self, parent, settings, callback_close, callback_title):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTerminalPanel, self).__init__(parent,style=style)
         self.settings = settings
-        self.close_handler = close_handler
+        self.callback_close = callback_close
+        self.callback_title = callback_title
         # Bind events.
         self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -463,9 +464,10 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnTermUpdateWindowTitle(self, title):
+        self.callback_title(self, title)
         return
     def OnTermUnhandledEscSeq(self, escSeq):
-        #print("Unhandled escape sequence: [{}".format(escSeq))
+        print("Unhandled escape sequence: [{}".format(escSeq))
         return
     def MonitorTerminal(self):
         # Monitor the state of the child process and tell parent when closed.
@@ -474,7 +476,7 @@ class glsTerminalPanel(wx.Window):
                 self.child_output_notifier_thread.join()
                 self.child_output_notifier_thread = None
             if self.notified_parent_closed == False:
-                self.close_handler(self)
+                self.callback_close(self)
                 self.notified_parent_closed = True
         else:
             wx.CallLater(10, self.MonitorTerminal)
@@ -498,7 +500,8 @@ class glsTermNotebook(wx.Window):
         self.settings = settings
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.term_notebook = wx.Notebook(self)
-        self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm) ]
+        self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings,
+                                            self.OnTermClose, self.OnTermTitle) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
         self.term_close_pending = []
         wx.CallLater(10, self.MonitorTerminals)
@@ -508,7 +511,8 @@ class glsTermNotebook(wx.Window):
         return
     def OnNewTerm(self, event):
         # Create a new terminal and add the tab to the notebook.
-        terminal = glsTerminalPanel(self.term_notebook, self.settings, self.OnCloseTerm)
+        terminal = glsTerminalPanel(self.term_notebook, self.settings,
+                                    self.OnTermClose, self.OnTermTitle)
         self.term_tabs.append(terminal)
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
         self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
@@ -524,10 +528,15 @@ class glsTermNotebook(wx.Window):
             self.term_close_pending.remove(terminal)
         wx.CallLater(10, self.MonitorTerminals)
         return
-    def OnCloseTerm(self, terminal):
+    def OnTermClose(self, terminal):
         # Add tab to closed terminal list.
         if terminal not in self.term_close_pending:
             self.term_close_pending.append(terminal)
+        return
+    def OnTermTitle(self, terminal, title):
+        for i,t in enumerate(self.term_tabs):
+                if terminal == t:
+                    self.term_notebook.SetPageText(i, title)
         return
 
 ################################################################
