@@ -293,8 +293,12 @@ class glsTerminalPanel(wx.Window):
         return
     def OnLeftDouble(self, event):
         row, col = self.PointToCursor(event.GetPosition())
-        start = row*self.cols + col
         screen = self.terminal.GetRawScreen()
+        if screen[row][col] not in self.word_chars:
+            self.sel_start = None
+            self.sel_end = None
+            return
+        start = row*self.cols + col
         sel_start = row, col
         for i in reversed(range(0,start)):
             r = int(i/self.cols)
@@ -314,6 +318,11 @@ class glsTerminalPanel(wx.Window):
                 sel_end = r, c+1
         self.sel_end = sel_end
         self.dbl_click = True
+        if self.sel_start == self.sel_end:
+            self.sel_start = None
+            self.sel_end = None
+        else:
+            self.selected = self.Copy()
         self.Refresh()
         wx.YieldIfNeeded()
         return
