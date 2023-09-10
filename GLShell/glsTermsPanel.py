@@ -71,6 +71,7 @@ class glsTerminalPanel(wx.Window):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTerminalPanel, self).__init__(parent,style=style)
         self.SetMinSize(min_size)
+        self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
         self.settings = settings
         self.callback_close = callback_close
         self.callback_title = callback_title
@@ -132,7 +133,7 @@ class glsTerminalPanel(wx.Window):
             for arg in arguments.split(' '):
                 arglist.append(arg)
         self.pid, self.io = pty.fork()
-        os.environ["TERM"] = "vt100"
+        os.environ["TERM"] = self.settings.term_type
         if self.pid == 0:
             # Child process.
             os.execl(self.path, *arglist)
@@ -158,7 +159,7 @@ class glsTerminalPanel(wx.Window):
         self.max_scroll_history = 10000
         self.UpdateScrollbar()
         # Setup buffer for double-buffered rendering.
-        self.dc_buffer = wx.EmptyBitmap(*self.Size)
+        self.dc_buffer = wx.Bitmap(*self.Size)
         return
     def ChildIsAlive(self):
         try:
@@ -337,13 +338,19 @@ class glsTerminalPanel(wx.Window):
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
         return
     def GetFgColor(self, color):
-        if color < len(self.color_map_fg):
-            return self.color_map_fg[color]
-        return self.color_map_fg[0]
+        if self.settings.term_color:
+            if color == 0:
+                return self.settings.term_fgcolor
+            if color < len(self.color_map_fg):
+                return self.color_map_fg[color]
+        return self.settings.term_fgcolor
     def GetBgColor(self, color):
-        if color < len(self.color_map_bg):
-            return self.color_map_bg[color]
-        return self.color_map_bg[0]
+        if self.settings.term_color:
+            if color == 0:
+                return self.settings.term_bgcolor
+            if color < len(self.color_map_bg):
+                return self.color_map_bg[color]
+        return self.settings.term_bgcolor
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
             self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
@@ -474,7 +481,7 @@ class glsTerminalPanel(wx.Window):
         self.sel_start = None
         self.sel_end = None
         # Resize buffer for painting.
-        self.dc_buffer = wx.EmptyBitmap(*self.Size)
+        self.dc_buffer = wx.Bitmap(*self.Size)
         return
     def OnChar(self, event):
         return
@@ -555,7 +562,12 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnTermUpdateWindowTitle(self, title):
-        self.callback_title(self, title)
+        text = ""
+        for c in title:
+            if not c.isprintable():
+                break
+            text += c
+        self.callback_title(self, text)
         return
     def OnTermUnhandledEscSeq(self, escSeq):
         print("Unhandled escape sequence: [{}".format(escSeq))
@@ -628,9 +640,10 @@ class glsTermNotebook(wx.Window):
             self.term_close_pending.append(terminal)
         return
     def OnTermTitle(self, terminal, title):
-        for i,t in enumerate(self.term_tabs):
-                if terminal == t:
-                    self.term_notebook.SetPageText(i, title)
+        if len(title) > 0:
+            for i,t in enumerate(self.term_tabs):
+                    if terminal == t:
+                        self.term_notebook.SetPageText(i, title)
         return
 
 ################################################################
