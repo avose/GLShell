@@ -59,6 +59,7 @@ class glsTerminalPanel(wx.Window):
                      ( 0,   255, 255),
                      ( 255, 255, 255),
                      ( 255, 255, 255) )
+    word_chars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
     shift_key_map = { ',':'<', '.':'>', '/':'?', ';':':', "'":'"', '[' :'{', ']':'}',
                       '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
                       '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
@@ -84,11 +85,13 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDouble)
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
         self.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
+        self.dbl_click = False
         self.left_down = False
         self.sel_start = None
         self.sel_end = None
@@ -154,6 +157,8 @@ class glsTerminalPanel(wx.Window):
         self.scrolled_rendition = []
         self.max_scroll_history = 10000
         self.UpdateScrollbar()
+        # Setup buffer for double-buffered rendering.
+        self.dc_buffer = wx.EmptyBitmap(*self.Size)
         return
     def ChildIsAlive(self):
         try:
@@ -258,24 +263,26 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
+    def PointToCursor(self, point):
+        return ( max(min(int(point[1]/self.char_h),self.rows),0),
+                 max(min(int(point[0]/self.char_w),self.cols),0) )
     def OnMiddleDown(self, event):
         self.Paste()
         return
     def OnLeftDown(self, event):
         self.SetFocus()
         self.left_down = True
-        pos = event.GetPosition()
-        self.sel_start = ( max(min(int(pos[1]/self.char_h),self.rows),0),
-                           max(min(int(pos[0]/self.char_w),self.cols),0) )
+        self.sel_start = self.PointToCursor(event.GetPosition())
         self.sel_end = self.sel_start
         self.Refresh()
         wx.YieldIfNeeded()
         return
     def OnLeftUp(self, event):
         self.left_down = False
-        pos = event.GetPosition()
-        self.sel_end = ( max(min(int(pos[1]/self.char_h),self.rows),0),
-                         max(min(int(pos[0]/self.char_w),self.cols),0) )
+        if self.dbl_click == True:
+            self.dbl_click = False
+            return
+        self.sel_end = self.PointToCursor(event.GetPosition())
         if self.sel_start == self.sel_end:
             self.sel_start = None
             self.sel_end = None
@@ -284,11 +291,35 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
+    def OnLeftDouble(self, event):
+        row, col = self.PointToCursor(event.GetPosition())
+        start = row*self.cols + col
+        screen = self.terminal.GetRawScreen()
+        sel_start = row, col
+        for i in reversed(range(0,start)):
+            r = int(i/self.cols)
+            c = i%self.cols
+            if screen[r][c] not in self.word_chars:
+                break
+            else:
+                sel_start = r, c
+        self.sel_start = sel_start
+        sel_end = row, col+1
+        for i in range(start,self.rows*self.cols):
+            r = int(i/self.cols)
+            c = i%self.cols
+            if screen[r][c] not in self.word_chars:
+                break
+            else:
+                sel_end = r, c+1
+        self.sel_end = sel_end
+        self.dbl_click = True
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
     def OnMove(self, event):
         if self.left_down:
-            pos = event.GetPosition()
-            self.sel_end = ( max(min(int(pos[1]/self.char_h),self.rows),0),
-                             max(min(int(pos[0]/self.char_w),self.cols),0) )
+            self.sel_end = self.PointToCursor(event.GetPosition())
             self.Refresh()
             wx.YieldIfNeeded()
         return
@@ -335,8 +366,12 @@ class glsTerminalPanel(wx.Window):
         dc.DrawText(text, col*self.char_w, row*self.char_h)
         return
     def OnPaint(self, event):
-        dc = wx.BufferedPaintDC(self)
+        dc = wx.MemoryDC()
+        dc.SelectObject(self.dc_buffer)
         dc.Clear()
+        brush = wx.Brush((0,0,0))
+        dc.SetBrush(brush)
+        dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
         scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
         # Draw the screen text.
         screen = self.terminal.GetRawScreen()
@@ -402,6 +437,9 @@ class glsTerminalPanel(wx.Window):
             if end[0]-start[0] > 0:
                 dc.DrawRectangle(0, (end[0])*self.char_h,
                                  end[1]*self.char_w, self.char_h)
+        # Switch to the real window dc and draw the buffer.
+        del dc
+        dc = wx.BufferedPaintDC(self, self.dc_buffer)
         return
     def UpdateScrollbar(self, new_lines=0):
         self.scrollbar.SetSize(self.Size[0]-10, 0, 10, self.Size[1])
@@ -423,6 +461,11 @@ class glsTerminalPanel(wx.Window):
             self.terminal.Resize(self.rows, self.cols)
         fcntl.ioctl(self.io, termios.TIOCSWINSZ,
         struct.pack("hhhh", self.rows, self.cols, 0, 0))
+        # Deselect.
+        self.sel_start = None
+        self.sel_end = None
+        # Resize buffer for painting.
+        self.dc_buffer = wx.EmptyBitmap(*self.Size)
         return
     def OnChar(self, event):
         return
