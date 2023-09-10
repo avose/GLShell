@@ -59,10 +59,12 @@ class glsTerminalPanel(wx.Window):
                      ( 0,   255, 255),
                      ( 255, 255, 255),
                      ( 255, 255, 255) )
-    shift_map = { ',':'<', '.':'>', '/':'?', ';':':', "'":'"', '[' :'{', ']':'}',
-                  '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
-                  '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
-                  '<':'<', '(':'(', ')':')' }
+    shift_key_map = { ',':'<', '.':'>', '/':'?', ';':':', "'":'"', '[' :'{', ']':'}',
+                      '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
+                      '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
+                      '<':'<', '(':'(', ')':')' }
+    special_key_map = {wx.WXK_UP:"\x1b[A",   wx.WXK_DOWN:"\x1b[B", wx.WXK_RIGHT:"\x1b[C",
+                       wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~" }
     def __init__(self, parent, settings, callback_close, callback_title, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -449,23 +451,15 @@ class glsTerminalPanel(wx.Window):
                         return chr(ord(chr(key).lower())-0x60)
             else:
                 if wx.WXK_SHIFT in self.keys_down:
-                    if ckey in self.shift_map:
-                        return self.shift_map[ckey]
+                    if ckey in self.shift_key_map:
+                        return self.shift_key_map[ckey]
                     else:
                         return ckey
                 else:
                     return ckey.lower()
         else:
-            if key == wx.WXK_UP:
-                return "\x1b[A"
-            if key == wx.WXK_DOWN:
-                return "\x1b[B"
-            if key == wx.WXK_RIGHT:
-                return "\x1b[C"
-            if key == wx.WXK_LEFT:
-                return "\x1b[D"
-            if key == wx.WXK_ESCAPE:
-                return "\x1b"
+            if key in self.special_key_map:
+                return self.special_key_map[key]
         return seq
     def OnKeyDown(self, event):
         key = event.GetKeyCode()
