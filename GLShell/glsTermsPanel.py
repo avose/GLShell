@@ -585,7 +585,7 @@ class glsTerminalPanel(wx.Window):
         self.modes = dict(modes)
         return
     def OnTermUnhandledEscSeq(self, escSeq):
-        print("Unhandled escape sequence: [{}".format(escSeq))
+        #print("Unhandled escape sequence: [{}".format(escSeq))
         return
     def MonitorTerminal(self):
         # Monitor the state of the child process and tell parent when closed.

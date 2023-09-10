@@ -54,7 +54,7 @@ class V102Terminal:
     __ESCSEQ_ICH_SL = '@'   # [n] [ ] @: Without space: insert n blank characters,
                             # default 1. With space: Shift left n columns(s),
                             # default 1.
-    
+
     __ESCSEQ_CUU = 'A'      # n A: Moves the cursor up n(default 1) times.
     __ESCSEQ_CUD = 'B'      # n B: Moves the cursor down n(default 1) times.
     __ESCSEQ_CUF = 'C'      # n C: Moves the cursor forward n(default 1) times.
@@ -78,6 +78,12 @@ class V102Terminal:
                             # line. If n is one, clear from cursor to beginning of
                             # the line. If n is two, clear entire line. Cursor
                             # position does not change.
+
+    __ESCSEQ_IL = 'L'       # [n] L: Insert n blank lines, default 1.
+
+    __ESCSEQ_DL = 'M'       # [n] M: Delete n lines, default 1.
+
+    __ESCSEQ_DCH = 'P'      # [n] P: Delete n characters, default 1.
 
     __ESCSEQ_VPA = 'd'      # n d: Cursor vertical absolute position. 'n' denotes
                             # the line no(1 based index). Should retain the column
@@ -150,8 +156,8 @@ class V102Terminal:
         self.curX = 0
         self.curY = 0
         self.ignoreChars = False
-        self.scrollRegion = (None, None)
-        
+        self.scrollRegion = (0, self.rows-1)
+
         # special character handlers
         self.charHandlers = { self.__ASCII_NUL :self.__OnCharIgnore,
                               self.__ASCII_BEL :self.__OnCharIgnore,
@@ -176,6 +182,9 @@ class V102Terminal:
                                 self.__ESCSEQ_CUP    :self.__OnEscSeqCUP,
                                 self.__ESCSEQ_ED     :self.__OnEscSeqED,
                                 self.__ESCSEQ_EL     :self.__OnEscSeqEL,
+                                self.__ESCSEQ_IL     :self.__OnEscSeqIL,
+                                self.__ESCSEQ_DL     :self.__OnEscSeqDL,
+                                self.__ESCSEQ_DCH    :self.__OnEscSeqDCH,
                                 self.__ESCSEQ_VPA    :self.__OnEscSeqVPA,
                                 self.__ESCSEQ_SGR    :self.__OnEscSeqSGR,
                                 self.__ESCSEQ_SETM   :self.__OnEscSeqSETCLRM,
@@ -233,7 +242,7 @@ class V102Terminal:
 
         # unparsed part of last input
         self.unparsedInput = None
-
+        return
     def GetRawScreen(self):
         """
         Returns the screen as a list of strings. The list will have rows no. of
@@ -241,7 +250,6 @@ class V102Terminal:
         used represents no character.
         """
         return self.screen
-
     def GetRawScreenRendition(self):
         """
         Returns the screen as a list of array of long. The list will have rows
@@ -251,25 +259,21 @@ class V102Terminal:
         background color.
         """
         return self.scrRendition
-
     def GetRows(self):
         """
         Returns no. rows in the terminal
         """
         return self.rows
-
     def GetCols(self):
         """
         Returns no. cols in the terminal
         """
         return self.cols
-
     def GetSize(self):
         """
         Returns terminal rows and cols as tuple
         """
         return (self.rows, self.cols)
-
     def Resize(self, rows, cols):
         """
         Resizes the terminal to specified rows and cols.
@@ -288,23 +292,18 @@ class V102Terminal:
                 self.isLineDirty.pop(0)
                 self.screen.pop(0)
                 self.scrRendition.pop(0)
-
         elif rows > self.rows:
             # add blank rows at bottom
             for i in range(rows - self.rows):
                 line = array('u')
                 rendition = array('L')
-
                 for j in range(self.cols):
                     line.append(u' ')
                     rendition.append(0)
-
                 self.screen.append(line)
                 self.scrRendition.append(rendition)
                 self.isLineDirty.append(False)
-
         self.rows = rows
-
         if cols < self.cols:
             # remove cols at right
             for i in range(self.rows):
@@ -317,21 +316,19 @@ class V102Terminal:
                 for j in range(cols - self.cols):
                     self.screen[i].append(u' ')
                     self.scrRendition[i].append(0)
-
         self.cols = cols
-
+        return
     def GetCursorPos(self):
         """
         Returns cursor position as tuple
         """
         return (self.curY, self.curX)
-
     def Clear(self):
         """
         Clears the entire terminal screen
         """
         self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
-
+        return
     def ClearRect(self, startRow, startCol, endRow, endCol):
         """
         Clears the terminal screen starting from startRow and startCol to
@@ -341,44 +338,35 @@ class V102Terminal:
             startRow = 0
         elif startRow >= self.rows:
             startRow = self.rows - 1
-
         if startCol < 0:
             startCol = 0
         elif startCol >= self.cols:
             startCol = self.cols - 1
-
         if endRow < 0:
             endRow = 0
         elif endRow >= self.rows:
             endRow = self.rows - 1
-
         if endCol < 0:
             endCol = 0
         elif endCol >= self.cols:
             endCol = self.cols - 1
-
         if startRow > endRow:
             startRow, endRow = endRow, startRow
-
         if startCol > endCol:
             startCol, endCol = endCol, startCol
-
         for i in range(startRow, endRow + 1):
             start = 0
             end = self.cols - 1
-
             if i == startRow:
                 start = startCol
             elif i == endRow:
                 end = endCol
-
             for j in range(start, end + 1):
                 self.screen[i][j] = ' '
                 self.scrRendition[i][j] = 0
-
             if end + 1 > start:
                 self.isLineDirty[i] = True
-
+        return
     def GetChar(self, row, col):
         """
         Returns the character at the location specified by row and col. The
@@ -386,12 +374,9 @@ class V102Terminal:
         """
         if row < 0 or row >= self.rows:
             return None
-
         if col < 0 or col >= self.cols:
             return None
-
         return self.screen[row][col]
-
     def GetRendition(self, row, col):
         """
         Returns the screen rendition at the location specified by row and col.
@@ -401,16 +386,12 @@ class V102Terminal:
         """
         if row < 0 or row >= self.rows:
             return None
-
         if col < 0 or col >= self.cols:
             return None
-
         style = self.scrRendition[row][col] & 0x000000ff
         fgcolor = (self.scrRendition[row][col] & 0x00000f00) >> 8
         bgcolor = (self.scrRendition[row][col] & 0x0000f000) >> 12
-
         return (style, fgcolor, bgcolor)
-
     def GetLine(self, lineno):
         """
         Returns the terminal screen line specified by lineno. The line is
@@ -419,49 +400,37 @@ class V102Terminal:
         """
         if lineno < 0 or lineno >= self.rows:
             return None
-
         return self.screen[lineno].tostring()
-
     def GetLines(self):
         """
         Returns terminal screen lines as a list, same as GetScreen
         """
         lines = []
-
         for i in range(self.rows):
             lines.append(self.screen[i].tostring())
-
         return lines
-
     def GetLinesAsText(self):
         """
         Returns the entire terminal screen as a single big string. Each row
         is seperated by \\n and blank space represents empty character.
         """
         text = ""
-
         for i in range(self.rows):
             text += self.screen[i].tostring()
             text += '\n'
-
         text = text.rstrip("\n") # removes leading new lines
-
         return text
-
     def GetDirtyLines(self):
         """
         Returns list of dirty lines(line nos) since last call to GetDirtyLines.
         The line no will be 0..rows - 1.
         """
         dirtyLines = []
-
         for i in range(self.rows):
             if self.isLineDirty[i]:
                 dirtyLines.append(i)
                 self.isLineDirty[i] = False
-
         return dirtyLines
-
     def SetCallback(self, event, func):
         """
         Sets callback function for the specified event. The event should be
@@ -494,7 +463,7 @@ class V102Terminal:
             and their settings (True/False) will be passed as an argument.
         """
         self.callbacks[event] = func
-
+        return
     def ProcessInput(self, text):
         """
         Processes the given input text. It detects V100 escape sequences and
@@ -505,21 +474,17 @@ class V102Terminal:
         """
         if text == None:
             return
-
         if self.unparsedInput != None:
             text = self.unparsedInput + text
             self.unparsedInput = None
-
         textlen = len(text)
         index = 0
         while index < textlen:
             ch = text[index]
             ascii = ord(ch)
-
             if self.ignoreChars:
                 index += 1
                 continue
-
             if ascii in self.charHandlers.keys():
                 index = self.charHandlers[ascii](text, index)
             else:
@@ -529,43 +494,35 @@ class V102Terminal:
                     #print("WARNING: Unsupported character %s:%d" % (ch, ascii))
                     pass
                 index += 1
-
         # update the dirty lines
         if self.callbacks[self.CALLBACK_UPDATE_LINES] != None:
             self.callbacks[self.CALLBACK_UPDATE_LINES]()
-
         # update cursor position
         if self.callbacks[self.CALLBACK_UPDATE_CURSOR_POS] != None:
             self.callbacks[self.CALLBACK_UPDATE_CURSOR_POS]()
-
+        return
     def ScrollUp(self):
         """
         Scrolls up the terminal screen by one line. The callbacks
         CALLBACK_UPDATE_LINES and CALLBACK_SCROLL_UP_SCREEN are called before
         scrolling the screen.
         """
-        scroll_start = self.scrollRegion[0] if self.scrollRegion[0] != None else 0
-        scroll_end   = self.scrollRegion[1] if self.scrollRegion[1] != None else self.rows
-
-        if scroll_start == 0 and scroll_end == self.rows:
+        if self.scrollRegion[0] == 0 and self.scrollRegion[1] == self.rows-1:
             # update the dirty lines
             if self.callbacks[self.CALLBACK_UPDATE_LINES] != None:
                 self.callbacks[self.CALLBACK_UPDATE_LINES]()
-
             # scrolls up the screen
             if self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN] != None:
                 self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN]()
-
-        line = self.screen.pop(scroll_start)
+        line = self.screen.pop(self.scrollRegion[0])
         for i in range(self.cols):
             line[i] = u' '
-        self.screen.insert(scroll_end-1, line)
-
-        rendition = self.scrRendition.pop(scroll_start)
+        self.screen.insert(self.scrollRegion[1], line)
+        rendition = self.scrRendition.pop(self.scrollRegion[0])
         for i in range(self.cols):
             rendition[i] = 0
-        self.scrRendition.insert(scroll_end-1, rendition)
-
+        self.scrRendition.insert(self.scrollRegion[1], rendition)
+        return
     def Dump(self, file=sys.stdout):
         """
         Dumps the entire terminal screen into the given file/stdout
@@ -573,7 +530,7 @@ class V102Terminal:
         for i in range(self.rows):
             file.write(self.screen[i].tostring())
             file.write("\n")
-
+        return
     def __NewLine(self):
         """
         Moves the cursor to the next line, if the cursor is already at the
@@ -584,7 +541,7 @@ class V102Terminal:
             self.curY += 1
         else:
             self.ScrollUp()
-
+        return
     def __PushChar(self, ch):
         """
         Writes the character(ch) into current cursor position and advances
@@ -592,13 +549,11 @@ class V102Terminal:
         """
         if self.curX >= self.cols:
             self.__NewLine()
-
         self.screen[self.curY][self.curX] = ch
         self.scrRendition[self.curY][self.curX] = self.curRendition
         self.curX += 1
-
         self.isLineDirty[self.curY] = True
-
+        return
     def __ParseEscSeq(self, text, index):
         """
         Parses escape sequence from the input and returns the index after escape
@@ -610,7 +565,6 @@ class V102Terminal:
         while index < textlen:
             ch = text[index]
             ascii = ord(ch)
-
             if ascii >= 32 and ascii <= 63:
                 # intermediate char (32 - 47)
                 # parameter chars (48 - 63)
@@ -623,13 +577,10 @@ class V102Terminal:
                 return (index + 1, chr(ascii), interChars)
             else:
                 print("Unexpected characters in escape sequence %s" % ch)
-
             index += 1
-
         # the escape sequence is not complete, inform this to caller by giving
         # '?' as final char
         return (index, '?', interChars)
-
     def __HandleEscSeq(self, text, index):
         """
         Tries to parse escape sequence from input and if its not complete then
@@ -639,7 +590,6 @@ class V102Terminal:
         if text[index] == '[':
             index += 1
             index, finalChar, interChars = self.__ParseEscSeq(text, index)
-
             if finalChar == '?':
                 self.unparsedInput = "\033["
                 if interChars != None:
@@ -650,12 +600,9 @@ class V102Terminal:
                 escSeq = ""
                 if interChars != None:
                     escSeq += interChars
-
                 escSeq += finalChar
-
                 if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
                     self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](escSeq)
-
         elif text[index] == ']':
             textlen = len(text)
             if index + 2 < textlen:
@@ -666,22 +613,16 @@ class V102Terminal:
                     while index < textlen:
                         if ord(text[index]) == self.__ASCII_BEL:
                             break
-
                         index += 1
-
                     self.__OnEscSeqTitle(text[start:index])
-
         return index
-
     def __OnCharBS(self, text, index):
         """
         Handler for backspace character
         """
         if self.curX > 0:
             self.curX -= 1
-
         return index + 1
-
     def __OnCharHT(self, text, index):
         """
         Handler for horizontal tab character
@@ -691,35 +632,30 @@ class V102Terminal:
             if self.curX % 8 == 0:
                 break
         return index + 1
-
     def __OnCharLF(self, text, index):
         """
         Handler for line feed character
         """
         self.__NewLine()
         return index + 1
-
     def __OnCharCR(self, text, index):
         """
         Handler for carriage return character
         """
         self.curX = 0
         return index + 1
-
     def __OnCharXON(self, text, index):
         """
         Handler for XON character
         """
         self.ignoreChars = False
         return index + 1
-
     def __OnCharXOFF(self, text, index):
         """
         Handler for XOFF character
         """
         self.ignoreChars = True
         return index + 1
-
     def __OnCharESC(self, text, index):
         """
         Handler for escape character
@@ -727,9 +663,7 @@ class V102Terminal:
         index += 1
         if index < len(text):
             index = self.__HandleEscSeq(text, index)
-
         return index
-
     def __OnCharCSI(self, text, index):
         """
         Handler for control sequence intruducer(CSI) character
@@ -737,20 +671,18 @@ class V102Terminal:
         index += 1
         index = self.__HandleEscSeq(text, index)
         return index
-
     def __OnCharIgnore(self, text, index):
         """
         Dummy handler for unhandler characters
         """
         return index + 1
-
     def __OnEscSeqTitle(self, params):
         """
         Handler for window title escape sequence
         """
         if self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE] != None:
             self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE](params)
-
+        return
     def __OnEscSeqICH_SL(self, params, end):
         """
         Handler for escape sequence ICH and SL
@@ -770,7 +702,6 @@ class V102Terminal:
             count = int(params) if params != '' else 1
             self.__PushChar(' ')
         return
-
     def __OnEscSeqCUU(self, params, end):
         """
         Handler for escape sequence CUU
@@ -778,11 +709,10 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-
         self.curY -= n;
         if self.curY < 0:
             self.curY = 0
-
+        return
     def __OnEscSeqCUD(self, params, end):
         """
         Handler for escape sequence CUD
@@ -790,11 +720,10 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-
         self.curY += n;
         if self.curY >= self.rows:
             self.curY = self.rows - 1
-
+        return
     def __OnEscSeqCUF(self, params, end):
         """
         Handler for escape sequence CUF
@@ -802,11 +731,10 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-
         self.curX += n;
         if self.curX >= self.cols:
             self.curX = self.cols - 1
-
+        return
     def __OnEscSeqCUB(self, params, end):
         """
         Handler for escape sequence CUB
@@ -814,11 +742,10 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-
         self.curX -= n;
         if self.curX < 0:
             self.curX = 0
-
+        return
     def __OnEscSeqCHA(self, params, end):
         """
         Handler for escape sequence CHA
@@ -826,23 +753,20 @@ class V102Terminal:
         if params == None:
             print("WARNING: CHA without parameter")
             return
-
         col = int(params)
-
         # convert it to zero based index
         col -= 1
         if col >= 0 and col < self.cols:
             self.curX = col
         else:
             print("WARNING: CHA column out of boundary")
-
+        return
     def __OnEscSeqCUP(self, params, end):
         """
         Handler for escape sequence CUP
         """
         y = 0
         x = 0
-
         if params != None:
             values = params.split(';')
             if len(values) == 2:
@@ -851,20 +775,17 @@ class V102Terminal:
             else:
                 print("WARNING: escape sequence CUP has invalid parameters")
                 return
-
         if x < 0:
             x = 0
         elif x >= self.cols:
             x = self.cols - 1
-
         if y < 0:
             y = 0
         elif y >= self.rows:
             y = self.rows - 1
-
         self.curX = x
         self.curY = y
-
+        return
     def __OnEscSeqED(self, params, end):
         """
         Handler for escape sequence ED
@@ -872,7 +793,6 @@ class V102Terminal:
         n = 0
         if params != None:
             n = int(params)
-
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.rows - 1, self.cols - 1)
         elif n == 1:
@@ -881,7 +801,7 @@ class V102Terminal:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
         else:
             print("WARNING: escape sequence ED has invalid parameter")
-
+        return
     def __OnEscSeqEL(self, params, end):
         """
         Handler for escape sequence EL
@@ -889,7 +809,6 @@ class V102Terminal:
         n = 0
         if params != None:
             n = int(params)
-
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.curY, self.cols - 1)
         elif n == 1:
@@ -898,7 +817,52 @@ class V102Terminal:
             self.ClearRect(self.curY, 0, self.curY, self.cols - 1)
         else:
             print("WARNING: escape sequence EL has invalid parameter")
-
+        return
+    def __OnEscSeqIL(self, params, end):
+        """
+        Handler for escape sequence IL
+        """
+        self.curX = 0
+        n = int(params) if params != None else 1
+        for l in range(n):
+            line = self.screen.pop(self.scrollRegion[1]+1)
+            for i in range(self.cols):
+                line[i] = u' '
+            self.screen.insert(self.curY+l, line)
+            rendition = self.scrRendition.pop(self.scrollRegion[1]+1)
+            for i in range(self.cols):
+                rendition[i] = 0
+            self.scrRendition.insert(self.curY+l, rendition)
+        return
+    def __OnEscSeqDL(self, params, end):
+        """
+        Handler for escape sequence DL
+        """
+        self.curX = 0
+        n = int(params) if params != None else 1
+        for l in range(n):
+            line = self.screen.pop(self.curY+l)
+            for i in range(self.cols):
+                line[i] = u' '
+            self.screen.insert(self.scrollRegion[1]+1, line)
+            rendition = self.scrRendition.pop(self.curY+l)
+            for i in range(self.cols):
+                rendition[i] = 0
+            self.scrRendition.insert(self.scrollRegion[1]+1, rendition)
+        return
+    def __OnEscSeqDCH(self, params, end):
+        """
+        Handler for escape sequence DCH
+        """
+        n = int(params) if params != None else 1
+        for c in range(self.curX,self.cols):
+            if c + n < self.cols:
+                self.screen[self.curY][c] = self.screen[self.curY][c+n]
+                self.scrRendition[self.curY][c] = self.scrRendition[self.curY][c+n]
+            else:
+                self.screen[self.curY][c] = ' '
+                self.scrRendition[self.curY][c] = 0
+        return
     def __OnEscSeqVPA(self, params, end):
         """
         Handler for escape sequence VPA
@@ -906,16 +870,14 @@ class V102Terminal:
         if params == None:
             print("WARNING: VPA without parameter")
             return
-
         row = int(params)
-
         # convert it to zero based index
         row -= 1
         if row >= 0 and row < self.rows:
             self.curY = row
         else:
             print("WARNING: VPA line no. out of boundary")
-
+        return
     def __OnEscSeqSGR(self, params, end):
         """
         Handler for escape sequence SGR
@@ -951,7 +913,7 @@ class V102Terminal:
         else:
             # reset rendition
             self.curRendition = 0
-
+        return
     def __OnEscSeqSETCLRM(self, params, end):
         """
         Handler for escape sequence SETM / CLRM.
@@ -972,7 +934,6 @@ class V102Terminal:
         if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
             self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
         return
-
     def __OnEscSeqSCRL_RG(self, params, end):
         """
         Handler for escape sequence SCRL_RG.
@@ -992,7 +953,7 @@ class V102Terminal:
             print("WARNING: SCRL_RG: scroll region out of bounds: (%d,%d).",
                   row_start, row_end)
             return
-        self.scrollRegion = (row_start, row_end)
+        self.scrollRegion = (row_start-1, row_end-1)
         self.curX = 0
         self.curY = 0
         return
