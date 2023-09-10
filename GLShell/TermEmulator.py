@@ -967,6 +967,7 @@ class V102Terminal:
         if len(args) != 2:
             if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
                 self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            return
         row_start, row_end = args
         row_start = int(row_start) - 1
         row_end = int(row_end) - 1
