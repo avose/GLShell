@@ -151,7 +151,6 @@ class glsTerminalPanel(wx.Window):
         self.scrolled_text = []
         self.scrolled_rendition = []
         self.max_scroll_history = 10000
-        print('hello',self.Size)
         self.UpdateScrollbar()
         return
     def ChildIsAlive(self):
@@ -598,7 +597,7 @@ class glsTermsPanel(wx.Window):
         self.settings = settings
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
-        self.splitter.SetMinimumPaneSize(min_term_size[0])
+        self.splitter.SetMinimumPaneSize(min_term_size[1])
         self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size),
                            glsTermNotebook(self.splitter, self.settings, min_term_size), ]
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        

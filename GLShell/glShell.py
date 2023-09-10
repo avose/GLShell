@@ -90,12 +90,13 @@ class glShell(wx.Frame):
         box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
         box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
         # Graph and Terminal side-by-side.
+        self.min_term_size = (320, 92)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
-        self.splitter.SetMinimumPaneSize(320)
+        self.splitter.SetMinimumPaneSize(self.min_term_size[0])
         # OpenGL FDP panel.
         self.graph_panel = glsGraphPanel(self.splitter, self.settings, self.OnCloseGraph)
         # Terminals.
-        self.terms_panel = glsTermsPanel(self.splitter, self.settings, min_term_size=(320, 64))
+        self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size)
         # Finalize UI layout.
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.splitter.SplitVertically(self.graph_panel, self.terms_panel)
