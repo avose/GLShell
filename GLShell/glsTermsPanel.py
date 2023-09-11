@@ -72,6 +72,9 @@ class glsTerminalPanel(wx.Window):
                         wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~",
                         wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~" }
 
+    special_alt_key_map = { wx.WXK_UP:"\x1b[1;3A",    wx.WXK_DOWN:"\x1b[1;3B",
+                            wx.WXK_RIGHT:"\x1b[1;3C", wx.WXK_LEFT:"\x1b[1;3D" }
+
     def __init__(self, parent, settings, callback_close, callback_title, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -118,7 +121,6 @@ class glsTerminalPanel(wx.Window):
         self.rows = int((self.Size[1]-10) / self.char_h)
         self.cols = int((self.Size[0]-10) / self.char_w)
         self.cursor_pos = (0,0)
-        self.modes = {}
         self.terminal = TermEmulator.V102Terminal(self.rows,
                                                   self.cols)
         self.terminal.SetCallback(self.terminal.CALLBACK_UNHANDLED_ESC_SEQ,
@@ -133,6 +135,10 @@ class glsTerminalPanel(wx.Window):
                                   self.OnTermUpdateWindowTitle)
         self.terminal.SetCallback(self.terminal.CALLBACK_MODE_CHANGE,
                                   self.OnTermModeChange)
+        self.terminal.SetCallback(self.terminal.CALLBACK_CURSOR_CHANGE,
+                                  self.OnTermCursorChange)
+        self.cursor_style = self.terminal.CURSOR_STYLE_DEFAULT
+        self.modes = dict(self.terminal.modes)
         # Start child process.
         self.path = self.settings.shell_path
         basename = os.path.basename(self.path)
@@ -392,15 +398,7 @@ class glsTerminalPanel(wx.Window):
                          len(text)*self.char_w, self.char_h)
         dc.DrawText(text, col*self.char_w, row*self.char_h)
         return
-    def OnPaint(self, event):
-        dc = wx.MemoryDC()
-        dc.SelectObject(self.dc_buffer)
-        dc.Clear()
-        brush = wx.Brush((0,0,0))
-        dc.SetBrush(brush)
-        dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
-        scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
-        # Draw the screen text.
+    def DrawScreen(self, dc, scroll):
         screen = self.terminal.GetRawScreen()
         rendition = self.terminal.GetRawScreenRendition()
         if scroll > 0 and scroll < self.rows:
@@ -434,25 +432,30 @@ class glsTerminalPanel(wx.Window):
                     cur_bgcolor = self.SetTextBGColor(dc, cur_bgcolor, bgcolor)
                 text += screen[row][col]
             self.DrawText(dc, text, row, col_start)
-        # Draw the cursor.
-        if scroll == 0:
-            if self.terminal.MODE_DECTCEM in self.modes and self.modes[self.terminal.MODE_DECTCEM]:
-                self.pen = wx.Pen((255,0,0,128))
-                if self.HasFocus():
-                    self.brush = wx.Brush((255,0,0,64))
-                else:
-                    self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
-            else:
-                self.pen = wx.Pen((255,0,0,64))
-                if self.HasFocus():
-                    self.brush = wx.Brush((255,0,0,32))
-                else:
-                    self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
-            dc.SetPen(self.pen)
-            dc.SetBrush(self.brush)
+        return
+    def DrawCursor(self, dc, scroll):
+        visible = True
+        if (scroll != 0 or not self.modes[self.terminal.MODE_DECTCEM] or
+            self.cursor_style == self.terminal.CURSOR_STYLE_INVISIBLE):
+            visible = False
+        if not visible:
+            return
+        self.pen = wx.Pen((255,0,0,128))
+        dc.SetPen(self.pen)
+        if self.HasFocus():
+            self.brush = wx.Brush((255,0,0,64))
+        else:
+            self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
+        dc.SetBrush(self.brush)
+        if (self.cursor_style == self.terminal.CURSOR_STYLE_DEFAULT or
+            self.cursor_style == self.terminal.CURSOR_STYLE_BLOCK):
             dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
                              self.char_w, self.char_h)
-        # Draw the current selection.
+        elif self.cursor_style == self.terminal.CURSOR_STYLE_UNDERLINE:
+            dc.DrawLine(self.cursor_pos[1]*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1,
+                        (self.cursor_pos[1]+1)*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1)
+        return
+    def DrawSelection(self, dc):
         if self.sel_start is not None and self.sel_end is not None:
             self.pen = wx.Pen((0,0,0), style=wx.TRANSPARENT)
             dc.SetPen(self.pen)
@@ -471,6 +474,24 @@ class glsTerminalPanel(wx.Window):
             if end[0]-start[0] > 0:
                 dc.DrawRectangle(0, (end[0])*self.char_h,
                                  end[1]*self.char_w, self.char_h)
+        return
+    def OnPaint(self, event):
+        # Draw with double buffering.
+        dc = wx.MemoryDC()
+        dc.SelectObject(self.dc_buffer)
+        # Clear.
+        dc.Clear()
+        brush = wx.Brush((0,0,0))
+        dc.SetBrush(brush)
+        dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
+        # Get scrolling information.
+        scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
+        # Draw the screen text.
+        self.DrawScreen(dc, scroll)
+        # Draw the cursor.
+        self.DrawCursor(dc, scroll)
+        # Draw the current selection.
+        self.DrawSelection(dc)
         # Switch to the real window dc and draw the buffer.
         del dc
         dc = wx.BufferedPaintDC(self, self.dc_buffer)
@@ -505,6 +526,9 @@ class glsTerminalPanel(wx.Window):
         return
     def KeyCodeToSequence(self, key):
         seq = None
+        if wx.WXK_ALT in self.keys_down:
+            if key in self.special_alt_key_map:
+                return self.special_alt_key_map[key]
         if key in self.special_key_map:
             return self.special_key_map[key]
         if key < 256:
@@ -512,6 +536,8 @@ class glsTerminalPanel(wx.Window):
             if wx.WXK_ALT in self.keys_down:
                 seq = "\x1b"
                 if wx.WXK_SHIFT in self.keys_down:
+                    if ckey in self.shift_key_map:
+                       return seq + self.shift_key_map[ckey]
                     return seq + ckey
                 return seq + ckey.lower()
             if wx.WXK_CONTROL in self.keys_down:
@@ -589,8 +615,11 @@ class glsTerminalPanel(wx.Window):
     def OnTermModeChange(self, modes):
         self.modes = dict(modes)
         return
+    def OnTermCursorChange(self, style):
+        self.cursor_style = style
+        return
     def OnTermUnhandledEscSeq(self, escSeq):
-        #print("Unhandled escape sequence: [{}".format(escSeq))
+        print("Unhandled escape sequence: [{}".format(escSeq))
         return
     def MonitorTerminal(self):
         # Monitor the state of the child process and tell parent when closed.

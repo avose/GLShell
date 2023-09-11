@@ -109,6 +109,10 @@ class V102Terminal:
                             # important ones is the scrolling region: "n ; m r" which
                             # limits effect of scrolling to specified range of lines.
 
+    __ESCSEQ_CSZ = 'c'      # Multiple escape sequences end in 'c'. One of the more
+                            # important ones is setting the cursor size / style:
+                            # "? n c", where n is the style.
+
     # vt102 modes.
     MODE_KAM     = '2'    # Keyboard action
     MODE_IRM     = '4'    # Insert-replace
@@ -128,6 +132,11 @@ class V102Terminal:
     MODE_DECTCEM = '?25'  # Show cursor
     MODE_BRCKPST = '?2004'# Bracketed paste mode
 
+    CURSOR_STYLE_DEFAULT = 0
+    CURSOR_STYLE_INVISIBLE = 1
+    CURSOR_STYLE_UNDERLINE = 2
+    CURSOR_STYLE_BLOCK = 8
+    
     RENDITION_STYLE_BOLD = 1
     RENDITION_STYLE_DIM = 2
     RENDITION_STYLE_ITALIC = 4
@@ -143,6 +152,7 @@ class V102Terminal:
     CALLBACK_UPDATE_CURSOR_POS = 3
     CALLBACK_UPDATE_WINDOW_TITLE = 4
     CALLBACK_MODE_CHANGE = 5
+    CALLBACK_CURSOR_CHANGE = 6
 
     def __init__(self, rows, cols):
         """
@@ -189,7 +199,11 @@ class V102Terminal:
                                 self.__ESCSEQ_SGR   :self.__OnEscSeqSGR,
                                 self.__ESCSEQ_SETM  :self.__OnEscSeqSETCLRM,
                                 self.__ESCSEQ_CLRM  :self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_CSR   :self.__OnEscSeqCSR}
+                                self.__ESCSEQ_CSR   :self.__OnEscSeqCSR,
+                                self.__ESCSEQ_CSZ   :self.__OnEscSeqCSZ, }
+
+        # cursor styles.
+        self.cursorStyle = self.CURSOR_STYLE_DEFAULT
 
         # terminal modes.
         self.modes = { self.MODE_DECTCEM:True,
@@ -238,7 +252,8 @@ class V102Terminal:
                            self.CALLBACK_UPDATE_CURSOR_POS: None,
                            self.CALLBACK_UNHANDLED_ESC_SEQ: None,
                            self.CALLBACK_UPDATE_WINDOW_TITLE: None,
-                           self.CALLBACK_MODE_CHANGE: None, }
+                           self.CALLBACK_MODE_CHANGE: None,
+                           self.CALLBACK_CURSOR_CHANGE: None, }
 
         # unparsed part of last input
         self.unparsedInput = None
@@ -461,6 +476,10 @@ class V102Terminal:
         CALLBACK_MODE_CHANGE
             Called whenever a terminal mode has changed. A dictionary of modes
             and their settings (True/False) will be passed as an argument.
+
+        CALLBACK_CURSOR_CHANGE
+            Called whenever a the cursor has changed. The new style will be
+            passed as an argument.
         """
         self.callbacks[event] = func
         return
@@ -825,10 +844,12 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
+            self.isLineDirty[self.scrollRegion[1]] = True
             line = self.screen.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.curY+l, line)
+            self.isLineDirty[self.curY+l] = True
             rendition = self.scrRendition.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 rendition[i] = 0
@@ -841,10 +862,12 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
+            self.isLineDirty[self.curY+l] = True
             line = self.screen.pop(self.curY+l)
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.scrollRegion[1], line)
+            self.isLineDirty[self.scrollRegion[1]] = True
             rendition = self.scrRendition.pop(self.curY+l)
             for i in range(self.cols):
                 rendition[i] = 0
@@ -855,6 +878,7 @@ class V102Terminal:
         Handler for escape sequence DCH
         """
         n = int(params) if params != None else 1
+        self.isLineDirty[self.curY] = True
         for c in range(self.curX,self.cols):
             if c + n < self.cols:
                 self.screen[self.curY][c] = self.screen[self.curY][c+n]
@@ -954,4 +978,23 @@ class V102Terminal:
         self.scrollRegion = (row_start, row_end)
         self.curX = 0
         self.curY = 0
+        return
+    def __OnEscSeqCSZ(self, params, end):
+        """
+        Handler for escape sequence CSZ.
+        """
+        if params == None:
+            print("WARNING: CSZ without parameter")
+            return
+        if len(params) != 2 or params[0] != '?':
+            if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
+                self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            return
+        style = int(params[1])
+        if style not in (0, 1, 2, 8):
+            style = self.CURSOR_STYLE_DEFAULT
+        if style != self.cursorStyle:
+            self.cursorStyle = style
+            if self.callbacks[self.CALLBACK_CURSOR_CHANGE] != None:
+                self.callbacks[self.CALLBACK_CURSOR_CHANGE](self.cursorStyle)
         return
