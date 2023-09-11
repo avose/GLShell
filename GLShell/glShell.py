@@ -22,9 +22,18 @@ class glShell(wx.Frame):
                           size = (1366, 768))
         self.settings = glsSettings.glsSettings()
         self.settings.Load()
+        self.settings.AddWatcher(self.OnChangeSettings)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.InitUI()
+        return
+    def OnChangeSettings(self, settings):
+        return
+    def OnClose(self, event):
+        self.settings.RemoveWatcher(self.OnChangeSettings)
+        return
+    def OnDestroy(self, event):
+        self.settings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnCharHook(self,event):
         event.DoAllowNextEvent()

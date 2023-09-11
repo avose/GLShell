@@ -14,6 +14,7 @@ class glsSettings():
     term_bgcolor = (0,0,0)
     term_wchars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
     def __init__(self):
+        self.watchers = []
         return
     def Load(self, path=None):
         if path is not None:
@@ -31,6 +32,7 @@ class glsSettings():
                 self.term_wchars = d['term_wchars'] if 'term_wchars' in d else self.term_wchars
         except:
             pass
+        self.OnChange()
         return
     def Save(self,path=None):
         if path is not None:
@@ -45,6 +47,18 @@ class glsSettings():
                  'term_bgcolor': self.term_bgcolor,
                  'term_wchars': self.term_wchars }
             json.dump(d, conf, indent=2)
+        return
+    def OnChange(self):
+        # Call this method if settings have changed.
+        for watcher in self.watchers:
+            watcher(self)
+        return
+    def AddWatcher(self, callback):
+        self.watchers.append(callback)
+        return
+    def RemoveWatcher(self, callback):
+        if callback in self.watchers:
+            self.watchers.remove(callback)
         return
 
 ################################################################
@@ -114,6 +128,7 @@ class TabTerminal(wx.Panel):
         self.settings.term_fgcolor = (color.GetRed(), color.GetGreen(), color.GetBlue())
         color = self.cp_bgcolor.GetColour()
         self.settings.term_bgcolor = (color.GetRed(), color.GetGreen(), color.GetBlue())
+        self.settings.OnChange()
         return
 
 class TabGraph(wx.Panel):

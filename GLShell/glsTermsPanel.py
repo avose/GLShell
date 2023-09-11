@@ -78,10 +78,13 @@ class glsTerminalPanel(wx.Window):
     def __init__(self, parent, settings, callback_close, callback_title, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
-        super(glsTerminalPanel, self).__init__(parent,style=style)
+        # Give the term panel a default size to avoid errors on creation.
+        # This also appears to influence some aspects of minimum size.
+        super(glsTerminalPanel, self).__init__(parent, size=(200,100), style=style)
         self.SetMinSize(min_size)
         self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
         self.settings = settings
+        self.settings.AddWatcher(self.OnChangeSettings)
         self.callback_close = callback_close
         self.callback_title = callback_title
         # Bind events.
@@ -218,6 +221,10 @@ class glsTerminalPanel(wx.Window):
         except:
             pass
         self.output_wait = True
+        return
+    def OnChangeSettings(self, settings):
+        self.Refresh()
+        wx.YieldIfNeeded()
         return
     def OnSetFocus(self, event):
         self.Refresh()
@@ -635,9 +642,11 @@ class glsTerminalPanel(wx.Window):
         return
     def OnClose(self, event=None):
         self.stop_output_notifier = True
+        self.settings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnDestroy(self, event):
         self.stop_output_notifier = True
+        self.settings.RemoveWatcher(self.OnChangeSettings)
         if self.child_output_notifier_thread is not None:
             self.child_output_notifier_thread.join()
         return
@@ -648,7 +657,7 @@ class glsTermNotebook(wx.Window):
     def __init__(self, parent, settings, min_term_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
-        super(glsTermNotebook, self).__init__(parent,style=style)
+        super(glsTermNotebook, self).__init__(parent, style=style)
         self.settings = settings
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)

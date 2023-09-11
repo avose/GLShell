@@ -33,11 +33,15 @@ class glsGraphCanvas(GLCanvas):
     zoom       = 20.0
     time_draw  = 1
     time_fdp   = 1
-    def __init__(self, parent, size):
+    def __init__(self, parent, size, settings):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, size=size)
         self.parent = parent
+        self.settings = settings
+        self.settings.AddWatcher(self.OnChangeSettings)
         self.textsizer = glsGLTextSizer()
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
@@ -47,6 +51,14 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         wx.CallLater(10, self.PushFrames)
+        return
+    def OnChangeSettings(self, settings):
+        return
+    def OnClose(self, event):
+        self.settings.RemoveWatcher(self.OnChangeSettings)
+        return
+    def OnDestroy(self, event):
+        self.settings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnSize(self, event):
         # Projection.
@@ -246,10 +258,10 @@ class glsGraphPanel(wx.Window):
         # Call super.
         box_main = wx.BoxSizer(wx.VERTICAL)
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
-        super(glsGraphPanel, self).__init__(parent,style=style)
-        self.SetMinSize((320,320))
-        self.SetBackgroundColour((255,0,0))
-        self.graph_canvas = glsGraphCanvas(self, size=(320,320))
+        super(glsGraphPanel, self).__init__(parent, style=style)
+        self.SetMinSize( (320,320) )
+        self.SetBackgroundColour( (255,0,0) )
+        self.graph_canvas = glsGraphCanvas(self, size=(320,320), settings=settings)
         box_main.Add(self.graph_canvas, 1, wx.ALIGN_LEFT | wx.ALL | wx.EXPAND, 0)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.SetSizerAndFit(box_main)
