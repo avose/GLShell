@@ -64,8 +64,10 @@ class glsTerminalPanel(wx.Window):
                       '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
                       '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
                       '<':'<', '(':'(', ')':')' }
-    special_key_map = {wx.WXK_UP:"\x1b[A",   wx.WXK_DOWN:"\x1b[B", wx.WXK_RIGHT:"\x1b[C",
-                       wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~" }
+    special_key_map = { wx.WXK_UP:"\x1b[A",   wx.WXK_DOWN:"\x1b[B", wx.WXK_RIGHT:"\x1b[C",
+                        wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~",
+                        wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~" }
+
     def __init__(self, parent, settings, callback_close, callback_title, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -499,6 +501,8 @@ class glsTerminalPanel(wx.Window):
         return
     def KeyCodeToSequence(self, key):
         seq = None
+        if key in self.special_key_map:
+            return self.special_key_map[key]
         if key < 256:
             ckey = chr(key)
             if wx.WXK_ALT in self.keys_down:
@@ -528,9 +532,6 @@ class glsTerminalPanel(wx.Window):
                         return ckey
                 else:
                     return ckey.lower()
-        else:
-            if key in self.special_key_map:
-                return self.special_key_map[key]
         return seq
     def OnKeyDown(self, event):
         key = event.GetKeyCode()
