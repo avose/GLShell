@@ -49,6 +49,7 @@ class glsTerminalPanel(wx.Window):
                      ( 255, 0,   255),
                      ( 0,   255, 255),
                      ( 255, 255, 255) )
+
     color_map_bg = ( ( 0,   0,     0),
                      ( 0,   0,     0),
                      ( 255, 0,     0),
@@ -59,11 +60,14 @@ class glsTerminalPanel(wx.Window):
                      ( 0,   255, 255),
                      ( 255, 255, 255),
                      ( 255, 255, 255) )
+
     word_chars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
+
     shift_key_map = { ',':'<', '.':'>', '/':'?', ';':':', "'":'"', '[' :'{', ']':'}',
                       '1':'!', '2':'@', '3':'#', '4':'$', '5':'%', '6' :'^', '7':'&',
                       '8':'*', '9':'(', '0':')', '-':'_', '=':'+', '\\':'|', '`':'~',
                       '<':'<', '(':'(', ')':')' }
+
     special_key_map = { wx.WXK_UP:"\x1b[A",   wx.WXK_DOWN:"\x1b[B", wx.WXK_RIGHT:"\x1b[C",
                         wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~",
                         wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~" }
