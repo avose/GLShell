@@ -105,9 +105,9 @@ class V102Terminal:
                             # modes commonly used with other terminal types may be
                             # supported.
 
-    __ESCSEQ_SCRL_RG = 'r'  # Multiple escape sequences end in 'r'. One of the more
-                            # important ones is the scrolling region ("n ; m r"):
-                            # limit effect of scrolling to specified range of lines.
+    __ESCSEQ_CSR = 'r'      # Multiple escape sequences end in 'r'. One of the more
+                            # important ones is the scrolling region: "n ; m r" which
+                            # limits effect of scrolling to specified range of lines.
 
     # vt102 modes.
     MODE_KAM     = '2'    # Keyboard action
@@ -173,23 +173,23 @@ class V102Terminal:
                               self.__ASCII_CSI :self.__OnCharCSI, }
 
         # escape sequence handlers
-        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL :self.__OnEscSeqICH_SL,
-                                self.__ESCSEQ_CUU    :self.__OnEscSeqCUU,
-                                self.__ESCSEQ_CUD    :self.__OnEscSeqCUD,
-                                self.__ESCSEQ_CUF    :self.__OnEscSeqCUF,
-                                self.__ESCSEQ_CUB    :self.__OnEscSeqCUB,
-                                self.__ESCSEQ_CHA    :self.__OnEscSeqCHA,
-                                self.__ESCSEQ_CUP    :self.__OnEscSeqCUP,
-                                self.__ESCSEQ_ED     :self.__OnEscSeqED,
-                                self.__ESCSEQ_EL     :self.__OnEscSeqEL,
-                                self.__ESCSEQ_IL     :self.__OnEscSeqIL,
-                                self.__ESCSEQ_DL     :self.__OnEscSeqDL,
-                                self.__ESCSEQ_DCH    :self.__OnEscSeqDCH,
-                                self.__ESCSEQ_VPA    :self.__OnEscSeqVPA,
-                                self.__ESCSEQ_SGR    :self.__OnEscSeqSGR,
-                                self.__ESCSEQ_SETM   :self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_CLRM   :self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_SCRL_RG:self.__OnEscSeqSCRL_RG}
+        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL:self.__OnEscSeqICH_SL,
+                                self.__ESCSEQ_CUU   :self.__OnEscSeqCUU,
+                                self.__ESCSEQ_CUD   :self.__OnEscSeqCUD,
+                                self.__ESCSEQ_CUF   :self.__OnEscSeqCUF,
+                                self.__ESCSEQ_CUB   :self.__OnEscSeqCUB,
+                                self.__ESCSEQ_CHA   :self.__OnEscSeqCHA,
+                                self.__ESCSEQ_CUP   :self.__OnEscSeqCUP,
+                                self.__ESCSEQ_ED    :self.__OnEscSeqED,
+                                self.__ESCSEQ_EL    :self.__OnEscSeqEL,
+                                self.__ESCSEQ_IL    :self.__OnEscSeqIL,
+                                self.__ESCSEQ_DL    :self.__OnEscSeqDL,
+                                self.__ESCSEQ_DCH   :self.__OnEscSeqDCH,
+                                self.__ESCSEQ_VPA   :self.__OnEscSeqVPA,
+                                self.__ESCSEQ_SGR   :self.__OnEscSeqSGR,
+                                self.__ESCSEQ_SETM  :self.__OnEscSeqSETCLRM,
+                                self.__ESCSEQ_CLRM  :self.__OnEscSeqSETCLRM,
+                                self.__ESCSEQ_CSR   :self.__OnEscSeqCSR}
 
         # terminal modes.
         self.modes = { self.MODE_DECTCEM:True,
@@ -825,11 +825,11 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
-            line = self.screen.pop(self.scrollRegion[1]+1)
+            line = self.screen.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.curY+l, line)
-            rendition = self.scrRendition.pop(self.scrollRegion[1]+1)
+            rendition = self.scrRendition.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 rendition[i] = 0
             self.scrRendition.insert(self.curY+l, rendition)
@@ -844,11 +844,11 @@ class V102Terminal:
             line = self.screen.pop(self.curY+l)
             for i in range(self.cols):
                 line[i] = u' '
-            self.screen.insert(self.scrollRegion[1]+1, line)
+            self.screen.insert(self.scrollRegion[1], line)
             rendition = self.scrRendition.pop(self.curY+l)
             for i in range(self.cols):
                 rendition[i] = 0
-            self.scrRendition.insert(self.scrollRegion[1]+1, rendition)
+            self.scrRendition.insert(self.scrollRegion[1], rendition)
         return
     def __OnEscSeqDCH(self, params, end):
         """
@@ -934,12 +934,12 @@ class V102Terminal:
         if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
             self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
         return
-    def __OnEscSeqSCRL_RG(self, params, end):
+    def __OnEscSeqCSR(self, params, end):
         """
-        Handler for escape sequence SCRL_RG.
+        Handler for escape sequence CSR.
         """
         if params == None:
-            print("WARNING: SETM / CLRM without parameter")
+            print("WARNING: CSR without parameter")
             return
         args = params.split(';')
         if len(args) != 2:
@@ -948,12 +948,10 @@ class V102Terminal:
             return
         row_start, row_end = args
         row_start = int(row_start) - 1
-        row_end = int(row_end) - 1
-        if row_start < 0 or row_end > self.rows:
-            print("WARNING: SCRL_RG: scroll region out of bounds: (%d,%d).",
-                  row_start, row_end)
-            return
-        self.scrollRegion = (row_start-1, row_end-1)
+        row_end   = int(row_end)   - 1
+        row_start = row_start if row_start > 0         else 0
+        row_end   = row_end   if row_end   < self.cols else self.cols-1
+        self.scrollRegion = (row_start, row_end)
         self.curX = 0
         self.curY = 0
         return
