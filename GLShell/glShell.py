@@ -1,4 +1,32 @@
 #!/usr/bin/env python3
+#
+# GLShell - OpenGL-Enhanced Integrated Development Environment
+# Copyright (C) 2023 Aaron D Vose
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# 02111-1307  USA
+#
+# Aaron D Vose
+# avose@aaronvose.net
+#
+# Initially forked from:
+# TermEmulator - Emulator for VT100 terminal programs
+# Copyright (C) 2008 Siva Chandran P
+#
+# Siva Chandran P
+# siva.chandran.p@gmail.com
 
 from __future__ import print_function
 
@@ -13,13 +41,14 @@ import glsProject as glsp
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 class glShell(wx.Frame):
+    ID_LICENSE = 1000
     def __init__(self,app):
         self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY,
-                          "glShell - "+VERSION,
+                          "GLShell - "+VERSION,
                           size = (1366, 768))
         self.settings = glsSettings.glsSettings()
         self.settings.Load()
@@ -74,14 +103,17 @@ class glShell(wx.Frame):
         menubar.Append(editMenu, '&Edit')
         # Help menu.
         helpMenu = wx.Menu() 
-        copyItem = wx.MenuItem(helpMenu, wx.ID_ABOUT, text = "About", kind = wx.ITEM_NORMAL)
-        helpMenu.Append(copyItem) 
+        aboutItem = wx.MenuItem(helpMenu, wx.ID_ABOUT, text = "About", kind = wx.ITEM_NORMAL)
+        helpMenu.Append(aboutItem)
+        licenseItem = wx.MenuItem(helpMenu, self.ID_LICENSE, text = "License", kind = wx.ITEM_NORMAL)
+        helpMenu.Append(licenseItem)
         menubar.Append(helpMenu, '&Help')
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.settings_frame = None
         self.about_frame = None
+        self.license_frame = None
         return
     def MenuHandler(self, event):
         id = event.GetId() 
@@ -100,6 +132,11 @@ class glShell(wx.Frame):
                 self.about_frame = glsHelp.glsAboutFrame(self)
             else:
                 self.about_frame.Raise()                
+        elif id == self.ID_LICENSE:
+            if self.license_frame is None:
+                self.license_frame = glsHelp.glsLicenseFrame(self)
+            else:
+                self.license_frame.Raise()                
         return
     def InitUI(self):
         # Setup menu bar.
@@ -133,11 +170,19 @@ class glShell(wx.Frame):
             self.graph_panel.AddProject(self.project)
         return
     def OnClose(self, event):
+        if self.settings_frame is not None:
+            self.settings_frame.OnClose(event)
+        if self.about_frame is not None:
+            self.about_frame.OnClose(event)
+        if self.license_frame is not None:
+            self.license_frame.OnClose(event)
         for t in self.project.threads:
             t.stop()
             t.join()
         event.Skip()
         return
+
+################################################################
 
 if __name__ == '__main__':
     proj_path = sys.argv[1] if len(sys.argv) == 2 else "."
