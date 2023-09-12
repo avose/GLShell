@@ -170,9 +170,9 @@ class SettingsFrame(wx.Frame):
         self.btn_save = wx.Button(self, wx.ID_ANY, "Save")
         self.btn_save.Bind(wx.EVT_BUTTON, self.OnSave)
         row_bottom.Add(self.btn_save)
-        self.btn_ok = wx.Button(self, wx.ID_ANY, "Apply")
-        self.btn_ok.Bind(wx.EVT_BUTTON, self.OnApply)
-        row_bottom.Add(self.btn_ok)
+        self.btn_apply = wx.Button(self, wx.ID_ANY, "Apply")
+        self.btn_apply.Bind(wx.EVT_BUTTON, self.OnApply)
+        row_bottom.Add(self.btn_apply)
         main_box.Add(row_bottom, 0)
         # Set main box as frame sizer.
         self.SetSizerAndFit(main_box)

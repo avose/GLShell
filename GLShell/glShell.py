@@ -11,6 +11,7 @@ from glsTermsPanel import glsTermsPanel
 from glsGraphPanel import glsGraphPanel
 import glsProject as glsp
 import glsSettings
+import glsHelp
 
 VERSION = "0.0.1"
 
@@ -41,7 +42,7 @@ class glShell(wx.Frame):
         return
     def InitMenuBar(self):
         menubar = wx.MenuBar() 
-        # File menue.
+        # File menu.
         fileMenu = wx.Menu() 
         newitem = wx.MenuItem(fileMenu, wx.ID_NEW, text = "New", kind = wx.ITEM_NORMAL) 
         fileMenu.Append(newitem)
@@ -57,7 +58,7 @@ class glShell(wx.Frame):
         quit = wx.MenuItem(fileMenu, wx.ID_EXIT, '&Quit') 
         fileMenu.Append(quit) 
         menubar.Append(fileMenu, '&File')
-        # Edit menue.
+        # Edit menu.
         editMenu = wx.Menu() 
         copyItem = wx.MenuItem(editMenu, wx.ID_COPY, text = "Copy", kind = wx.ITEM_NORMAL)
         editMenu.Append(copyItem) 
@@ -71,22 +72,34 @@ class glShell(wx.Frame):
                                    kind = wx.ITEM_NORMAL) 
         editMenu.Append(settingsItem) 
         menubar.Append(editMenu, '&Edit')
+        # Help menu.
+        helpMenu = wx.Menu() 
+        copyItem = wx.MenuItem(helpMenu, wx.ID_ABOUT, text = "About", kind = wx.ITEM_NORMAL)
+        helpMenu.Append(copyItem) 
+        menubar.Append(helpMenu, '&Help')
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
         self.settings_frame = None
+        self.about_frame = None
         return
     def MenuHandler(self, event):
         id = event.GetId() 
         if id == wx.ID_EXIT:
-            sys.exit()
-        elif id == self.ID_SETTINGS:
+            self.OnClose(event)
+            return
+        if id == self.ID_SETTINGS:
             if self.settings_frame is None:
                 self.settings_frame = glsSettings.SettingsFrame(self, self.settings)
                 self.settings_frame.Show()
                 self.settings_frame.Raise()
             else:
                 self.settings_frame.Raise()
+        elif id == wx.ID_ABOUT:
+            if self.about_frame is None:
+                self.about_frame = glsHelp.glsAboutFrame(self)
+            else:
+                self.about_frame.Raise()                
         return
     def InitUI(self):
         # Setup menu bar.
@@ -95,7 +108,7 @@ class glShell(wx.Frame):
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Toolbar box.
         box_tool = wx.BoxSizer(wx.HORIZONTAL)
-        self.bt_run = wx.Button(self, wx.ID_ANY, "Toollbar Button")
+        self.bt_run = wx.Button(self, wx.ID_ANY, "Toolbar Button")
         box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
         box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
         # Graph and Terminal side-by-side.
