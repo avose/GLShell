@@ -130,88 +130,97 @@ class glsGraphCanvas(GLCanvas):
         next_draw = 5 if next_draw <= 5 else int(next_draw)
         wx.CallLater(next_draw, self.PushFrames)
         return
-    def OnDraw(self):
-        # Clear buffer.
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        if self.graph_2D:
-            self.Set2D()
-        elif self.graph_3D:
-            self.Set3D()
-        red = [1.0, 0.0, 0.0 ,1.0]
-        grn = [0.0, 1.0, 0.0 ,1.0]
-        blu = [0.0, 0.0, 1.0 ,1.0]
-        ylw = [1.0, 1.0, 0.0 ,1.0]
-        self.textbuff.SetColor(ylw)
-        # Apply zoom and rotation.
-        if self.graph_2D:
-            glTranslatef(*self.translate, 0)
-            glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
-            glRotatef(self.rotate, 0, 0, 1)
-            glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
-            zoom = self.zoom
-        elif self.graph_3D:
-            zoom = self.zoom * 0.05
-            glTranslatef(self.translate[0]/self.Size[0]*5*self.zoom,
-                         self.translate[1]/self.Size[1]*5*self.zoom, 0)
-            glRotatef(self.rotate, 0, 1, 0)
-        # Draw the graph.
-        self.Record3DTo2DMatrices()
-        if self.project is not None and len(self.project.roots) > 0:
-            gthread = self.project.threads[0]
-            graph   = gthread.get_graph()
-            # Draw graph while holding the lock.
-            with gthread.lock:
-                # Draw edges.
-                glColor4fv(grn)
-                glBegin(GL_LINES)
-                for ei in range(graph.np_edges.shape[0]):
-                    e = graph.np_edges[ei]
-                    for n in e:
-                        pos = np.array(graph.np_nodes[n])
-                        pos *= zoom
-                        if self.graph_2D:
-                            pos[0] += self.Size[0]/2.0
-                            pos[1] += self.Size[1]/2.0
-                        glVertex3fv(pos)
-                glEnd()
-                # Draw nodes.
-                pos_nodes = []
-                for ni,node in enumerate(graph.nlist):
-                    pos = np.array(graph.np_nodes[ni])
+    def DrawGraph(self):
+        if self.project is None or len(self.project.roots) == 0:
+            return
+        # Get graph and its settings.
+        gthread = self.project.threads[0]
+        graph   = gthread.get_graph()
+        # Draw graph while holding the lock.
+        with gthread.lock:
+            if gthread.dims == 2:
+                self.Set2D()
+                self.graph_2D = True
+                self.graph_3D = False
+            elif gthread.dims == 3:
+                self.Set3D()
+                self.graph_2D = False
+                self.graph_3D = True
+            red = [1.0, 0.0, 0.0 ,1.0]
+            grn = [0.0, 1.0, 0.0 ,1.0]
+            blu = [0.0, 0.0, 1.0 ,1.0]
+            ylw = [1.0, 1.0, 0.0 ,1.0]
+            self.textbuff.SetColor(ylw)
+            # Apply zoom and rotation.
+            if self.graph_2D:
+                glTranslatef(*self.translate, 0)
+                glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
+                glRotatef(self.rotate, 0, 0, 1)
+                glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
+                zoom = self.zoom
+            elif self.graph_3D:
+                zoom = self.zoom * 0.05
+                glTranslatef(self.translate[0]/self.Size[0]*5*self.zoom,
+                             self.translate[1]/self.Size[1]*5*self.zoom, 0)
+                glRotatef(self.rotate, 0, 1, 0)
+            # Save 2D screen coordinates for the nodes.
+            self.Record3DTo2DMatrices()
+            pos_nodes = []
+            # Draw edges.
+            glColor4fv(grn)
+            glBegin(GL_LINES)
+            for ei in range(graph.np_edges.shape[0]):
+                e = graph.np_edges[ei]
+                for n in e:
+                    pos = np.array(graph.np_nodes[n])
                     pos *= zoom
                     if self.graph_2D:
                         pos[0] += self.Size[0]/2.0
                         pos[1] += self.Size[1]/2.0
-                    if isinstance(node, glsDir):
-                        glColor4fv(red)
-                        size = 10.0
-                    else:
-                        glColor4fv(blu)
-                        size = 8.0
-                    glPointSize(size)
-                    glBegin(GL_POINTS)
                     glVertex3fv(pos)
-                    glEnd()
-                    pos_nodes.append(self.Project3DTo2D(pos))
-                # Draw labels.
-                self.Set2D()
-                for ni,node in enumerate(graph.nlist):
-                    pos = pos_nodes[ni]
-                    if self.graph_3D:
-                        if isinstance(node, glsDir):
-                            label = True
-                        else:
-                            label = True if self.zoom >= 10 else False
-                    elif self.graph_2D:
-                        if isinstance(node, glsDir):
-                            label = True
-                        else:
-                            label = True if zoom >= 10 else False
-                    if label is True:
-                        self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
-                                             text=node.name, center=True)
-        # Draw stats.
+            glEnd()
+            # Draw nodes.
+            for ni,node in enumerate(graph.nlist):
+                pos = np.array(graph.np_nodes[ni])
+                pos *= zoom
+                if self.graph_2D:
+                    pos[0] += self.Size[0]/2.0
+                    pos[1] += self.Size[1]/2.0
+                if isinstance(node, glsDir):
+                    glColor4fv(red)
+                    size = 10.0
+                else:
+                    glColor4fv(blu)
+                    size = 8.0
+                glPointSize(size)
+                glBegin(GL_POINTS)
+                glVertex3fv(pos)
+                glEnd()
+                pos_nodes.append(self.Project3DTo2D(pos))
+            # Draw labels.
+            self.Set2D()
+            for ni,node in enumerate(graph.nlist):
+                pos = pos_nodes[ni]
+                if self.graph_3D:
+                    if isinstance(node, glsDir):
+                        label = True
+                    else:
+                        label = True if self.zoom >= 10 else False
+                elif self.graph_2D:
+                    if isinstance(node, glsDir):
+                        label = True
+                    else:
+                        label = True if zoom >= 10 else False
+                if label is True:
+                    self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
+                                         text=node.name, center=True)
+        return
+    def DrawStats(self):
         self.Set2D()
+        red = [1.0, 0.0, 0.0 ,1.0]
+        grn = [0.0, 1.0, 0.0 ,1.0]
+        blu = [0.0, 0.0, 1.0 ,1.0]
+        ylw = [1.0, 1.0, 0.0 ,1.0]
         glColor4fv([0,0,0,0.75])
         glBegin(GL_QUADS)
         glVertex3fv([0,   self.Size[1]-2*self.textbuff.height, 0])
@@ -236,6 +245,14 @@ class glsGraphCanvas(GLCanvas):
         fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
         fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_ogl)
+        return
+    def OnDraw(self):
+        # Clear buffer.
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        # Draw the graph.
+        self.DrawGraph()
+        # Draw stats.
+        self.DrawStats()
         # Swap buffers to show the scene.
         self.SwapBuffers()
         return

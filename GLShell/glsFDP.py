@@ -65,6 +65,7 @@ class glsFDPProcess(Process):
     def __init__(self, settings, in_q, out_q, speed, steps=10, nice=1):
         Process.__init__(self)
         self.settings = settings
+        self.dims = 3 if self.settings.graph_3D else 2
         self.in_q  = in_q
         self.out_q = out_q
         self.nice  = nice
@@ -76,7 +77,7 @@ class glsFDPProcess(Process):
         return
     def run(self):
         while(True):
-            cmd, nodes, edges = self.in_q.get()
+            cmd, nodes, edges, dims = self.in_q.get()
             if cmd == "stop":
                 break
             if nodes is not None:
@@ -86,6 +87,9 @@ class glsFDPProcess(Process):
             nodes = self.nodes
             edges = self.edges
             start = datetime.datetime.now()
+            if self.dims == 2 and dims == 3:
+                nodes[:,2] = np.random.rand(nodes.shape[0])
+            self.dims = dims
             for step in range(self.steps):
                 # See: https://sparrow.dev/pairwise-distance-in-numpy/
                 vectors = nodes[:,None,:] - nodes[None,:,:]
@@ -105,11 +109,11 @@ class glsFDPProcess(Process):
                     aforces[edges[e,0]] += eforces[e]
                     aforces[edges[e,1]] -= eforces[e]
                 nodes += aforces * self.speed
-                if self.settings.graph_2D:
+                if dims == 2:
                     nodes[:,2] = 0
                 time = datetime.datetime.now() - start
                 time = time.total_seconds()
-            self.out_q.put([np.array(nodes),time/self.steps])
+            self.out_q.put([np.array(nodes), time/self.steps, dims])
             sleep(self.nice/1000.0)
         return
 
@@ -119,6 +123,7 @@ class glsFDPThread(Thread):
     def __init__(self, settings, graph, speed, nice=1):
         Thread.__init__(self)
         self.settings = settings
+        self.dims = 3 if self.settings.graph_3D else 2
         self.graph = graph
         self.speed = speed
         self.nice  = nice
@@ -140,23 +145,25 @@ class glsFDPThread(Thread):
             else:
                 nodes = None
                 edges = None
-            self.in_q.put(["run",nodes,edges])
+            dims = 3 if self.settings.graph_3D else 2
+            self.in_q.put(["run", nodes, edges, dims])
             data = False
             while(not data):
                 try:
-                    nodes,time = self.out_q.get_nowait()
+                    nodes,time,dims = self.out_q.get_nowait()
                     data = True
                 except Empty:
                     sleep(self.nice/1000.0)
             with self.lock:
                 self.graph.set_np_nodes(nodes)
                 self.time = time
+                self.dims = dims
             sleep(self.nice/1000.0)
         return
     def get_time(self):
         with self.lock:
             return self.time
-    def set_speed(self,speed):
+    def set_speed(self, speed):
         with self.lock:
             self.speed = speed
         return
@@ -165,6 +172,6 @@ class glsFDPThread(Thread):
             return self.graph
         return
     def stop(self):
-        self.in_q.put(["stop",None,None])
+        self.in_q.put(["stop", None, None, None])
         self.done = True
         return
