@@ -5,9 +5,6 @@ from glsFDP import fdpGraph
 from glsFDP import glsFDPThread
 
 class glsFSObj(fdpNode):
-    name = ""
-    path = ""
-    abspath = ""
     def __init__(self, path):
         self.path = path
         self.name = os.path.basename(self.path)
@@ -30,15 +27,13 @@ class glsDir(glsFSObj):
         return self.path + "@" + str(self.pos) + "+" + str(self.frc)
 
 class glsRoot(glsFSObj):
-    files = []
-    dirs  = []
-    graph = fdpGraph()
-    def __init__(self, path="."):
+    def __init__(self, settings, path="."):
         path = os.path.abspath(path)
         super().__init__(path)
+        self.settings = settings
         self.files = []
         self.dirs  = []
-        self.graph = fdpGraph()
+        self.graph = fdpGraph(self.settings)
         for root, dirs, files in os.walk(self.path):
             root_node = glsDir(root)
             for name in files:
@@ -54,17 +49,17 @@ class glsRoot(glsFSObj):
         return
 
 class glsProject:
-    threads = []
-    roots   = []
-    def __init__(self, paths=["."]):
+    def __init__(self, settings, paths=["."]):
+        self.settings = settings
         self.roots = []
+        self.threads = []
         for p in paths:
             self.add_root(p)
         return
-    def add_root(self,path):
-        root = glsRoot(path)
+    def add_root(self, path):
+        root = glsRoot(self.settings, path)
         self.roots.append(root)
-        thread = glsFDPThread(root.graph,speed=0.01)
+        thread = glsFDPThread(self.settings, root.graph, speed=0.01)
         self.threads.append(thread)
         thread.start()
         return

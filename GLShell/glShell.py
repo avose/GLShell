@@ -45,14 +45,13 @@ VERSION = "0.0.2"
 
 class glShell(wx.Frame):
     ID_LICENSE = 1000
-    def __init__(self,app):
+    def __init__(self, app, settings):
+        self.settings = settings
+        self.settings.AddWatcher(self.OnChangeSettings)
         self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY,
                           "GLShell - "+VERSION,
                           size = (1366, 768))
-        self.settings = glsSettings.glsSettings()
-        self.settings.Load()
-        self.settings.AddWatcher(self.OnChangeSettings)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.InitUI()
@@ -185,10 +184,12 @@ class glShell(wx.Frame):
 ################################################################
 
 if __name__ == '__main__':
+    settings = glsSettings.glsSettings()
+    settings.Load()
     proj_path = sys.argv[1] if len(sys.argv) == 2 else "."
-    project = glsp.glsProject(paths=[proj_path])
+    project = glsp.glsProject(settings, paths=[proj_path])
     app = wx.App(0);
-    gl_shell = glShell(app)
+    gl_shell = glShell(app, settings)
     app.SetTopWindow(gl_shell)
     gl_shell.AddProject(project)
     app.MainLoop()

@@ -13,6 +13,8 @@ class glsSettings():
     term_fgcolor = (192,192,192)
     term_bgcolor = (0,0,0)
     term_wchars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
+    graph_2D = False
+    graph_3D = True
     def __init__(self):
         self.watchers = []
         return
@@ -30,6 +32,8 @@ class glsSettings():
                 self.term_fgcolor = d['term_fgcolor'] if 'term_fgcolor' in d else self.term_fgcolor
                 self.term_gbcolor = d['term_bgcolor'] if 'term_bgcolor' in d else self.term_bgcolor
                 self.term_wchars = d['term_wchars'] if 'term_wchars' in d else self.term_wchars
+                self.graph_2D = d['graph_2D'] if 'graph_2D' in d else self.graph_2D
+                self.graph_3D = d['graph_3D'] if 'graph_3D' in d else self.graph_3D
         except:
             pass
         self.OnChange()
@@ -45,7 +49,9 @@ class glsSettings():
                  'term_color': self.term_color,
                  'term_fgcolor': self.term_fgcolor,
                  'term_bgcolor': self.term_bgcolor,
-                 'term_wchars': self.term_wchars }
+                 'term_wchars': self.term_wchars,
+                 'graph_2D': self.graph_2D,
+                 'graph_3D': self.graph_3D }
             json.dump(d, conf, indent=2)
         return
     def OnChange(self):
@@ -128,21 +134,39 @@ class TabTerminal(wx.Panel):
         self.settings.term_fgcolor = (color.GetRed(), color.GetGreen(), color.GetBlue())
         color = self.cp_bgcolor.GetColour()
         self.settings.term_bgcolor = (color.GetRed(), color.GetGreen(), color.GetBlue())
-        self.settings.OnChange()
         return
+
+################################################################
 
 class TabGraph(wx.Panel):
     def __init__(self, parent, settings):
         wx.Panel.__init__(self, parent)
+        self.settings = settings
         main_box = wx.BoxSizer(wx.VERTICAL)
         row = wx.BoxSizer(wx.HORIZONTAL)
-        self.msg = wx.StaticText(self, -1, "Settings for force-directed placement graph.")
-        row.Add(self.msg, 0, wx.ALIGN_CENTER | wx.ALL, 20)
+        lblList = ['3D', '2D']
+        self.rbox = wx.RadioBox(self, label='Grap Rendering',
+                                pos=(80,10), choices=lblList ,
+                                majorDimension=1, style=wx.RA_SPECIFY_ROWS)
+        if self.settings.graph_3D:
+            self.rbox.SetSelection(0)
+        elif self.settings.graph_2D:
+            self.rbox.SetSelection(1)
+        row.Add(self.rbox, 0, wx.ALIGN_CENTER | wx.ALL, 20)
         main_box.Add(row, 0, wx.ALIGN_CENTER | wx.ALL, 20)
         self.SetSizerAndFit(main_box)
         return
     def Save(self):
+        dims = self.rbox.GetStringSelection()
+        if dims == "3D":
+            self.settings.graph_2D = False
+            self.settings.graph_3D = True
+        elif dims == "2D":
+            self.settings.graph_2D = True
+            self.settings.graph_3D = False
         return
+
+################################################################
 
 class SettingsFrame(wx.Frame):
     def __init__(self, parent, settings,
@@ -185,6 +209,7 @@ class SettingsFrame(wx.Frame):
         self.tab_term.Save()
         self.tab_graph.Save()
         self.parent.settings.Save()
+        self.settings.OnChange()
         return
     def OnApply(self, event):
         self.tab_term.Save()

@@ -38,6 +38,8 @@ class glsGraphCanvas(GLCanvas):
         GLCanvas.__init__(self, parent, id=-1, size=size)
         self.parent = parent
         self.settings = settings
+        self.graph_2D = settings.graph_2D
+        self.graph_3D = settings.graph_3D
         self.settings.AddWatcher(self.OnChangeSettings)
         self.textsizer = glsGLTextSizer()
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -50,6 +52,8 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.translate = np.array((0, 0, 0), dtype=np.single)
+        self.rotate = 0
         wx.CallLater(10, self.PushFrames)
         return
     def OnChangeSettings(self, settings):
@@ -61,17 +65,7 @@ class glsGraphCanvas(GLCanvas):
         self.settings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnSize(self, event):
-        # Projection.
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(0.0, self.Size[0],
-                0.0, self.Size[1],
-                -0.01, 10.0)
-        # Model view.
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        # Viewport.
-        glViewport(0,0,self.Size[0],self.Size[1])
+        self.SetMatrices()
         return
     def OnLeftDown(self, event):
         self.mouse_pos = event.GetPosition()
@@ -91,12 +85,12 @@ class glsGraphCanvas(GLCanvas):
         return
     def OnMove(self, event):
         pos = event.GetPosition()
+        dx = (self.mouse_pos[0] - pos[0])*0.3
+        dy = (self.mouse_pos[1] - pos[1])*0.3
         if self.mouse_down[0]:
-            self.translate += (-(self.mouse_pos[0] - pos[0]),
-                                (self.mouse_pos[1] - pos[1]))
+            self.translate += np.array((-dx, dy, 0), dtype=np.single)
         if self.mouse_down[3]:
-            self.rotate += ((self.mouse_pos[0] - pos[0])*0.3,
-                            (self.mouse_pos[1] - pos[1])*0.3)
+            self.rotate += dx + dy
         self.mouse_pos = pos
         return
     def OnWheel(self, event):
@@ -139,19 +133,29 @@ class glsGraphCanvas(GLCanvas):
     def OnDraw(self):
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        if self.graph_2D:
+            self.Set2D()
+        elif self.graph_3D:
+            self.Set3D()
         red = [1.0, 0.0, 0.0 ,1.0]
         grn = [0.0, 1.0, 0.0 ,1.0]
         blu = [0.0, 0.0, 1.0 ,1.0]
         ylw = [1.0, 1.0, 0.0 ,1.0]
         self.textbuff.SetColor(ylw)
         # Apply zoom and rotation.
-        glPushMatrix()
-        glTranslatef(*self.translate, 0)
-        # !!avose: Rotation need to be fixed to not rotate text!!
-        glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
-        glRotatef(self.rotate[0], 0, 0, 1)
-        glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
+        if self.graph_2D:
+            glTranslatef(*self.translate, 0)
+            glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
+            glRotatef(self.rotate, 0, 0, 1)
+            glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
+            zoom = self.zoom
+        elif self.graph_3D:
+            zoom = self.zoom * 0.05
+            glTranslatef(self.translate[0]/self.Size[0]*5*self.zoom,
+                         self.translate[1]/self.Size[1]*5*self.zoom, 0)
+            glRotatef(self.rotate, 0, 1, 0)
         # Draw the graph.
+        self.Record3DTo2DMatrices()
         if self.project is not None and len(self.project.roots) > 0:
             gthread = self.project.threads[0]
             graph   = gthread.get_graph()
@@ -164,37 +168,50 @@ class glsGraphCanvas(GLCanvas):
                     e = graph.np_edges[ei]
                     for n in e:
                         pos = np.array(graph.np_nodes[n])
-                        pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
-                        pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
+                        pos *= zoom
+                        if self.graph_2D:
+                            pos[0] += self.Size[0]/2.0
+                            pos[1] += self.Size[1]/2.0
                         glVertex3fv(pos)
                 glEnd()
                 # Draw nodes.
+                pos_nodes = []
                 for ni,node in enumerate(graph.nlist):
-                    glPushMatrix()
                     pos = np.array(graph.np_nodes[ni])
-                    pos[0] = pos[0]*self.zoom + self.Size[0]/2.0
-                    pos[1] = pos[1]*self.zoom + self.Size[1]/2.0
-                    glTranslatef(*pos)
+                    pos *= zoom
+                    if self.graph_2D:
+                        pos[0] += self.Size[0]/2.0
+                        pos[1] += self.Size[1]/2.0
                     if isinstance(node, glsDir):
                         glColor4fv(red)
-                        self.textbuff.SetColor([1,0,1,1])
                         size = 10.0
-                        label = True
                     else:
                         glColor4fv(blu)
-                        self.textbuff.SetColor(ylw)
                         size = 8.0
-                        label = True if self.zoom >= 10 else False
                     glPointSize(size)
                     glBegin(GL_POINTS)
-                    glVertex3fv([0,0,0])
+                    glVertex3fv(pos)
                     glEnd()
-                    glPopMatrix()
+                    pos_nodes.append(self.Project3DTo2D(pos))
+                # Draw labels.
+                self.Set2D()
+                for ni,node in enumerate(graph.nlist):
+                    pos = pos_nodes[ni]
+                    if self.graph_3D:
+                        if isinstance(node, glsDir):
+                            label = True
+                        else:
+                            label = True if self.zoom >= 10 else False
+                    elif self.graph_2D:
+                        if isinstance(node, glsDir):
+                            label = True
+                        else:
+                            label = True if zoom >= 10 else False
                     if label is True:
-                        pos[1] += 10
-                        self.textbuff.DrawGL(pos,text=node.name,center=True)
-        glPopMatrix()
+                        self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
+                                             text=node.name, center=True)
         # Draw stats.
+        self.Set2D()
         glColor4fv([0,0,0,0.75])
         glBegin(GL_QUADS)
         glVertex3fv([0,   self.Size[1]-2*self.textbuff.height, 0])
@@ -222,6 +239,41 @@ class glsGraphCanvas(GLCanvas):
         # Swap buffers to show the scene.
         self.SwapBuffers()
         return
+    def Project3DTo2D(self, pos):
+        return gluProject(*pos, self.model_view, self.projection, self.viewport)
+    def Record3DTo2DMatrices(self):
+        self.model_view = glGetDoublev(GL_MODELVIEW_MATRIX)
+        self.projection = glGetDoublev(GL_PROJECTION_MATRIX)
+        self.viewport   = glGetIntegerv(GL_VIEWPORT)
+        return
+    def Set2D(self):
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glOrtho(0.0, self.Size[0],
+                0.0, self.Size[1],
+                -0.01, 10.0)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        return
+    def Set3D(self):
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(75, self.Size[0]/self.Size[1], 1, 1000);
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        gluLookAt(0.0,  0.0, 10.0,  # eye
+                  0.0,  0.0,  0.0,   # center
+                  0.0,  1.0,  0.0 ); # up vector
+        return
+    def SetMatrices(self):
+        # Projection and model view.
+        if self.graph_2D:
+            self.Set2D()
+        elif self.graph_3D:
+            self.Set3D()
+        # Viewport.
+        glViewport(0, 0, self.Size[0],self.Size[1])
+        return
     def InitGL(self):
         # Lighting.
         glDisable(GL_LIGHTING)
@@ -236,17 +288,8 @@ class glsGraphCanvas(GLCanvas):
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
         glEnable(GL_POINT_SMOOTH);
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-        # Projection.
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(0.0, self.Size[0],
-                0.0, self.Size[1],
-                -0.01, 10.0)
-        # Model view.
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        # Viewport.
-        glViewport(0,0,self.Size[0],self.Size[1])
+        # Set projection and model view.
+        self.SetMatrices()
         # Get a reusable quadric.
         self.quadratic = gluNewQuadric()
         gluQuadricNormals(self.quadratic, GLU_SMOOTH)

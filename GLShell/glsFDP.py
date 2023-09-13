@@ -7,24 +7,15 @@ import sys, math
 import datetime
 
 class fdpNode():
-    pos = np.array([0,0,0], dtype=float)
-    frc = np.array([0,0,0], dtype=float)
-    id  = ""
     def __init__(self,id):
         self.pos = np.random.random(size=3)
         self.frc = np.array([0,0,0], dtype=float)
-        self.pos[2] = 0.0
         self.id = id
         return
 
 class fdpGraph():
-    nodes = {}
-    edges = {}
-    nlist = []
-    nndxs = {}
-    np_nodes = np.ndarray((0,3),dtype=np.single)
-    np_edges = np.ndarray((0,2),dtype=np.intc)
-    def __init__(self):
+    def __init__(self, settings):
+        self.settings = settings
         self.nodes = {}
         self.edges = {}
         self.nlist = []
@@ -71,16 +62,9 @@ class fdpGraph():
 ################################################################
     
 class glsFDPProcess(Process):
-    in_q  = None
-    out_q = None
-    speed = 0.1
-    nice  = 0
-    steps = 10
-    nodes = None
-    edges = None
-    done  = False
-    def __init__(self, in_q, out_q, speed, steps=10, nice=1):
+    def __init__(self, settings, in_q, out_q, speed, steps=10, nice=1):
         Process.__init__(self)
+        self.settings = settings
         self.in_q  = in_q
         self.out_q = out_q
         self.nice  = nice
@@ -121,6 +105,8 @@ class glsFDPProcess(Process):
                     aforces[edges[e,0]] += eforces[e]
                     aforces[edges[e,1]] -= eforces[e]
                 nodes += aforces * self.speed
+                if self.settings.graph_2D:
+                    nodes[:,2] = 0
                 time = datetime.datetime.now() - start
                 time = time.total_seconds()
             self.out_q.put([np.array(nodes),time/self.steps])
@@ -130,57 +116,41 @@ class glsFDPProcess(Process):
 ################################################################
 
 class glsFDPThread(Thread):
-    graph = None
-    lock  = None
-    speed = 0.1
-    nice  = 10
-    time  = 0
-    done  = False
-    proc  = False
-    in_q  = None
-    out_q = None
-    first = True
-    def __init__(self, graph, speed, nice=1, proc=True):
+    def __init__(self, settings, graph, speed, nice=1):
         Thread.__init__(self)
+        self.settings = settings
         self.graph = graph
         self.speed = speed
         self.nice  = nice
         self.done  = False
         self.first = True
         self.lock  = Lock()
-        if proc:
-            self.in_q  = Queue()
-            self.out_q = Queue()
-            self.proc = glsFDPProcess(self.in_q, self.out_q, self.speed)
-            self.proc.start()
+        self.in_q  = Queue()
+        self.out_q = Queue()
+        self.time = 0
+        self.proc = glsFDPProcess(self.settings, self.in_q, self.out_q, self.speed)
+        self.proc.start()
         return
     def run(self):
         while(not self.done):
-            if self.proc:
-                if self.first:
-                    with self.lock:
-                        nodes = self.graph.get_np_nodes()
-                        edges = self.graph.get_np_edges()
-                else:
-                    nodes = None
-                    edges = None
-                self.in_q.put(["run",nodes,edges])
-                data = False
-                while(not data):
-                    try:
-                        nodes,time = self.out_q.get_nowait()
-                        data = True
-                    except Empty:
-                        sleep(self.nice/1000.0)
+            if self.first:
                 with self.lock:
-                    self.graph.set_np_nodes(nodes)
-                    self.time = time
+                    nodes = self.graph.get_np_nodes()
+                    edges = self.graph.get_np_edges()
             else:
-                with self.lock:
-                    start = datetime.datetime.now()
-                    self.graph.tick(speed=self.speed)
-                    time = datetime.datetime.now() - start
-                    self.time = time.total_seconds()
+                nodes = None
+                edges = None
+            self.in_q.put(["run",nodes,edges])
+            data = False
+            while(not data):
+                try:
+                    nodes,time = self.out_q.get_nowait()
+                    data = True
+                except Empty:
+                    sleep(self.nice/1000.0)
+            with self.lock:
+                self.graph.set_np_nodes(nodes)
+                self.time = time
             sleep(self.nice/1000.0)
         return
     def get_time(self):
@@ -195,7 +165,6 @@ class glsFDPThread(Thread):
             return self.graph
         return
     def stop(self):
-        if self.proc:
-            self.in_q.put(["stop",None,None])
+        self.in_q.put(["stop",None,None])
         self.done = True
         return
