@@ -278,7 +278,7 @@ class glsGraphCanvas(GLCanvas):
         gluPerspective(75, self.Size[0]/self.Size[1], 1, 1000);
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        gluLookAt(0.0,  0.0, 10.0,  # eye
+        gluLookAt(0.0,  0.0, 10.0,   # eye
                   0.0,  0.0,  0.0,   # center
                   0.0,  1.0,  0.0 ); # up vector
         return

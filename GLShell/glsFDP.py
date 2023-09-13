@@ -104,6 +104,7 @@ class glsFDPProcess(Process):
                 af_rows = np.sum(forces,axis=0)
                 af_cols = np.sum(forces,axis=1)
                 aforces += af_rows - af_cols
+                dists = (dists*0.25)**3.0
                 eforces = vectors[edges[:,1], edges[:,0]] * dists[edges[:,1], edges[:,0], np.newaxis]
                 for e in range(len(edges)):
                     aforces[edges[e,0]] += eforces[e]
