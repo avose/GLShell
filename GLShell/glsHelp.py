@@ -1,5 +1,7 @@
 import wx
 
+################################################################
+
 class glsAboutFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="About GLShell", style=style)
@@ -600,3 +602,5 @@ class glsLicenseFrame(wx.Frame):
         self.Parent.license_frame = None
         self.Destroy()
         return
+
+################################################################

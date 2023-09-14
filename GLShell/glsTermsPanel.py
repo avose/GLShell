@@ -13,6 +13,8 @@ from array import *
 
 import TermEmulator
 
+################################################################
+
 def PrintStringAsAscii(s):
     for ch in s:
         if ch in string.printable:
@@ -20,6 +22,8 @@ def PrintStringAsAscii(s):
         else:
             print(ord(ch), end="")
     return
+
+################################################################
 
 class glsTermPanelPopupMenu(wx.Menu):
     ID_NEW_TERM    = 1000
@@ -38,6 +42,8 @@ class glsTermPanelPopupMenu(wx.Menu):
         item = wx.MenuItem(self, self.ID_SEARCH_FILE, 'Search File')
         self.Append(item)
         return
+
+################################################################
 
 class glsTerminalPanel(wx.Window):
     color_map_fg = ( ( 192, 192, 192),
@@ -722,3 +728,5 @@ class glsTermsPanel(wx.Window):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
+
+################################################################

@@ -5,6 +5,8 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 
+################################################################
+
 class glsGLTextSizer():
     fontinfo = None
     font     = None
@@ -21,6 +23,8 @@ class glsGLTextSizer():
         return
     def TextSize(self,text):
         return self.dc.GetTextExtent(text)
+
+################################################################
 
 class glsGLText():
     buff       = None
@@ -106,3 +110,5 @@ class glsGLText():
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
         return
+
+################################################################

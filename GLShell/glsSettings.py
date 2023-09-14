@@ -223,3 +223,5 @@ class SettingsFrame(wx.Frame):
         self.parent.settings_frame = None
         self.Destroy()
         return
+
+################################################################

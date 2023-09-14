@@ -37,11 +37,14 @@ from threading import Thread
 
 from glsTermsPanel import glsTermsPanel
 from glsGraphPanel import glsGraphPanel
+from glsToolBar import glsToolBar
 import glsProject as glsp
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
+
+################################################################
 
 class glShell(wx.Frame):
     ID_LICENSE = 1000
@@ -142,11 +145,9 @@ class glShell(wx.Frame):
         self.InitMenuBar()
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
-        # Toolbar box.
-        box_tool = wx.BoxSizer(wx.HORIZONTAL)
-        self.bt_run = wx.Button(self, wx.ID_ANY, "Toolbar Button")
-        box_tool.Add(self.bt_run, 0, wx.LEFT | wx.RIGHT, 10)
-        box_main.Add(box_tool, 0, wx.ALIGN_RIGHT | wx.ALL, 0)
+        # Toolbar.
+        self.toolbar = glsToolBar(self, self.settings)
+        box_main.Add(self.toolbar, 0, wx.EXPAND)
         # Graph and Terminal side-by-side.
         self.min_term_size = (320, 92)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
@@ -167,6 +168,12 @@ class glShell(wx.Frame):
         self.project = proj;
         if self.graph_panel is not None:
             self.graph_panel.AddProject(self.project)
+        return
+    def OnSearchFiles(self, text):
+        self.project.search_files(text)
+        return
+    def OnSearchContents(self, text):
+        self.project.search_contents(text)
         return
     def OnClose(self, event):
         if self.settings_frame is not None:
@@ -193,3 +200,5 @@ if __name__ == '__main__':
     app.SetTopWindow(gl_shell)
     gl_shell.AddProject(project)
     app.MainLoop()
+
+################################################################

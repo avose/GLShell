@@ -6,6 +6,8 @@ import numpy as np
 import sys, math
 import datetime
 
+################################################################
+
 class fdpNode():
     def __init__(self,id):
         self.pos = np.random.random(size=3)
@@ -180,3 +182,5 @@ class glsFDPThread(Thread):
         self.in_q.put(["stop", None, None, None])
         self.done = True
         return
+
+################################################################

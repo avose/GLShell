@@ -186,12 +186,17 @@ class glsGraphCanvas(GLCanvas):
                 if self.graph_2D:
                     pos[0] += self.Size[0]/2.0
                     pos[1] += self.Size[1]/2.0
-                if isinstance(node, glsDir):
-                    glColor4fv(red)
-                    size = 10.0
+                if node.search_result == True:
+                    glColor4fv((1.0,0.0,1.0,1.0))
+                    size = 20.0
+                    pass
                 else:
-                    glColor4fv(blu)
-                    size = 8.0
+                    if isinstance(node, glsDir):
+                        glColor4fv(red)
+                        size = 10.0
+                    else:
+                        glColor4fv(blu)
+                        size = 8.0
                 glPointSize(size)
                 glBegin(GL_POINTS)
                 glVertex3fv(pos)
@@ -201,16 +206,19 @@ class glsGraphCanvas(GLCanvas):
             self.Set2D()
             for ni,node in enumerate(graph.nlist):
                 pos = pos_nodes[ni]
-                if self.graph_3D:
-                    if isinstance(node, glsDir):
-                        label = True
-                    else:
-                        label = True if self.zoom >= 10 else False
-                elif self.graph_2D:
-                    if isinstance(node, glsDir):
-                        label = True
-                    else:
-                        label = True if zoom >= 10 else False
+                if node.search_result == True:
+                    label = True
+                else:
+                    if self.graph_3D:                        
+                        if isinstance(node, glsDir):
+                            label = True
+                        else:
+                            label = True if self.zoom >= 10 else False
+                    elif self.graph_2D:
+                        if isinstance(node, glsDir):
+                            label = True
+                        else:
+                            label = True if zoom >= 10 else False
                 if label is True:
                     self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
                                          text=node.name, center=True)
@@ -333,3 +341,5 @@ class glsGraphPanel(wx.Window):
     def OnSize(self, event):
         self.graph_canvas.SetSize(0,0,self.Size[0],self.Size[1])
         return
+
+################################################################

@@ -4,6 +4,8 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 
+################################################################
+
 class glsGLBuffer():
     dc     = None
     bitmap = None
@@ -48,5 +50,6 @@ class glsGLBuffer():
     def BindTexture(self):
         if self.tex is not None:
             glBindTexture(GL_TEXTURE_2D, self.tex)
+        return
 
-        
+################################################################
