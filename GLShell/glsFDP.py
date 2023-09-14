@@ -95,16 +95,20 @@ class glsFDPProcess(Process):
                 vectors = nodes[:,None,:] - nodes[None,:,:]
                 dists = np.linalg.norm(vectors, axis=-1)
                 vectors *= 0.1
-                dists2 = np.square(dists)[:,:,np.newaxis]
+                dists0 = np.array(dists)
+                dists0[dists0>30.0] = 30.0
+                dists0[dists0<0.1] = 0.1
+                dists0 = (dists0**3)[:,:,np.newaxis]
                 forces = np.divide(np.transpose(vectors,axes=(1,0,2)),
-                                   dists2,
+                                   dists0,
                                    out=np.zeros_like(vectors),
-                                   where=dists2!=0)
+                                   where=dists0!=0)
                 aforces = np.zeros_like(nodes)
                 af_rows = np.sum(forces,axis=0)
                 af_cols = np.sum(forces,axis=1)
                 aforces += af_rows - af_cols
-                dists = (dists*0.25)**3.0
+                dists = dists**3
+                dists[dists>40.0] = 40.0
                 eforces = vectors[edges[:,1], edges[:,0]] * dists[edges[:,1], edges[:,0], np.newaxis]
                 for e in range(len(edges)):
                     aforces[edges[e,0]] += eforces[e]
