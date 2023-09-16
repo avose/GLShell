@@ -144,7 +144,7 @@ class glsFDPThread(Thread):
         self.proc.start()
         return
     def run(self):
-        while(not self.done):
+        while not self.done:
             if self.first:
                 with self.lock:
                     nodes = self.graph.get_np_nodes()
@@ -155,7 +155,7 @@ class glsFDPThread(Thread):
             dims = 3 if self.settings.graph_3D else 2
             self.in_q.put(["run", nodes, edges, dims])
             data = False
-            while(not data):
+            while not data:
                 try:
                     nodes,time,dims = self.out_q.get_nowait()
                     data = True

@@ -1,7 +1,5 @@
-import re
 import os
 import sys
-import mmap
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsFDP import glsFDPThread
@@ -57,35 +55,6 @@ class glsRoot(glsFSObj):
                 self.graph.add_node(node)
                 self.graph.add_edge( (root_node,node) )
         return
-    def search_files(self, text):
-        if text is None or text == "":
-            for node in self.graph.nlist:
-                node.search_result = False
-            return
-        for node in self.graph.nlist:
-            if re.match(text, node.name):
-                node.search_result = True
-            else:
-                node.search_result = False
-        return
-    def search_contents(self, text):
-        if text is None or text == "":
-            for node in self.graph.nlist:
-                node.search_result = False
-            return
-        for node in self.graph.nlist:
-            if not isinstance(node, glsFile):
-                continue
-            try:
-                with open(node.abspath, 'rb', 0) as f:
-                    contents = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                    if contents.find(bytes(text,"utf-8")) != -1:
-                        node.search_result = True
-                    else:
-                        node.search_result = False
-            except:
-                node.search_result = False
-        return
 
 ################################################################
 
@@ -97,12 +66,6 @@ class glsProject:
         self.root = glsRoot(self.settings, path)
         self.thread = glsFDPThread(self.settings, self.root.graph, speed=0.01)
         self.thread.start()
-        return
-    def search_files(self, text):
-        self.root.search_files(text)
-        return
-    def search_contents(self, text):
-        self.root.search_contents(text)
         return
 
 ################################################################
