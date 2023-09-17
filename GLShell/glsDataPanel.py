@@ -115,22 +115,29 @@ class glsSearch():
         self.projects = projects
         self.text = text
         self.search_type = search_type
-        self.results = {}
+        self.results = []
+        self.result_files = {}
         return
     def AddResult(self, result):
         pndx, result = result
         nndx, path, line = result
-        if (pndx,nndx) not in self.results:
-            self.results[(pndx,nndx)] = [ (path, line) ]
+        if line:
+            lndx, line = line
         else:
-            self.results[(pndx,nndx)].append( (path, line) )
+            lndx = 0
+        key = (pndx,nndx)
+        if key not in self.result_files:
+            self.result_files[key] = True
+            self.results.append( (path,) )
+        if line:
+            self.results.append( (path, lndx, line) )
         return
 
 ################################################################
 
 class glsSearchResultList(wx.VListBox):
     def __init__(self, parent, search):
-        style = wx.LB_NEEDED_SB | wx.LB_SINGLE
+        style = wx.LB_NEEDED_SB | wx.LB_MULTIPLE
         self.char_w,self.char_h = 10,10
         super(glsSearchResultList, self).__init__(parent, style=style)
         self.search = search
@@ -157,21 +164,13 @@ class glsSearchResultList(wx.VListBox):
         text += initial_text
         return (text, nlines)
     def ResultToStrings(self, index):
-        # result: (path, line)
-        results = list(self.search.results.values())[index]
-        path, rows_path = self.LineWrapText(results[0][0])
-        rows_lines = 0
-        lines = ""
-        for rndx,result in enumerate(results):
-            if result[1] is not None:
-                # line: (index, text)
-                lndx, line = result[1]
-                line, lrows = self.LineWrapText("%d: "%(lndx) + line)
-                rows_lines += lrows    
-                lines += line
-                if rndx != len(results)-1:
-                    lines += '\n'
-        return path, rows_path, lines, rows_lines
+        result = self.search.results[index]
+        if len(result) == 1:
+            path, rows_path = self.LineWrapText(result[0])
+            return path, rows_path, "", 0, ""
+        path, lndx, line = result
+        line, rows_line = self.LineWrapText("        " + line)
+        return "", 0, line, rows_line, ("%d: "%(lndx)).ljust(8)
     def HeaderToString(self):
         if self.search.search_type == self.search.TYPE_FILES:
             type_text = "files"
@@ -183,7 +182,6 @@ class glsSearchResultList(wx.VListBox):
         text, rows = self.HeaderToString()
         return rows * self.char_h
     def DrawHeader(self, dc, rect):
-        dc.SetFont(self.font)
         text, rows = self.HeaderToString()
         dc.SetTextForeground((255,255,0))
         dc.DrawText(text, rect[0], rect[1])
@@ -191,45 +189,34 @@ class glsSearchResultList(wx.VListBox):
     def OnMeasureItem(self, index):
         if index == 0:
             return self.MeasureHeader()
-        path, rows_path, line, rows_line = self.ResultToStrings(index-1)
+        path, rows_path, line, rows_line, lndx = self.ResultToStrings(index-1)
         return (rows_path + rows_line) * self.char_h
     def OnDrawItem(self, dc, rect, index):
         dc.Clear()
-        pen = wx.Pen((0,0,128))
+        dc.SetFont(self.font)
+        if not index:
+            self.DrawHeader(dc, rect)
+            return
+        path, rows_path, line, rows_line, lndx = self.ResultToStrings(index-1)
+        # Draw background.
         if self.IsSelected(index):
             brush = wx.Brush((96,96,96))
         else:
             brush = wx.Brush((0,0,0))
-        dc.SetPen(pen)
         dc.SetBrush(brush)
+        dc.SetPen(wx.Pen((0,0,0)))
         dc.DrawRectangle(rect[0], rect[1], rect[2], rect[3])
-        if index == 0:
-            self.DrawHeader(dc, rect)
+        if path:
+            # Draw path.
+            dc.SetTextForeground((255,255,255))
+            dc.DrawText(path, rect[0], rect[1])
             return
-        dc.SetFont(self.font)
-        path, rows_path, lines, rows_lines = self.ResultToStrings(index-1)
-        dc.SetTextForeground((192,192,192))
-        dc.DrawText(path, rect[0], rect[1])
-        pos = (rect[0], rect[1]+rows_path*self.char_h)
-        if rows_lines == 0:
-            return
-        '''
-        start = 0
-        end = contents.find(newline, start)
-        line_num = 0
-        while end != -1:
-            line = contents[start:end]
-            yield line_num, line.decode("utf-8")
-            line_num += 1
-            start = end + 1
-            end = contents.find(newline, start)
-        if len(contents)-start > 0:
-            line = contents[start:]
-            yield line_num, line.decode("utf-8")
-        text = path + '\n' + line
-        '''
+        # Draw line number.
+        dc.SetTextForeground((255,255,0))
+        dc.DrawText(lndx, rect[0], rect[1])
+        # Draw matching line.
         dc.SetTextForeground((128,255,128))
-        dc.DrawText(lines, *pos)
+        dc.DrawText(line_raw, rect[0], rect[1])
         return
     def OnDrawBackground(self, dc, rect, index):
         dc.Clear()
@@ -263,8 +250,6 @@ class glsSearchResultPanel(wx.Window):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def OnSearchResult(self):
-        return
 
 ################################################################
 
@@ -297,6 +282,7 @@ class glsDataPanel(wx.Window):
         elif search.search_type == search.TYPE_CONTENTS:
             type_text = "Contents"
         self.notebook.AddPage(result_panel, "Search %s '%s'"%(type_text, search.text))
+        self.notebook.SetSelection(len(self.tabs)-1)
         return
     def SearchFiles(self, text):
         self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_FILES))
