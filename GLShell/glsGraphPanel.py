@@ -23,7 +23,6 @@ class glsGraphCanvas(GLCanvas):
         GLCanvas.__init__(self, parent, id=-1, size=size)
         self.project = project
         self.settings = settings
-        self.graph_2D = settings.graph_2D
         self.graph_3D = settings.graph_3D
         self.settings.AddWatcher(self.OnChangeSettings)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -142,11 +141,9 @@ class glsGraphCanvas(GLCanvas):
         with gthread.lock:
             if gthread.dims == 2:
                 self.Set2D()
-                self.graph_2D = True
                 self.graph_3D = False
             elif gthread.dims == 3:
                 self.Set3D()
-                self.graph_2D = False
                 self.graph_3D = True
             red = [1.0, 0.0, 0.0 ,1.0]
             grn = [0.0, 1.0, 0.0 ,1.0]
@@ -154,17 +151,17 @@ class glsGraphCanvas(GLCanvas):
             ylw = [1.0, 1.0, 0.0 ,1.0]
             self.textbuff.SetColor(ylw)
             # Apply zoom and rotation.
-            if self.graph_2D:
+            if self.graph_3D:
+                zoom = self.zoom * 0.05
+                glTranslatef(self.translate[0]/self.Size[0]*5*self.zoom,
+                             self.translate[1]/self.Size[1]*5*self.zoom, 0)
+                glRotatef(self.rotate, 0, 1, 0)
+            else:
                 glTranslatef(*self.translate, 0)
                 glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
                 glRotatef(self.rotate, 0, 0, 1)
                 glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
                 zoom = self.zoom
-            elif self.graph_3D:
-                zoom = self.zoom * 0.05
-                glTranslatef(self.translate[0]/self.Size[0]*5*self.zoom,
-                             self.translate[1]/self.Size[1]*5*self.zoom, 0)
-                glRotatef(self.rotate, 0, 1, 0)
             # Save 2D screen coordinates for the nodes.
             self.Record3DTo2DMatrices()
             pos_nodes = []
@@ -176,7 +173,7 @@ class glsGraphCanvas(GLCanvas):
                 for n in e:
                     pos = np.array(graph.np_nodes[n])
                     pos *= zoom
-                    if self.graph_2D:
+                    if not self.graph_3D:
                         pos[0] += self.Size[0]/2.0
                         pos[1] += self.Size[1]/2.0
                     glVertex3fv(pos)
@@ -185,7 +182,7 @@ class glsGraphCanvas(GLCanvas):
             for ni,node in enumerate(graph.nlist):
                 pos = np.array(graph.np_nodes[ni])
                 pos *= zoom
-                if self.graph_2D:
+                if not self.graph_3D:
                     pos[0] += self.Size[0]/2.0
                     pos[1] += self.Size[1]/2.0
                 if node.search_result == True:
@@ -216,7 +213,7 @@ class glsGraphCanvas(GLCanvas):
                             label = True
                         else:
                             label = True if self.zoom >= 10 else False
-                    elif self.graph_2D:
+                    else:
                         if isinstance(node, glsDir):
                             label = True
                         else:
@@ -291,10 +288,10 @@ class glsGraphCanvas(GLCanvas):
         return
     def SetMatrices(self):
         # Projection and model view.
-        if self.graph_2D:
-            self.Set2D()
-        elif self.graph_3D:
+        if self.graph_3D:
             self.Set3D()
+        else:
+            self.Set2D()
         # Viewport.
         glViewport(0, 0, self.Size[0],self.Size[1])
         return
