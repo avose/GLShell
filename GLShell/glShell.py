@@ -41,7 +41,7 @@ import glsProject as glsp
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 ################################################################
 

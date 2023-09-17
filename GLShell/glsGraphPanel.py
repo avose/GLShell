@@ -23,7 +23,7 @@ class glsGraphCanvas(GLCanvas):
         GLCanvas.__init__(self, parent, id=-1, size=size)
         self.project = project
         self.settings = settings
-        self.graph_3D = settings.graph_3D
+        self.graph_3D = settings.Get('graph_3D')
         self.settings.AddWatcher(self.OnChangeSettings)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)

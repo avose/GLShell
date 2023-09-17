@@ -140,15 +140,15 @@ class glsTerminalPanel(wx.Window):
         self.cursor_style = self.terminal.CURSOR_STYLE_DEFAULT
         self.modes = dict(self.terminal.modes)
         # Start child process.
-        self.path = self.settings.shell_path
+        self.path = self.settings.Get('shell_path')
         basename = os.path.basename(self.path)
         arglist = [ basename ]
-        arguments = self.settings.shell_args
+        arguments = self.settings.Get('shell_args')
         if arguments != "":
             for arg in arguments.split(' '):
                 arglist.append(arg)
         self.pid, self.io = pty.fork()
-        os.environ["TERM"] = self.settings.term_type
+        os.environ["TERM"] = self.settings.Get('term_type')
         if self.pid == 0:
             # Child process.
             os.execl(self.path, *arglist)
@@ -370,19 +370,19 @@ class glsTerminalPanel(wx.Window):
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
         return
     def GetFgColor(self, color):
-        if self.settings.term_color:
+        if self.settings.Get('term_color'):
             if color == 0:
-                return self.settings.term_fgcolor
+                return self.settings.Get('term_fgcolor')
             if color < len(self.color_map_fg):
                 return self.color_map_fg[color]
-        return self.settings.term_fgcolor
+        return self.settings.Get('term_fgcolor')
     def GetBgColor(self, color):
-        if self.settings.term_color:
+        if self.settings.Get('term_color'):
             if color == 0:
-                return self.settings.term_bgcolor
+                return self.settings.Get('term_bgcolor')
             if color < len(self.color_map_bg):
                 return self.color_map_bg[color]
-        return self.settings.term_bgcolor
+        return self.settings.Get('term_bgcolor')
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
             self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
@@ -749,7 +749,7 @@ class glsTermsPanel(wx.Window):
         term = self.GetCurrentTerm()
         if term is None:
             return
-        command = self.settings.edit_line
+        command = self.settings.Get('edit_line')
         command = command.replace("{LINE}",str(line))
         term.SendText(command)
         return
@@ -757,7 +757,7 @@ class glsTermsPanel(wx.Window):
         term = self.GetCurrentTerm()
         if term is None:
             return
-        command = self.settings.edit_open
+        command = self.settings.Get('edit_open')
         command = command.replace("{FILE}",str(path))
         term.SendText(command)
         return
@@ -766,7 +766,7 @@ class glsTermsPanel(wx.Window):
         if notebook is None:
             return
         term = notebook.OnNewTerm()
-        command = self.settings.edit_path + " '%s'\x0a"%(path)
+        command = self.settings.Get('edit_path') + " '%s'\x0a"%(path)
         term.SendText(command)
         return
 

@@ -1,5 +1,7 @@
 import wx
 
+from glShell import VERSION
+
 ################################################################
 
 class glsAboutFrame(wx.Frame):
@@ -11,7 +13,7 @@ class glsAboutFrame(wx.Frame):
         # Panel to hold text at the top of the about frame.
         self.panel_top = wx.Panel(self )
         box_text = wx.BoxSizer(wx.VERTICAL)
-        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY, "About GLShell:")
+        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY, "About GLShell (v%s):"%VERSION)
         self.st_title.SetFont(wx.Font(wx.FontInfo(11).FaceName("Monospace").Bold()))
         box_text.Add(self.st_title, 0, wx.ALL, 20)
         self.description = 'GL-Shell was first created in the summer of 2023 by Aaron Vose to\n'\
@@ -566,7 +568,7 @@ glsLicense = "		  GNU LESSER GENERAL PUBLIC LICENSE\n"\
 
 class glsLicenseFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
-        wx.Frame.__init__(self, parent, title="About GLShell", style=style)
+        wx.Frame.__init__(self, parent, title="GLShell License", style=style)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_top = wx.BoxSizer(wx.VERTICAL)

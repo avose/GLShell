@@ -67,7 +67,7 @@ class glsFDPProcess(Process):
     def __init__(self, settings, in_q, out_q, speed, steps=10, nice=1):
         Process.__init__(self)
         self.settings = settings
-        self.dims = 3 if self.settings.graph_3D else 2
+        self.dims = 3 if self.settings.Get('graph_3D') else 2
         self.in_q  = in_q
         self.out_q = out_q
         self.nice  = nice
@@ -130,7 +130,7 @@ class glsFDPThread(Thread):
     def __init__(self, settings, graph, speed, nice=1):
         Thread.__init__(self)
         self.settings = settings
-        self.dims = 3 if self.settings.graph_3D else 2
+        self.dims = 3 if self.settings.Get('graph_3D') else 2
         self.graph = graph
         self.speed = speed
         self.nice  = nice
@@ -152,7 +152,7 @@ class glsFDPThread(Thread):
             else:
                 nodes = None
                 edges = None
-            dims = 3 if self.settings.graph_3D else 2
+            dims = 3 if self.settings.Get('graph_3D') else 2
             self.in_q.put(["run", nodes, edges, dims])
             data = False
             while not data:
