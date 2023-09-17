@@ -19,7 +19,7 @@ class glsSettings():
     edit_path = "/usr/bin/emacs"
     edit_args = "-nw"
     edit_open = "\x18\x06{FILE}\x0a"
-    edit_line = "\x1b\x78agoto-line\x0a{LINE}\x0a"
+    edit_line = "\x1b\x78goto-line\x0a{LINE}\x0a"
     def __init__(self):
         self.watchers = []
         return
@@ -288,7 +288,7 @@ class TabEditor(wx.Panel):
         # Row zero.
         row0 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_path = wx.StaticText(self, wx.ID_ANY, "Editor Path:")
-        row0.Add(self.st_edit_path, 0, wx.LEFT | wx.RIGHT, 5)
+        row0.Add(self.st_edit_path, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.tc_path = wx.TextCtrl(self, wx.ID_ANY)
         edit_path = os.path.abspath(settings.edit_path)
         self.tc_path.SetValue(edit_path)
@@ -298,7 +298,7 @@ class TabEditor(wx.Panel):
         # Row one.
         row1 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_args = wx.StaticText(self, wx.ID_ANY, "Arguments:")
-        row1.Add(self.st_edit_args, 0, wx.LEFT | wx.RIGHT, 5)
+        row1.Add(self.st_edit_args, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.tc_args = wx.TextCtrl(self, wx.ID_ANY)
         self.tc_args.SetValue(str(settings.edit_args))
         row1.Add(self.tc_args, 1, wx.ALL)
@@ -313,19 +313,19 @@ class TabEditor(wx.Panel):
         row3 = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_open = wx.Button(self, wx.ID_ANY, "Open File")
         self.btn_open.Bind(wx.EVT_BUTTON, self.OnOpenKeys)
-        row3.Add(self.btn_open, 0, wx.LEFT | wx.RIGHT, 5)
+        row3.Add(self.btn_open, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.tc_open = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
         self.tc_open.SetValue(str(settings.edit_open))
-        row3.Add(self.tc_open, 1, wx.EXPAND | wx.ALL)
+        row3.Add(self.tc_open, 1, wx.EXPAND | wx.RIGHT, 5)
         main_box.Add(row3, 0, wx.EXPAND | wx.BOTTOM, 5)
         # Row four.
         row4 = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_line = wx.Button(self, wx.ID_ANY, "Goto Line")
         self.btn_line.Bind(wx.EVT_BUTTON, self.OnLineKeys)
-        row4.Add(self.btn_line, 0, wx.LEFT | wx.RIGHT, 5)
+        row4.Add(self.btn_line, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.tc_line = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
         self.tc_line.SetValue(str(settings.edit_line))
-        row4.Add(self.tc_line, 1, wx.EXPAND | wx.ALL)
+        row4.Add(self.tc_line, 1, wx.EXPAND | wx.RIGHT, 5)
         main_box.Add(row4, 0, wx.EXPAND | wx.BOTTOM, 5)
         self.SetSizerAndFit(main_box)
         return
