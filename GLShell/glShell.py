@@ -37,6 +37,7 @@ import wx
 from glsTermsPanel import glsTermsPanel
 from glsDataPanel import glsDataPanel
 from glsToolBar import glsToolBar
+from glsIcons import glsIcons
 import glsProject as glsp
 import glsSettings
 import glsHelp
@@ -46,7 +47,10 @@ VERSION = "0.0.4"
 ################################################################
 
 class glShell(wx.Frame):
-    ID_LICENSE = 1000
+    ID_LICENSE  = 1000
+    ID_ABOUT    = 1002
+    ID_SETTINGS = 1003
+    ID_EXIT     = 1004
     def __init__(self, app, project, settings):
         self.settings = settings
         self.settings.AddWatcher(self.OnChangeSettings)
@@ -55,6 +59,7 @@ class glShell(wx.Frame):
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.icons = glsIcons()
         self.InitUI()
         self.data_panel.AddProject(project)
         return
@@ -73,42 +78,26 @@ class glShell(wx.Frame):
     def InitMenuBar(self):
         menubar = wx.MenuBar()
         # File menu.
-        fileMenu = wx.Menu()
-        newitem = wx.MenuItem(fileMenu, wx.ID_NEW, text="New", kind=wx.ITEM_NORMAL)
-        fileMenu.Append(newitem)
-        openitem = wx.MenuItem(fileMenu, wx.ID_OPEN, text="Open", kind=wx.ITEM_NORMAL)
-        fileMenu.Append(openitem)
-        saveitem = wx.MenuItem(fileMenu, wx.ID_SAVE, text="Save", kind=wx.ITEM_NORMAL)
-        fileMenu.Append(saveitem)
-        saveasitem = wx.MenuItem(fileMenu, wx.ID_SAVEAS, text="Save as", kind=wx.ITEM_NORMAL)
-        fileMenu.Append(saveasitem)
-        closeitem = wx.MenuItem(fileMenu, wx.ID_CLOSE, text="Close", kind=wx.ITEM_NORMAL)
-        fileMenu.Append(closeitem)
-        fileMenu.AppendSeparator()
-        quit = wx.MenuItem(fileMenu, wx.ID_EXIT, '&Quit')
-        fileMenu.Append(quit)
-        menubar.Append(fileMenu, '&File')
+        menu_file = wx.Menu()
+        item = wx.MenuItem(menu_file, self.ID_EXIT, text="Quit")
+        item.SetBitmap(self.icons.Get('cross'))
+        menu_file.Append(item)
+        menubar.Append(menu_file, 'File')
         # Edit menu.
-        editMenu = wx.Menu()
-        copyItem = wx.MenuItem(editMenu, wx.ID_COPY, text="Copy", kind=wx.ITEM_NORMAL)
-        editMenu.Append(copyItem)
-        cutItem = wx.MenuItem(editMenu, wx.ID_CUT, text="Cut", kind=wx.ITEM_NORMAL)
-        editMenu.Append(cutItem)
-        pasteItem = wx.MenuItem(editMenu, wx.ID_PASTE, text="Paste", kind=wx.ITEM_NORMAL)
-        editMenu.Append(pasteItem)
-        editMenu.AppendSeparator()
-        self.ID_SETTINGS = 1337
-        settingsItem = wx.MenuItem(editMenu, self.ID_SETTINGS, text="Settings",
-                                   kind=wx.ITEM_NORMAL)
-        editMenu.Append(settingsItem)
-        menubar.Append(editMenu, '&Edit')
+        menu_edit = wx.Menu()
+        item = wx.MenuItem(menu_edit, self.ID_SETTINGS, text="Settings")
+        item.SetBitmap(self.icons.Get('cog'))
+        menu_edit.Append(item)
+        menubar.Append(menu_edit, 'Edit')
         # Help menu.
-        helpMenu = wx.Menu()
-        aboutItem = wx.MenuItem(helpMenu, wx.ID_ABOUT, text="About", kind=wx.ITEM_NORMAL)
-        helpMenu.Append(aboutItem)
-        licenseItem = wx.MenuItem(helpMenu, self.ID_LICENSE, text="License", kind=wx.ITEM_NORMAL)
-        helpMenu.Append(licenseItem)
-        menubar.Append(helpMenu, '&Help')
+        menu_help = wx.Menu()
+        item = wx.MenuItem(menu_help, self.ID_ABOUT, text="About")
+        item.SetBitmap(self.icons.Get('information'))
+        menu_help.Append(item)
+        item = wx.MenuItem(menu_help, self.ID_LICENSE, text="License")
+        item.SetBitmap(self.icons.Get('script'))
+        menu_help.Append(item)
+        menubar.Append(menu_help, '&Help')
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
@@ -118,7 +107,7 @@ class glShell(wx.Frame):
         return
     def MenuHandler(self, event):
         id = event.GetId()
-        if id == wx.ID_EXIT:
+        if id == self.ID_EXIT:
             self.OnClose(event)
             return
         if id == self.ID_SETTINGS:
@@ -128,7 +117,7 @@ class glShell(wx.Frame):
                 self.settings_frame.Raise()
             else:
                 self.settings_frame.Raise()
-        elif id == wx.ID_ABOUT:
+        elif id == self.ID_ABOUT:
             if self.about_frame is None:
                 self.about_frame = glsHelp.glsAboutFrame(self)
             else:

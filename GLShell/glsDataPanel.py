@@ -7,6 +7,7 @@ from multiprocessing import Process, Queue
 
 from glsProject import glsFile
 from glsGraphPanel import glsGraphPanel
+from glsIcons import glsIcons
 
 ################################################################
 
@@ -138,11 +139,19 @@ class glsSearch():
 class glsSearchResultListPopupMenu(wx.Menu):
     ID_OPEN_NEW = 1000
     ID_OPEN     = 1001
+    ID_EXIT     = 1002
     def __init__(self, parent):
         super(glsSearchResultListPopupMenu, self).__init__()
-        self.Append(wx.MenuItem(self, self.ID_OPEN_NEW, 'Open (New Tab)'))
-        self.Append(wx.MenuItem(self, self.ID_OPEN, 'Open (Current Tab)'))
-        self.Append(wx.MenuItem(self, wx.ID_EXIT, 'Close'))
+        self.icons = glsIcons()
+        item = wx.MenuItem(self, self.ID_OPEN_NEW, 'Open (New Tab)')
+        item.SetBitmap(self.icons.Get('monitor_add'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_OPEN, 'Open (Current Tab)')
+        item.SetBitmap(self.icons.Get('monitor'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_EXIT, 'Close')
+        item.SetBitmap(self.icons.Get('cross'))
+        self.Append(item)
         return
 
 ################################################################
@@ -276,7 +285,7 @@ class glsSearchResultList(wx.VListBox):
         return
     def OnMenuItem(self, event):
         item_id = event.GetId() 
-        if item_id == wx.ID_EXIT:
+        if item_id == glsSearchResultListPopupMenu.ID_EXIT:
             self.OnClose(event)
         elif (item_id == glsSearchResultListPopupMenu.ID_OPEN or
               item_id == glsSearchResultListPopupMenu.ID_OPEN_NEW ):
@@ -342,7 +351,12 @@ class glsDataPanel(wx.Window):
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
+        self.icons = glsIcons()
+        self.image_list = wx.ImageList(16, 16)
+        self.image_list.Add(self.icons.Get('chart_organisation'))
+        self.image_list.Add(self.icons.Get('magnifier'))
         self.notebook = wx.Notebook(self)
+        self.notebook.SetImageList(self.image_list)
         self.tabs = []
         self.tabs_closing = []
         box_main.Add(self.notebook, 1, wx.EXPAND)
@@ -352,7 +366,8 @@ class glsDataPanel(wx.Window):
     def AddProject(self, project):
         graph_panel = glsGraphPanel(self.notebook, project, self.settings)
         self.tabs.append(graph_panel)
-        self.notebook.AddPage(graph_panel, "Graph '%s'"%(project.name))
+        self.notebook.AddPage(graph_panel, " Graph '%s'"%(project.name))
+        self.notebook.SetPageImage(len(self.tabs)-1, 0)
         graph_panel.StartGraph()
         return
     def GetProjects(self):
@@ -365,8 +380,9 @@ class glsDataPanel(wx.Window):
             type_text = "Files"
         elif search.search_type == search.TYPE_CONTENTS:
             type_text = "Contents"
-        self.notebook.AddPage(result_panel, "Search %s '%s'"%(type_text, search.text))
+        self.notebook.AddPage(result_panel, " Search %s '%s'"%(type_text, search.text))
         self.notebook.SetSelection(len(self.tabs)-1)
+        self.notebook.SetPageImage(len(self.tabs)-1, 1)
         return
     def SearchFiles(self, text):
         self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_FILES))

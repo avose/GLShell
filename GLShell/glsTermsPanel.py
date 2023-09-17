@@ -13,6 +13,7 @@ from array import *
 
 import TermEmulator
 from glsKeyPress import glsKeyPress
+from glsIcons import glsIcons
 
 ################################################################
 
@@ -28,16 +29,32 @@ def PrintStringAsAscii(s):
 
 class glsTermPanelPopupMenu(wx.Menu):
     ID_NEW_TERM        = 1000
-    ID_SEARCH_CONTENTS = 1001
-    ID_SEARCH_FILES    = 1002
+    ID_COPY            = 1001
+    ID_PASTE           = 1002
+    ID_SEARCH_CONTENTS = 1003
+    ID_SEARCH_FILES    = 1004
+    ID_EXIT            = 1005
     def __init__(self, parent):
         super(glsTermPanelPopupMenu, self).__init__()
-        self.Append(wx.MenuItem(self, self.ID_NEW_TERM,        'New Terminal'))
-        self.Append(wx.MenuItem(self, wx.ID_COPY,              'Copy'))
-        self.Append(wx.MenuItem(self, wx.ID_PASTE,             'Paste'))
-        self.Append(wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents'))
-        self.Append(wx.MenuItem(self, self.ID_SEARCH_FILES,    'Search Files'))
-        self.Append(wx.MenuItem(self, wx.ID_EXIT,              'Close Terminal'))
+        self.icons = glsIcons()
+        item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
+        item.SetBitmap(self.icons.Get('monitor_add'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_COPY, 'Copy')
+        item.SetBitmap(self.icons.Get('script_add'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_PASTE, 'Paste')
+        item.SetBitmap(self.icons.Get('script_edit'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents')
+        item.SetBitmap(self.icons.Get('magnifier'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_SEARCH_FILES, 'Search Files')
+        item.SetBitmap(self.icons.Get('magnifier'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_EXIT, 'Close Terminal')
+        item.SetBitmap(self.icons.Get('cross'))
+        self.Append(item)
         return
 
 ################################################################
@@ -234,13 +251,13 @@ class glsTerminalPanel(wx.Window):
         return
     def OnMenuItem(self, event):
         id = event.GetId() 
-        if id == wx.ID_COPY:
+        if id == glsTermPanelPopupMenu.ID_COPY:
             self.Copy()
-        elif id == wx.ID_PASTE:
+        elif id == glsTermPanelPopupMenu.ID_PASTE:
             self.Paste()
         elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
             self.Parent.Parent.OnNewTerm()
-        elif id == wx.ID_EXIT:
+        elif id == glsTermPanelPopupMenu.ID_EXIT:
             self.OnClose(event)
         elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
             text = self.GetSelectedText()
@@ -639,7 +656,11 @@ class glsTermNotebook(wx.Window):
         self.current = False
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
+        self.icons = glsIcons()
+        self.image_list = wx.ImageList(16, 16)
+        self.image_list.Add(self.icons.Get('monitor'))
         self.term_notebook = wx.Notebook(self)
+        self.term_notebook.SetImageList(self.image_list)
         self.term_tabs = []
         self.term_close_pending = []
         self.OnNewTerm()
@@ -656,8 +677,9 @@ class glsTermNotebook(wx.Window):
                                     self.SetCurrent,
                                     self.min_term_size)
         self.term_tabs.append(terminal)
-        self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
+        self.term_notebook.AddPage(terminal, " Terminal " + str(len(self.term_tabs)))
         self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
+        self.term_notebook.SetPageImage(len(self.term_tabs)-1, 0)
         return terminal
     def CloseTerminals(self):
         # Check for closed terminals and clean up their tabs.

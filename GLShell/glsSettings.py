@@ -3,6 +3,7 @@ import wx
 import json
 
 from glsKeyPress import glsKeyPress
+from glsIcons import glsIcons
 
 ################################################################
 
@@ -357,14 +358,21 @@ class SettingsFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         # Create panel and notebook on the panel.
         main_box = wx.BoxSizer(wx.VERTICAL)
-        self.nb = wx.Notebook(self)
-        self.tabs = [ TabTerminal(self.nb, self.settings),
-                      TabEditor(self.nb, self.settings),
-                      TabGraph(self.nb, self.settings) ]
-        self.nb.AddPage(self.tabs[0], "Terminal")
-        self.nb.AddPage(self.tabs[1], "Term Editor")
-        self.nb.AddPage(self.tabs[2], "FDP Graph")
-        main_box.Add(self.nb, 1, wx.EXPAND | wx.TOP)
+        self.icons = glsIcons()
+        self.image_list = wx.ImageList(16, 16)
+        self.image_list.Add(self.icons.Get('monitor'))
+        self.image_list.Add(self.icons.Get('monitor_edit'))
+        self.image_list.Add(self.icons.Get('chart_organisation'))
+        self.notebook = wx.Notebook(self)
+        self.notebook.SetImageList(self.image_list)
+        self.tabs = [ TabTerminal(self.notebook, self.settings),
+                      TabEditor(self.notebook, self.settings),
+                      TabGraph(self.notebook, self.settings) ]
+        self.tab_names = [ " Terminal", " Term Editor", " FDP Graph" ]
+        for t in range(len(self.tabs)):
+            self.notebook.AddPage(self.tabs[t], self.tab_names[t])
+            self.notebook.SetPageImage(t, t)
+        main_box.Add(self.notebook, 1, wx.EXPAND | wx.TOP)
         # Create buttons.
         row_bottom = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_cancel = wx.Button(self, wx.ID_ANY, "Cancel")
