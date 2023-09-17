@@ -135,16 +135,28 @@ class glsSearch():
 
 ################################################################
 
+class glsSearchResultListPopupMenu(wx.Menu):
+    def __init__(self, parent):
+        super(glsSearchResultListPopupMenu, self).__init__()
+        self.Append(wx.MenuItem(self, wx.ID_OPEN, 'Open'))
+        self.Append(wx.MenuItem(self, wx.ID_EXIT, 'Close'))
+        return
+
+################################################################
+
 class glsSearchResultList(wx.VListBox):
-    def __init__(self, parent, search):
+    def __init__(self, parent, search, callback_close):
         style = wx.LB_NEEDED_SB | wx.LB_MULTIPLE
         self.char_w,self.char_h = 10,10
         super(glsSearchResultList, self).__init__(parent, style=style)
+        self.callback_close = callback_close
         self.search = search
         self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
         self.font = wx.Font(self.fontinfo)
         self.thread = glsSearchThread(search, self.OnSearchResult)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Bind(wx.EVT_MENU, self.OnMenuItem)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         dc = wx.MemoryDC()
         dc.SetFont(self.font)
         self.SetBackgroundColour((0,0,0))
@@ -195,6 +207,7 @@ class glsSearchResultList(wx.VListBox):
         dc.Clear()
         dc.SetFont(self.font)
         if not index:
+            # Draw header.
             self.DrawHeader(dc, rect)
             return
         path, rows_path, line, rows_line, lndx = self.ResultToStrings(index-1)
@@ -214,9 +227,32 @@ class glsSearchResultList(wx.VListBox):
         # Draw line number.
         dc.SetTextForeground((255,255,0))
         dc.DrawText(lndx, rect[0], rect[1])
-        # Draw matching line.
-        dc.SetTextForeground((128,255,128))
-        dc.DrawText(line_raw, rect[0], rect[1])
+        # Extract matching text and remaining text.
+        line = line.replace("\n","")
+        line_len = len(line)
+        new_line = ""
+        matches = ""
+        match = re.search(self.search.text, line)
+        while match:
+            for i in range(0, match.start()):
+                matches += " "
+            matches += line[match.start():match.end()]
+            new_line += line[:match.start()]
+            for i in range(match.start(), match.end()):
+                new_line += " "
+            line = line[match.end():]
+            match = re.search(self.search.text, line)
+        for i in range(0, len(line)):
+            matches += " "
+        new_line += line
+        matches, rows_matches = self.LineWrapText("        "+matches)
+        new_line, rows_line = self.LineWrapText("        "+new_line)
+        # Draw remaining text.
+        dc.SetTextForeground((128,192,128))
+        dc.DrawText(new_line, rect[0], rect[1])
+        # Draw matching text.
+        dc.SetTextForeground((0,255,0))
+        dc.DrawText(matches, rect[0], rect[1])
         return
     def OnDrawBackground(self, dc, rect, index):
         dc.Clear()
@@ -231,24 +267,50 @@ class glsSearchResultList(wx.VListBox):
     def OnSearchResult(self, result):
         self.SetItemCount(len(self.search.results) + 1)
         return
+    def OnRightDown(self, event):
+        self.PopupMenu(glsSearchResultListPopupMenu(self), event.GetPosition())
+        return
+    def OnMenuItem(self, event):
+        id = event.GetId() 
+        if id == wx.ID_EXIT:
+            self.OnClose(event)
+        elif id == wx.ID_OPEN:
+            pass
+        return
     def OnClose(self, event=None):
-        self.thread.stop()
-        self.thread.join()
+        if self.thread:
+            self.thread.stop()
+            self.thread.join()
+            self.thread = None
+        self.callback_close()
         return
 
 ################################################################
 
 class glsSearchResultPanel(wx.Window):
-    def __init__(self, parent, search):
+    def __init__(self, parent, search, callback_close):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsSearchResultPanel, self).__init__(parent, style=style)
         self.search = search
+        self.callback_close = callback_close
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.vlb_results = glsSearchResultList(self, search)
+        self.vlb_results = glsSearchResultList(self, search, self.OnSearchClose)
         self.vlb_results.SetMinSize((200,200))
         box_main.Add(self.vlb_results, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+    def OnSearchClose(self):
+        self.callback_close(self)
+        return
+    def OnClose(self, event):
+        if self.vlb_results:
+            self.vlb_results.OnClose(event)
+        self.vlb_results = None
+        return
+    def OnDestroy(self, event):
+        self.OnClose(event)
         return
 
 ################################################################
@@ -262,6 +324,7 @@ class glsDataPanel(wx.Window):
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Notebook(self)
         self.tabs = []
+        self.tabs_closing = []
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
@@ -275,7 +338,7 @@ class glsDataPanel(wx.Window):
     def GetProjects(self):
         return [ tab for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
     def AddSearch(self, search):
-        result_panel = glsSearchResultPanel(self.notebook, search)
+        result_panel = glsSearchResultPanel(self.notebook, search, self.OnCloseTab)
         self.tabs.append(result_panel)
         if search.search_type == search.TYPE_FILES:
             type_text = "Files"
@@ -290,10 +353,23 @@ class glsDataPanel(wx.Window):
     def SearchContents(self, text):
         self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_CONTENTS))
         return
+    def CloseTabs(self):
+        for closing in self.tabs_closing:
+            for i,t in enumerate(self.tabs):
+                if t == closing:
+                    self.notebook.DeletePage(i)
+                    self.notebook.SendSizeEvent()
+                    self.tabs.remove(closing)
+                    self.tabs_closing.remove(closing)
+        return
+    def OnCloseTab(self, tab):
+        if tab not in self.tabs_closing:
+            self.tabs_closing.append(tab)
+        wx.CallLater(10, self.CloseTabs)
+        return
     def OnClose(self, event):
         for tab in self.tabs:
-            if isinstance(tab, glsGraphPanel):
-                tab.OnClose(event)
+            tab.OnClose(event)
         event.Skip()
         return
 

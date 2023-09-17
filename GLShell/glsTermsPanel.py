@@ -31,16 +31,12 @@ class glsTermPanelPopupMenu(wx.Menu):
     ID_SEARCH_FILE = 1002
     def __init__(self, parent):
         super(glsTermPanelPopupMenu, self).__init__()
-        item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
-        self.Append(item)
-        item = wx.MenuItem(self, wx.ID_COPY, 'Copy')
-        self.Append(item)
-        item = wx.MenuItem(self, wx.ID_PASTE, 'Paste')
-        self.Append(item)
-        item = wx.MenuItem(self, self.ID_SEARCH_TEXT, 'Search Text')
-        self.Append(item)
-        item = wx.MenuItem(self, self.ID_SEARCH_FILE, 'Search File')
-        self.Append(item)
+        self.Append(wx.MenuItem(self, self.ID_NEW_TERM,    'New Terminal'))
+        self.Append(wx.MenuItem(self, wx.ID_COPY,          'Copy'))
+        self.Append(wx.MenuItem(self, wx.ID_PASTE,         'Paste'))
+        self.Append(wx.MenuItem(self, self.ID_SEARCH_TEXT, 'Search Text'))
+        self.Append(wx.MenuItem(self, self.ID_SEARCH_FILE, 'Search File'))
+        self.Append(wx.MenuItem(self, wx.ID_EXIT,          'Close Terminal'))
         return
 
 ################################################################
@@ -94,7 +90,7 @@ class glsTerminalPanel(wx.Window):
         self.callback_close = callback_close
         self.callback_title = callback_title
         # Bind events.
-        self.Bind(wx.EVT_MENU, self.MenuHandler)
+        self.Bind(wx.EVT_MENU, self.OnMenuItem)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_CHAR, self.OnChar)
@@ -240,7 +236,7 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
-    def MenuHandler(self, event):
+    def OnMenuItem(self, event):
         id = event.GetId() 
         if id == wx.ID_COPY:
             self.Copy()
@@ -248,6 +244,8 @@ class glsTerminalPanel(wx.Window):
             self.Paste()
         elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
             self.Parent.Parent.OnNewTerm(event)
+        elif id == wx.ID_EXIT:
+            self.OnClose(event)
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -673,7 +671,6 @@ class glsTermNotebook(wx.Window):
                                             self.min_term_size) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
         self.term_close_pending = []
-        wx.CallLater(10, self.MonitorTerminals)
         box_main.Add(self.term_notebook, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
@@ -687,7 +684,7 @@ class glsTermNotebook(wx.Window):
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
         self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
         return
-    def MonitorTerminals(self, event=None):
+    def CloseTerminals(self):
         # Check for closed terminals and clean up their tabs.
         for terminal in self.term_close_pending:
             for i,t in enumerate(self.term_tabs):
@@ -696,12 +693,12 @@ class glsTermNotebook(wx.Window):
                     self.term_notebook.SendSizeEvent()
                     self.term_tabs.remove(self.term_tabs[i])
             self.term_close_pending.remove(terminal)
-        wx.CallLater(10, self.MonitorTerminals)
         return
     def OnTermClose(self, terminal):
         # Add tab to closed terminal list.
         if terminal not in self.term_close_pending:
             self.term_close_pending.append(terminal)
+        wx.CallLater(10, self.CloseTerminals)
         return
     def OnTermTitle(self, terminal, title):
         if len(title) > 0:
