@@ -46,7 +46,7 @@ class glsSearchProcess(Process):
         newline = bytes('\n', "utf-8")
         start = 0
         end = contents.find(newline, start)
-        line_num = 0
+        line_num = 1
         while end != -1:
             line = contents[start:end]
             yield line_num, line.decode("utf-8")
@@ -136,20 +136,24 @@ class glsSearch():
 ################################################################
 
 class glsSearchResultListPopupMenu(wx.Menu):
+    ID_OPEN_NEW = 1000
+    ID_OPEN     = 1001
     def __init__(self, parent):
         super(glsSearchResultListPopupMenu, self).__init__()
-        self.Append(wx.MenuItem(self, wx.ID_OPEN, 'Open'))
+        self.Append(wx.MenuItem(self, self.ID_OPEN_NEW, 'Open (New Tab)'))
+        self.Append(wx.MenuItem(self, self.ID_OPEN, 'Open (Current Tab)'))
         self.Append(wx.MenuItem(self, wx.ID_EXIT, 'Close'))
         return
 
 ################################################################
 
 class glsSearchResultList(wx.VListBox):
-    def __init__(self, parent, search, callback_close):
-        style = wx.LB_NEEDED_SB | wx.LB_MULTIPLE
+    def __init__(self, parent, search, callback_resultopen, callback_close):
+        style = wx.LB_NEEDED_SB
         self.char_w,self.char_h = 10,10
         super(glsSearchResultList, self).__init__(parent, style=style)
         self.callback_close = callback_close
+        self.callback_resultopen = callback_resultopen
         self.search = search
         self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
         self.font = wx.Font(self.fontinfo)
@@ -271,11 +275,24 @@ class glsSearchResultList(wx.VListBox):
         self.PopupMenu(glsSearchResultListPopupMenu(self), event.GetPosition())
         return
     def OnMenuItem(self, event):
-        id = event.GetId() 
-        if id == wx.ID_EXIT:
+        item_id = event.GetId() 
+        if item_id == wx.ID_EXIT:
             self.OnClose(event)
-        elif id == wx.ID_OPEN:
-            pass
+        elif (item_id == glsSearchResultListPopupMenu.ID_OPEN or
+              item_id == glsSearchResultListPopupMenu.ID_OPEN_NEW ):
+            result = self.GetSelection()
+            if result == wx.NOT_FOUND or result == 0:
+                return
+            result -= 1
+            if not result < len(self.search.results) or not result >= 0:
+                return
+            result = self.search.results[result]
+            path = result[0]
+            if len(result) > 1:
+                lndx = result[1]
+            else:
+                lndx = None
+            self.callback_resultopen(item_id, path, lndx)
         return
     def OnClose(self, event=None):
         if self.thread:
@@ -288,14 +305,16 @@ class glsSearchResultList(wx.VListBox):
 ################################################################
 
 class glsSearchResultPanel(wx.Window):
-    def __init__(self, parent, search, callback_close):
+    def __init__(self, parent, search, callback_resultopen, callback_close):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsSearchResultPanel, self).__init__(parent, style=style)
         self.search = search
         self.callback_close = callback_close
+        self.callback_resultopen = callback_resultopen
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.vlb_results = glsSearchResultList(self, search, self.OnSearchClose)
+        self.vlb_results = glsSearchResultList(self, search, self.callback_resultopen,
+                                               self.OnSearchClose)
         self.vlb_results.SetMinSize((200,200))
         box_main.Add(self.vlb_results, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
@@ -316,10 +335,11 @@ class glsSearchResultPanel(wx.Window):
 ################################################################
 
 class glsDataPanel(wx.Window):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
         self.settings = settings
+        self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Notebook(self)
@@ -338,7 +358,8 @@ class glsDataPanel(wx.Window):
     def GetProjects(self):
         return [ tab for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
     def AddSearch(self, search):
-        result_panel = glsSearchResultPanel(self.notebook, search, self.OnCloseTab)
+        result_panel = glsSearchResultPanel(self.notebook, search, self.OnResultOpen,
+                                            self.OnCloseTab)
         self.tabs.append(result_panel)
         if search.search_type == search.TYPE_FILES:
             type_text = "Files"
@@ -352,6 +373,16 @@ class glsDataPanel(wx.Window):
         return
     def SearchContents(self, text):
         self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_CONTENTS))
+        return
+    def OnResultOpen(self, action_id, path, line=None):
+        if action_id == glsSearchResultListPopupMenu.ID_OPEN_NEW:
+            self.terms_panel.EditorStart(path)
+            if line is not None:
+                self.terms_panel.EditorLineSet(line)
+        if action_id == glsSearchResultListPopupMenu.ID_OPEN:
+            self.terms_panel.EditorFileOpen(path)
+            if line is not None:
+                self.terms_panel.EditorLineSet(line)
         return
     def CloseTabs(self):
         for closing in self.tabs_closing:

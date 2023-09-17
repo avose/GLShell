@@ -67,7 +67,8 @@ class glsTerminalPanel(wx.Window):
     word_chars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
 
     def __init__(self, parent, settings, callback_close, callback_title,
-                 callback_searchfiles, callback_searchcontents, min_size):
+                 callback_searchfiles, callback_searchcontents,
+                 callback_setcurrent, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
@@ -81,6 +82,7 @@ class glsTerminalPanel(wx.Window):
         self.callback_title = callback_title
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
+        self.callback_setcurrent = callback_setcurrent
         # Bind events.
         self.keys_down = {}
         self.key_press = glsKeyPress(self.keys_down)
@@ -223,6 +225,7 @@ class glsTerminalPanel(wx.Window):
         return
     def OnSetFocus(self, event):
         self.Refresh()
+        self.callback_setcurrent(True)
         wx.YieldIfNeeded()
         return
     def OnKillFocus(self, event):
@@ -236,7 +239,7 @@ class glsTerminalPanel(wx.Window):
         elif id == wx.ID_PASTE:
             self.Paste()
         elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
-            self.Parent.Parent.OnNewTerm(event)
+            self.Parent.Parent.OnNewTerm()
         elif id == wx.ID_EXIT:
             self.OnClose(event)
         elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
@@ -534,14 +537,17 @@ class glsTerminalPanel(wx.Window):
         # Resize buffer for painting.
         self.dc_buffer = wx.Bitmap(*self.Size)
         return
+    def SendText(self, text):
+        if text is not None and text != "":
+            os.write(self.io, bytes(text,'utf-8'))
+        return
     def OnChar(self, event):
         return
     def OnKeyDown(self, event):
         key = event.GetKeyCode()
         self.keys_down[key] = True
         seq = self.key_press.KeyCodeToSequence(key)
-        if seq is not None:
-            os.write(self.io, bytes(seq,'utf-8'))
+        self.SendText(seq)
         event.Skip()
         return
     def OnKeyUp(self, event):
@@ -621,38 +627,38 @@ class glsTerminalPanel(wx.Window):
 
 class glsTermNotebook(wx.Window):
     def __init__(self, parent, settings, min_term_size,
-                 callback_searchfiles, callback_searchcontents):
+                 callback_searchfiles, callback_searchcontents,
+                 callback_current):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
+        self.callback_current = callback_current
         self.settings = settings
+        self.current = False
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.term_notebook = wx.Notebook(self)
-        self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings,
-                                            self.OnTermClose, self.OnTermTitle,
-                                            self.callback_searchfiles,
-                                            self.callback_searchcontents,
-                                            self.min_term_size ) ]
-        self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
+        self.term_tabs = []
         self.term_close_pending = []
+        self.OnNewTerm()
         box_main.Add(self.term_notebook, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def OnNewTerm(self, event):
+    def OnNewTerm(self):
         # Create a new terminal and add the tab to the notebook.
         terminal = glsTerminalPanel(self.term_notebook, self.settings,
                                     self.OnTermClose, self.OnTermTitle,
                                     self.callback_searchfiles,
                                     self.callback_searchcontents,
+                                    self.SetCurrent,
                                     self.min_term_size)
         self.term_tabs.append(terminal)
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
         self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
-        return
+        return terminal
     def CloseTerminals(self):
         # Check for closed terminals and clean up their tabs.
         for terminal in self.term_close_pending:
@@ -675,6 +681,24 @@ class glsTermNotebook(wx.Window):
                     if terminal == t:
                         self.term_notebook.SetPageText(i, title)
         return
+    def IsCurrent(self):
+        return self.current
+    def SetCurrent(self, state):
+        self.current = state
+        if self.current:
+            self.callback_current(self)
+        return
+    def GetCurrentTerm(self):
+        current = self.term_notebook.GetSelection()
+        if current >= 0 and current < len(self.term_tabs):
+            return self.term_tabs[current]
+        return None
+    def SendText(self, text):
+        if text is None or text == "":
+            return
+        current = self.GetCurrentTerm()
+        current.SendText(text)
+        return
 
 ################################################################
 
@@ -692,14 +716,59 @@ class glsTermsPanel(wx.Window):
         self.splitter.SetMinimumPaneSize(min_term_size[1])
         self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size,
                                            self.callback_searchfiles,
-                                           self.callback_searchcontents),
+                                           self.callback_searchcontents,
+                                           self.CallbackCurrentNotebook),
                            glsTermNotebook(self.splitter, self.settings, min_term_size,
                                            self.callback_searchfiles,
-                                           self.callback_searchcontents), ]
+                                           self.callback_searchcontents,
+                                           self.CallbackCurrentNotebook), ]
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
+    def CallbackCurrentNotebook(self, notebook):
+        for nb in self.notebooks:
+            if nb != notebook:
+                nb.SetCurrent(False)
+        return
+    def GetCurrentNotebook(self):
+        for nb in self.notebooks:
+            if nb.IsCurrent():
+                return nb
+        if len(self.notebooks):
+            self.notebooks[0].SetCurrent(True)
+            return self.notebooks[0]
+        return None
+    def GetCurrentTerm(self):
+        notebook = self.GetCurrentNotebook()
+        if notebook is not None:
+            return notebook.GetCurrentTerm()
+        return None
+    def EditorLineSet(self, line):
+        term = self.GetCurrentTerm()
+        if term is None:
+            return
+        command = self.settings.edit_line
+        command = command.replace("{LINE}",str(line))
+        term.SendText(command)
+        return
+    def EditorFileOpen(self, path):
+        term = self.GetCurrentTerm()
+        if term is None:
+            return
+        command = self.settings.edit_open
+        command = command.replace("{FILE}",str(path))
+        term.SendText(command)
+        return
+    def EditorStart(self, path):
+        notebook = self.GetCurrentNotebook()
+        if notebook is None:
+            return
+        term = notebook.OnNewTerm()
+        command = self.settings.edit_path + " '%s'\x0a"%(path)
+        term.SendText(command)
+        return
+
 
 ################################################################

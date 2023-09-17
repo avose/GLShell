@@ -151,11 +151,11 @@ class glShell(wx.Frame):
         self.min_term_size = (320, 92)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
         self.splitter.SetMinimumPaneSize(self.min_term_size[0])
-        # OpenGL FDP panel.
-        self.data_panel = glsDataPanel(self.splitter, self.settings)
         # Terminals.
         self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size,
                                          self.OnSearchFiles, self.OnSearchContents)
+        # Data panel.
+        self.data_panel = glsDataPanel(self.splitter, self.settings, self.terms_panel)
         # Finalize UI layout.
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.splitter.SplitVertically(self.data_panel, self.terms_panel)
