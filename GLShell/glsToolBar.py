@@ -11,9 +11,9 @@ class glsToobarItem(wx.Window):
 ################################################################
 
 class glsToolSearch(glsToobarItem):
-    def __init__(self, parent, label, callback):
+    def __init__(self, parent, label, callback_search):
         super(glsToolSearch, self).__init__(parent)
-        self.callback = callback
+        self.callback_search = callback_search
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_row = wx.BoxSizer(wx.HORIZONTAL)
         self.tc_text = wx.TextCtrl(self, wx.ID_ANY, size=(200,-1),
@@ -29,27 +29,29 @@ class glsToolSearch(glsToobarItem):
         return
     def __OnSearch(self, event):
         text = self.tc_text.GetValue()
-        self.callback(text)
+        self.callback_search(text)
         return
 
 ################################################################
 
 class glsToolSearchFiles(glsToolSearch):
-    def __init__(self, parent):
+    def __init__(self, parent, callback_search):
         super(glsToolSearchFiles, self).__init__(parent, "Search Files",
                                                  self.OnSearch)
+        self.callback_search = callback_search
         return
     def OnSearch(self, text):
-        self.Parent.Parent.OnSearchFiles(text)
+        self.callback_search(text)
         return
 
 class glsToolSearchContents(glsToolSearch):
-    def __init__(self, parent):
+    def __init__(self, parent, callback_search):
         super(glsToolSearchContents, self).__init__(parent, "Search Contents",
                                                     self.OnSearch)
+        self.callback_search = callback_search
         return
     def OnSearch(self, text):
-        self.Parent.Parent.OnSearchContents(text)
+        self.callback_search(text)
         return
 
 ################################################################
@@ -66,13 +68,16 @@ class glsToolBarPopupMenu(wx.Menu):
 ################################################################
 
 class glsToolBar(wx.Window):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, callback_searchfiles, callback_searchcontents):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsToolBar, self).__init__(parent,style=style)
         self.settings = settings
+        self.callback_searchfiles = callback_searchfiles
+        self.callback_searchcontents = callback_searchcontents
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_tool = wx.BoxSizer(wx.HORIZONTAL)
-        self.tools = [ glsToolSearchFiles(self), glsToolSearchContents(self) ]
+        self.tools = [ glsToolSearchFiles(self, self.callback_searchfiles),
+                       glsToolSearchContents(self, self.callback_searchcontents) ]
         for tool in self.tools:
             box_tool.Add(tool, 0, wx.EXPAND)
         box_main.Add(box_tool, 0, wx.ALIGN_RIGHT)

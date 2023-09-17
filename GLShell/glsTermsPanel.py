@@ -26,17 +26,17 @@ def PrintStringAsAscii(s):
 ################################################################
 
 class glsTermPanelPopupMenu(wx.Menu):
-    ID_NEW_TERM    = 1000
-    ID_SEARCH_TEXT = 1001
-    ID_SEARCH_FILE = 1002
+    ID_NEW_TERM        = 1000
+    ID_SEARCH_CONTENTS = 1001
+    ID_SEARCH_FILES    = 1002
     def __init__(self, parent):
         super(glsTermPanelPopupMenu, self).__init__()
-        self.Append(wx.MenuItem(self, self.ID_NEW_TERM,    'New Terminal'))
-        self.Append(wx.MenuItem(self, wx.ID_COPY,          'Copy'))
-        self.Append(wx.MenuItem(self, wx.ID_PASTE,         'Paste'))
-        self.Append(wx.MenuItem(self, self.ID_SEARCH_TEXT, 'Search Text'))
-        self.Append(wx.MenuItem(self, self.ID_SEARCH_FILE, 'Search File'))
-        self.Append(wx.MenuItem(self, wx.ID_EXIT,          'Close Terminal'))
+        self.Append(wx.MenuItem(self, self.ID_NEW_TERM,        'New Terminal'))
+        self.Append(wx.MenuItem(self, wx.ID_COPY,              'Copy'))
+        self.Append(wx.MenuItem(self, wx.ID_PASTE,             'Paste'))
+        self.Append(wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents'))
+        self.Append(wx.MenuItem(self, self.ID_SEARCH_FILES,    'Search Files'))
+        self.Append(wx.MenuItem(self, wx.ID_EXIT,              'Close Terminal'))
         return
 
 ################################################################
@@ -77,7 +77,8 @@ class glsTerminalPanel(wx.Window):
     special_alt_key_map = { wx.WXK_UP:"\x1b[1;3A",    wx.WXK_DOWN:"\x1b[1;3B",
                             wx.WXK_RIGHT:"\x1b[1;3C", wx.WXK_LEFT:"\x1b[1;3D" }
 
-    def __init__(self, parent, settings, callback_close, callback_title, min_size):
+    def __init__(self, parent, settings, callback_close, callback_title,
+                 callback_searchfiles, callback_searchcontents, min_size):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
@@ -89,6 +90,8 @@ class glsTerminalPanel(wx.Window):
         self.settings.AddWatcher(self.OnChangeSettings)
         self.callback_close = callback_close
         self.callback_title = callback_title
+        self.callback_searchfiles = callback_searchfiles
+        self.callback_searchcontents = callback_searchcontents
         # Bind events.
         self.Bind(wx.EVT_MENU, self.OnMenuItem)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -246,6 +249,14 @@ class glsTerminalPanel(wx.Window):
             self.Parent.Parent.OnNewTerm(event)
         elif id == wx.ID_EXIT:
             self.OnClose(event)
+        elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
+            text = self.GetSelectedText()
+            if text is not None:
+                self.callback_searchfiles(text)
+        elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
+            text = self.GetSelectedText()
+            if text is not None:
+                self.callback_searchcontents(text)
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -658,17 +669,22 @@ class glsTerminalPanel(wx.Window):
 ################################################################
 
 class glsTermNotebook(wx.Window):
-    def __init__(self, parent, settings, min_term_size):
+    def __init__(self, parent, settings, min_term_size,
+                 callback_searchfiles, callback_searchcontents):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
+        self.callback_searchfiles = callback_searchfiles
+        self.callback_searchcontents = callback_searchcontents
         self.settings = settings
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.term_notebook = wx.Notebook(self)
         self.term_tabs = [ glsTerminalPanel(self.term_notebook, self.settings,
                                             self.OnTermClose, self.OnTermTitle,
-                                            self.min_term_size) ]
+                                            self.callback_searchfiles,
+                                            self.callback_searchcontents,
+                                            self.min_term_size ) ]
         self.term_notebook.AddPage(self.term_tabs[0], "Terminal 1")
         self.term_close_pending = []
         box_main.Add(self.term_notebook, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
@@ -679,6 +695,8 @@ class glsTermNotebook(wx.Window):
         # Create a new terminal and add the tab to the notebook.
         terminal = glsTerminalPanel(self.term_notebook, self.settings,
                                     self.OnTermClose, self.OnTermTitle,
+                                    self.callback_searchfiles,
+                                    self.callback_searchcontents,
                                     self.min_term_size)
         self.term_tabs.append(terminal)
         self.term_notebook.AddPage(terminal, "Terminal " + str(len(self.term_tabs)))
@@ -710,16 +728,23 @@ class glsTermNotebook(wx.Window):
 ################################################################
 
 class glsTermsPanel(wx.Window):
-    def __init__(self, parent, settings, min_term_size):
+    def __init__(self, parent, settings, min_term_size,
+                 callback_searchfiles, callback_searchcontents):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.settings = settings
+        self.callback_searchfiles = callback_searchfiles
+        self.callback_searchcontents = callback_searchcontents
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
         self.splitter.SetMinimumPaneSize(min_term_size[1])
-        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size),
-                           glsTermNotebook(self.splitter, self.settings, min_term_size), ]
+        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size,
+                                           self.callback_searchfiles,
+                                           self.callback_searchcontents),
+                           glsTermNotebook(self.splitter, self.settings, min_term_size,
+                                           self.callback_searchfiles,
+                                           self.callback_searchcontents), ]
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)

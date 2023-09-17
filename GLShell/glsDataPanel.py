@@ -213,7 +213,7 @@ class glsSearchResultList(wx.VListBox):
         path, rows_path, line, rows_line, lndx = self.ResultToStrings(index-1)
         # Draw background.
         if self.IsSelected(index):
-            brush = wx.Brush((96,96,96))
+            brush = wx.Brush((64,0,64))
         else:
             brush = wx.Brush((0,0,0))
         dc.SetBrush(brush)

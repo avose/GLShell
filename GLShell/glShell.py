@@ -145,7 +145,7 @@ class glShell(wx.Frame):
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Toolbar.
-        self.toolbar = glsToolBar(self, self.settings)
+        self.toolbar = glsToolBar(self, self.settings, self.OnSearchFiles, self.OnSearchContents)
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         # DataPanel and TermsPanel side-by-side.
         self.min_term_size = (320, 92)
@@ -154,7 +154,8 @@ class glShell(wx.Frame):
         # OpenGL FDP panel.
         self.data_panel = glsDataPanel(self.splitter, self.settings)
         # Terminals.
-        self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size)
+        self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size,
+                                         self.OnSearchFiles, self.OnSearchContents)
         # Finalize UI layout.
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.splitter.SplitVertically(self.data_panel, self.terms_panel)
