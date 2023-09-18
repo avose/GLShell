@@ -357,13 +357,13 @@ class glsSearchResultPanel(wx.Window):
     def OnSearchClose(self):
         self.callback_close(self)
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         if self.vlb_results:
-            self.vlb_results.OnClose(event)
+            self.vlb_results.OnClose()
         self.vlb_results = None
         return
     def OnDestroy(self, event):
-        self.OnClose(event)
+        self.OnClose()
         return
 
 ################################################################
@@ -439,10 +439,11 @@ class glsDataPanel(wx.Window):
             self.tabs_closing.append(tab)
         wx.CallLater(10, self.CloseTabs)
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         for tab in self.tabs:
-            tab.OnClose(event)
-        event.Skip()
+            tab.OnClose()
+        if event is not None:
+            event.Skip()
         return
 
 ################################################################

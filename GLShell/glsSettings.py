@@ -92,6 +92,7 @@ class KeyPressesFrame(wx.Frame):
         self.panel.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
         self.panel.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
         self.panel.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.panel.SetFocus()
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_panel = wx.BoxSizer(wx.VERTICAL)
@@ -165,6 +166,8 @@ class KeyPressesFrame(wx.Frame):
         if key in self.keys_down:
             del self.keys_down[event.GetKeyCode()]
         event.Skip()
+        return
+    def OnClose(self, event=None):
         return
 
 ################################################################
@@ -425,7 +428,7 @@ class SettingsFrame(wx.Frame):
         for tab in self.tabs:
             tab.Save()
         self.settings.OnChange()
-        self.OnClose(event)
+        self.OnClose()
         return
     def OnReset(self, event):
         self.settings.Reset()
@@ -433,9 +436,9 @@ class SettingsFrame(wx.Frame):
             tab.Load()
         return
     def OnCancel(self, event):
-        self.OnClose(event)
+        self.OnClose()
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         self.Parent.settings_frame = None
         self.Destroy()
         return

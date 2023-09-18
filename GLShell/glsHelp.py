@@ -57,9 +57,9 @@ class glsAboutFrame(wx.Frame):
         self.Show(True)
         return
     def OnOk(self, event):
-        self.OnClose(event)
+        self.OnClose()
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         self.Parent.about_frame = None
         self.Destroy()
         return
@@ -852,9 +852,9 @@ class glsLicenseFrame(wx.Frame):
         self.Show(True)
         return
     def OnOk(self, event):
-        self.OnClose(event)
+        self.OnClose()
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         self.Parent.license_frame = None
         self.Destroy()
         return

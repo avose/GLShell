@@ -68,12 +68,6 @@ class glShell(wx.Frame):
         return
     def OnChangeSettings(self, settings):
         return
-    def OnClose(self, event):
-        self.settings.RemoveWatcher(self.OnChangeSettings)
-        return
-    def OnDestroy(self, event):
-        self.settings.RemoveWatcher(self.OnChangeSettings)
-        return
     def OnCharHook(self,event):
         event.DoAllowNextEvent()
         event.Skip()
@@ -111,7 +105,8 @@ class glShell(wx.Frame):
     def MenuHandler(self, event):
         id = event.GetId()
         if id == self.ID_EXIT:
-            self.OnClose(event)
+            self.OnClose()
+            self.Destroy()
             return
         if id == self.ID_SETTINGS:
             if self.settings_frame is None:
@@ -163,15 +158,20 @@ class glShell(wx.Frame):
     def OnSearchContents(self, text):
         self.data_panel.SearchContents(text)
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         if self.settings_frame is not None:
-            self.settings_frame.OnClose(event)
+            self.settings_frame.OnClose()
         if self.about_frame is not None:
-            self.about_frame.OnClose(event)
+            self.about_frame.OnClose()
         if self.license_frame is not None:
-            self.license_frame.OnClose(event)
-        self.data_panel.OnClose(event)
-        event.Skip()
+            self.license_frame.OnClose()
+        self.data_panel.OnClose()
+        self.settings.RemoveWatcher(self.OnChangeSettings)
+        if event is not None:
+            event.Skip()
+        return
+    def OnDestroy(self, event):
+        self.settings.RemoveWatcher(self.OnChangeSettings)
         return
 
 ################################################################

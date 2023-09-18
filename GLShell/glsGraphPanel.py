@@ -295,11 +295,12 @@ class glsGraphCanvas(GLCanvas):
         # Viewport.
         glViewport(0, 0, self.Size[0],self.Size[1])
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         self.settings.RemoveWatcher(self.OnChangeSettings)
         self.project.thread.stop()
         self.project.thread.join()
-        event.Skip()
+        if event is not None:
+            event.Skip()
         return
 
 ################################################################
@@ -327,9 +328,9 @@ class glsGraphPanel(wx.Window):
         if self.graph_canvas is not None:
             self.graph_canvas.SetSize(0, 0, self.Size[0], self.Size[1])
         return
-    def OnClose(self, event):
+    def OnClose(self, event=None):
         if self.graph_canvas is not None:
-            self.graph_canvas.OnClose(event)
+            self.graph_canvas.OnClose()
         return
 
 ################################################################
