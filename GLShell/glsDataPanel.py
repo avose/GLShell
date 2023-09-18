@@ -2,6 +2,7 @@ import re
 import mmap
 import wx
 import mimetypes
+from time import sleep
 from threading import Thread, Lock
 from multiprocessing import Process, Queue
 
@@ -16,12 +17,9 @@ class glsSearchProcess(Process):
         Process.__init__(self)
         self.search = search
         self.out_q = out_q
-        self.done  = False
         return
     def run(self):
         for result in self.GetResults():
-            if self.done:
-                break
             self.out_q.put(result)
         self.out_q.put(None)
         return
@@ -83,10 +81,10 @@ class glsSearchProcess(Process):
 ################################################################
 
 class glsSearchThread(Thread):
-    def __init__(self, search, callback):
+    def __init__(self, search, callback_result):
         Thread.__init__(self)
         self.search = search
-        self.callback = callback
+        self.callback_result = callback_result
         self.in_q = Queue()
         self.done = False
         self.proc = glsSearchProcess(self.search, self.in_q)
@@ -100,7 +98,7 @@ class glsSearchThread(Thread):
                 self.done = True
                 break
             self.search.AddResult(result)
-            self.callback(result)
+            self.callback_result()
         self.proc.join()
         return
     def stop(self):
@@ -116,8 +114,9 @@ class glsSearch():
         self.projects = projects
         self.text = text
         self.search_type = search_type
-        self.results = []
-        self.result_files = {}
+        self.lock = Lock()
+        self.__results = []
+        self.__result_files = {}
         return
     def AddResult(self, result):
         pndx, result = result
@@ -127,11 +126,16 @@ class glsSearch():
         else:
             lndx = 0
         key = (pndx,nndx)
-        if key not in self.result_files:
-            self.result_files[key] = True
-            self.results.append( (path,) )
-        if line:
-            self.results.append( (path, lndx, line) )
+        with self.lock:
+            if key not in self.__result_files:
+                self.__result_files[key] = True
+                self.__results.append( (path,) )
+            if line:
+                self.__results.append( (path, lndx, line) )
+        return
+    def GetResults(self):
+        with self.lock:
+            return self.__results.copy()
         return
 
 ################################################################
@@ -175,6 +179,10 @@ class glsSearchResultList(wx.VListBox):
         self.SetBackgroundColour((0,0,0))
         self.char_w,self.char_h = dc.GetTextExtent("X")
         self.SetItemCount(1)
+        self.result_count = 1
+        self.closing = False
+        self.watcher_done = False
+        wx.CallLater(5, self.ResultWatcher)
         return
     def LineWrapText(self, initial_text):
         if initial_text is None or len(initial_text) == 0:
@@ -189,7 +197,7 @@ class glsSearchResultList(wx.VListBox):
         text += initial_text
         return (text, nlines)
     def ResultToStrings(self, index):
-        result = self.search.results[index]
+        result = self.search.GetResults()[index]
         if len(result) == 1:
             path, rows_path = self.LineWrapText(result[0])
             return path, rows_path, "", 0, ""
@@ -277,8 +285,16 @@ class glsSearchResultList(wx.VListBox):
         return
     def OnDrawSeparator(self, dc, rect, index):
         return
-    def OnSearchResult(self, result):
-        self.SetItemCount(len(self.search.results) + 1)
+    def ResultWatcher(self):
+        if self.closing:
+            self.watcher_done = True
+            return
+        self.SetItemCount(self.result_count)
+        self.Refresh()
+        wx.CallLater(50, self.ResultWatcher)
+        return
+    def OnSearchResult(self):
+        self.result_count = len(self.search.GetResults()) + 1
         return
     def OnRightDown(self, event):
         self.PopupMenu(glsSearchResultListPopupMenu(self), event.GetPosition())
@@ -286,16 +302,16 @@ class glsSearchResultList(wx.VListBox):
     def OnMenuItem(self, event):
         item_id = event.GetId() 
         if item_id == glsSearchResultListPopupMenu.ID_EXIT:
-            self.OnClose(event)
+            self.OnClose()
         elif (item_id == glsSearchResultListPopupMenu.ID_OPEN or
               item_id == glsSearchResultListPopupMenu.ID_OPEN_NEW ):
             result = self.GetSelection()
             if result == wx.NOT_FOUND or result == 0:
                 return
             result -= 1
-            if not result < len(self.search.results) or not result >= 0:
+            if not result < len(self.search.GetResults()) or not result >= 0:
                 return
-            result = self.search.results[result]
+            result = self.search.GetResults()[result]
             path = result[0]
             if len(result) > 1:
                 lndx = result[1]
@@ -304,10 +320,15 @@ class glsSearchResultList(wx.VListBox):
             self.callback_resultopen(item_id, path, lndx)
         return
     def OnClose(self, event=None):
+        self.closing = True
         if self.thread:
             self.thread.stop()
             self.thread.join()
             self.thread = None
+        if not self.watcher_done:
+            wx.CallLater(5, self.OnClose)
+            if event is not None:
+                event.Veto()
         self.callback_close()
         return
 
