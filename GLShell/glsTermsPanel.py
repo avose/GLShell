@@ -116,6 +116,7 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_LEFT_DCLICK, self.OnLeftDouble)
         self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
         self.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
@@ -385,6 +386,15 @@ class glsTerminalPanel(wx.Window):
     def OnRightDown(self, event):
         self.SetFocus()
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
+        return
+    def OnWheel(self, event):
+        self.SetFocus()
+        if event.GetWheelRotation() < 0:
+            for i in range(5):
+                self.SendText(self.key_press.special_key_map[wx.WXK_DOWN])
+        else:
+            for i in range(5):
+                self.SendText(self.key_press.special_key_map[wx.WXK_UP])
         return
     def GetFgColor(self, color):
         if self.settings.Get('term_color'):
@@ -791,6 +801,5 @@ class glsTermsPanel(wx.Window):
         command = self.settings.Get('edit_path') + " '%s'\x0a"%(path)
         term.SendText(command)
         return
-
 
 ################################################################

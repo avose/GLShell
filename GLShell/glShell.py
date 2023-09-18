@@ -42,7 +42,7 @@ import glsProject as glsp
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 ################################################################
 
@@ -60,6 +60,9 @@ class glShell(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.icons = glsIcons()
+        self.icon = wx.Icon()
+        self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
+        self.SetIcon(self.icon)
         self.InitUI()
         self.data_panel.AddProject(project)
         return
@@ -95,7 +98,7 @@ class glShell(wx.Frame):
         item.SetBitmap(self.icons.Get('information'))
         menu_help.Append(item)
         item = wx.MenuItem(menu_help, self.ID_LICENSE, text="License")
-        item.SetBitmap(self.icons.Get('script'))
+        item.SetBitmap(self.icons.Get('script_key'))
         menu_help.Append(item)
         menubar.Append(menu_help, '&Help')
         # Connect menus to menu bar.

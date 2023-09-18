@@ -8,6 +8,10 @@ from glsIcons import glsIcons
 class glsAboutFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="About GLShell", style=style)
+        self.icons = glsIcons()
+        self.icon = wx.Icon()
+        self.icon.CopyFromBitmap(self.icons.Get('information'))
+        self.SetIcon(self.icon)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_top = wx.BoxSizer(wx.VERTICAL)
@@ -813,6 +817,10 @@ class glsLicenseCC(wx.Window):
 class glsLicenseFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="GLShell License", style=style)
+        self.icons = glsIcons()
+        self.icon = wx.Icon()
+        self.icon.CopyFromBitmap(self.icons.Get('script_key'))
+        self.SetIcon(self.icon)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Panel to hold text at the top of the about frame.
@@ -822,7 +830,7 @@ class glsLicenseFrame(wx.Frame):
         box_top.Add(self.st_title, 0, wx.ALL, 20)
         self.icons = glsIcons()
         self.image_list = wx.ImageList(16, 16)
-        self.image_list.Add(self.icons.Get('script'))
+        self.image_list.Add(self.icons.Get('script_key'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.lgpl = glsLicenseLGPL(self.notebook)

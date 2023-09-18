@@ -1,5 +1,7 @@
 import wx
 
+from glsIcons import glsIcons
+
 ################################################################
 
 class glsToobarItem(wx.Window):
@@ -14,6 +16,7 @@ class glsToolSearch(glsToobarItem):
     def __init__(self, parent, label, callback_search):
         super(glsToolSearch, self).__init__(parent)
         self.callback_search = callback_search
+        self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_row = wx.BoxSizer(wx.HORIZONTAL)
         self.tc_text = wx.TextCtrl(self, wx.ID_ANY, size=(200,-1),
@@ -21,6 +24,7 @@ class glsToolSearch(glsToobarItem):
         self.tc_text.Bind(wx.EVT_TEXT_ENTER, self.__OnSearch)
         box_row.Add(self.tc_text, 1, wx.EXPAND | wx.LEFT, 5)
         self.bt_search = wx.Button(self, wx.ID_ANY, label)
+        self.bt_search.SetBitmap(self.icons.Get('magnifier'))
         self.bt_search.Bind(wx.EVT_BUTTON, self.__OnSearch)
         box_row.Add(self.bt_search, 0, wx.LEFT | wx.RIGHT, 5)
         box_main.Add(box_row, 0, wx.ALL, 0)
