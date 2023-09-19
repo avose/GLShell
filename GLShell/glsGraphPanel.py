@@ -102,9 +102,9 @@ class glsGraphCanvas(GLCanvas):
         return
     def OnWheel(self, event):
         if event.GetWheelRotation() < 0:
-            self.zoom *= 0.9
+            self.zoom *= 0.95
         else:
-            self.zoom *= 1.1
+            self.zoom /= 0.95
         return
     def OnPaint(self, event):
         if not self.init:
@@ -145,10 +145,11 @@ class glsGraphCanvas(GLCanvas):
             elif gthread.dims == 3:
                 self.Set3D()
                 self.graph_3D = True
-            red = [1.0, 0.0, 0.0 ,1.0]
-            grn = [0.0, 1.0, 0.0 ,1.0]
-            blu = [0.0, 0.0, 1.0 ,1.0]
-            ylw = [1.0, 1.0, 0.0 ,1.0]
+            red = [1.0, 0.0, 0.0, 1.0]
+            grn = [0.0, 1.0, 0.0, 1.0]
+            blu = [0.0, 0.0, 1.0, 1.0]
+            ylw = [1.0, 1.0, 0.0, 1.0]
+            prp = [1.0, 0.3, 1.0, 1.0]
             self.textbuff.SetColor(ylw)
             # Apply zoom and rotation.
             if self.graph_3D:
@@ -210,13 +211,17 @@ class glsGraphCanvas(GLCanvas):
                 else:
                     if self.graph_3D:                        
                         if isinstance(node, glsDir):
+                            self.textbuff.SetColor(ylw)
                             label = True
                         else:
-                            label = True if self.zoom >= 10 else False
+                            self.textbuff.SetColor(prp)
+                            label = True if self.zoom >= 25 else False
                     else:
                         if isinstance(node, glsDir):
+                            self.textbuff.SetColor(ylw)
                             label = True
                         else:
+                            self.textbuff.SetColor(prp)
                             label = True if zoom >= 10 else False
                 if label is True:
                     self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
@@ -293,7 +298,7 @@ class glsGraphCanvas(GLCanvas):
         else:
             self.Set2D()
         # Viewport.
-        glViewport(0, 0, self.Size[0],self.Size[1])
+        glViewport(0, 0, self.Size[0], self.Size[1])
         return
     def OnClose(self, event=None):
         self.settings.RemoveWatcher(self.OnChangeSettings)

@@ -637,7 +637,7 @@ class glsTerminalPanel(wx.Window):
                 self.callback_close(self)
                 self.notified_parent_closed = True
         else:
-            wx.CallLater(10, self.MonitorTerminal)
+            wx.CallLater(50, self.MonitorTerminal)
         return
     def OnClose(self, event=None):
         self.stop_output_notifier = True
