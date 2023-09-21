@@ -10,6 +10,7 @@ import datetime
 from glsGLBuffer import glsGLBuffer
 from glsGLText import glsGLTextSizer
 from glsGLText import glsGLText
+from glsGLFont import glsGLFont
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsProject import glsFile
@@ -35,6 +36,7 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
         self.textsizer = glsGLTextSizer()
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
@@ -250,6 +252,9 @@ class glsGraphCanvas(GLCanvas):
         fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
         fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
         self.textbuff.DrawGL(fps_pos, text=fps_fdp)
+        #glPushMatrix()
+        #self.glfont.DrawString(fps_fdp, pos=fps_pos)
+        #glPopMatrix()
         fps_ogl = 1.0 / self.time_draw
         fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
         fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
