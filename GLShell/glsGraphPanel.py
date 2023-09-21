@@ -108,7 +108,6 @@ class glsGraphCanvas(GLCanvas):
             self.glctx = wx.glcanvas.GLContext(self)
             self.SetCurrent(self.glctx)
             self.InitGL()
-            text = "string with length of max length for file and directory names"
             self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
             self.init = True
         self.SetCurrent(self.glctx)

@@ -73,7 +73,8 @@ class glsSearchProcess(Process):
             try:
                 with open(node.abspath, 'rb', 0) as f:
                     contents = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                    if mimetype is not None and mimetype.startswith("text/"):
+                    if (node.name.endswith("~") or
+                        mimetype is not None and mimetype.startswith("text/")):
                         for index, line in self.LinesOf(contents):
                             if re.search(stext, line):
                                 yield (nndx, node.abspath, (index,line))
@@ -168,6 +169,7 @@ class glsSearchResultList(wx.VListBox):
         max_len = max(1, int(self.Size[0]/self.char_w)-2)
         nlines = 1
         text = ""
+        initial_text = initial_text.replace("\t","    ")
         while len(initial_text) > max_len:
             text += initial_text[0:max_len] + '\n'
             initial_text = initial_text[max_len:]
