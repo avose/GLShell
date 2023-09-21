@@ -8,13 +8,12 @@ from OpenGL.GL import *
 ################################################################
 
 class glsGLTextSizer():
-    fontinfo = None
-    font     = None
-    dc       = None
     def __init__(self,fontinfo=None):
         self.dc = wx.MemoryDC()
+        self.fontinfo = None
+        self.font = None
         if fontinfo is not None:
-            self.SetFont(fontinfo)
+            self.SetFont(self.fontinfo)
         return
     def SetFont(self,fontinfo):
         self.fontinfo = fontinfo
@@ -27,14 +26,11 @@ class glsGLTextSizer():
 ################################################################
 
 class glsGLText():
-    buff       = None
-    text       = None
-    font       = None
-    fontinfo   = None
-    color      = None
-    width      = 0
-    height     = 0
     def __init__(self,buff,fontinfo,color=None,text=None):
+        self.width = 0
+        self.height = 0
+        self.text = text
+        self.color = color
         if not isinstance(buff, glsGLBuffer):
             raise Exception("glsGLText(): Buffer must have type glsGLBuffer.")
         self.buff = buff
@@ -97,6 +93,8 @@ class glsGLText():
                            [0.0, 0.0],
                            [1.0, 0.0],
                            [1.0, 1.0] ]
+        #glRasterPos2f(x,y)
+        #glDrawPixels(b.shape[0], b.shape[1], GL_RGBA, GL_UNSIGNED_BYTE, b)
         pos = np.array(pos, dtype=np.single)
         offsets = np.array(offsets, dtype=np.single)
         glEnable(GL_TEXTURE_2D)

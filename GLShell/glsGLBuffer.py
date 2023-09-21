@@ -7,12 +7,6 @@ from OpenGL.GL import *
 ################################################################
 
 class glsGLBuffer():
-    dc     = None
-    bitmap = None
-    buff   = None
-    tex    = None
-    width  = 0
-    height = 0
     def __init__(self,w,h):
         self.width  = w
         self.height = h
@@ -21,6 +15,7 @@ class glsGLBuffer():
         self.bitmap = wx.Bitmap(self.width, self.height, 32)
         self.bitmap.UseAlpha(True)
         self.dc.SelectObject(self.bitmap)
+        self.tex = None
         return
     def Clear(self):
         self.buff.fill(0)
