@@ -8,8 +8,6 @@ import wx
 import datetime
 
 from glsGLBuffer import glsGLBuffer
-from glsGLText import glsGLTextSizer
-from glsGLText import glsGLText
 from glsGLFont import glsGLFont
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
@@ -36,7 +34,6 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
-        self.textsizer = glsGLTextSizer()
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
         self.init = False
