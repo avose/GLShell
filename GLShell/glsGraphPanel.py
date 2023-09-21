@@ -36,13 +36,11 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
-        self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
         self.textsizer = glsGLTextSizer()
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
         self.init = False
         self.glctx = None
-        self.textbuff = None
         self.fps_max = 100
         self.mouse_down = [False, False, False, False]
         self.mouse_pos = np.array([0, 0],dtype=np.single)
@@ -114,11 +112,7 @@ class glsGraphCanvas(GLCanvas):
             self.SetCurrent(self.glctx)
             self.InitGL()
             text = "string with length of max length for file and directory names"
-            finfo = wx.FontInfo(10).FaceName("Monospace").Bold()
-            self.textsizer.SetFont(finfo)
-            tw,th = self.textsizer.TextSize(text)
-            buff = glsGLBuffer(tw,th)
-            self.textbuff = glsGLText(buff,finfo,(255,255,0,255),text)
+            self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
             self.init = True
         self.SetCurrent(self.glctx)
         start = datetime.datetime.now()
@@ -152,7 +146,6 @@ class glsGraphCanvas(GLCanvas):
             blu = [0.0, 0.0, 1.0, 1.0]
             ylw = [1.0, 1.0, 0.0, 1.0]
             prp = [1.0, 0.3, 1.0, 1.0]
-            self.textbuff.SetColor(ylw)
             # Apply zoom and rotation.
             if self.graph_3D:
                 zoom = self.zoom * 0.05
@@ -213,21 +206,20 @@ class glsGraphCanvas(GLCanvas):
                 else:
                     if self.graph_3D:                        
                         if isinstance(node, glsDir):
-                            self.textbuff.SetColor(ylw)
+                            color = ylw
                             label = True
                         else:
-                            self.textbuff.SetColor(prp)
+                            color = prp
                             label = True if self.zoom >= 25 else False
                     else:
                         if isinstance(node, glsDir):
-                            self.textbuff.SetColor(ylw)
+                            color = ylw
                             label = True
                         else:
-                            self.textbuff.SetColor(prp)
+                            color = prp
                             label = True if zoom >= 10 else False
                 if label is True:
-                    self.textbuff.DrawGL((pos[0], pos[1]+10, 0),
-                                         text=node.name, center=True)
+                    self.glfont.DrawText(node.name, [pos[0], pos[1]+10], color, True)
         return
     def DrawStats(self):
         self.Set2D()
@@ -237,12 +229,11 @@ class glsGraphCanvas(GLCanvas):
         ylw = [1.0, 1.0, 0.0 ,1.0]
         glColor4fv([0,0,0,0.75])
         glBegin(GL_QUADS)
-        glVertex3fv([0,   self.Size[1]-2*self.textbuff.height, 0])
-        glVertex3fv([0,   self.Size[1],                        0])
-        glVertex3fv([140, self.Size[1],                        0])
-        glVertex3fv([140, self.Size[1]-2*self.textbuff.height, 0])
+        glVertex3fv([0,   self.Size[1]-2*self.glfont.char_h, 0])
+        glVertex3fv([0,   self.Size[1],                      0])
+        glVertex3fv([140, self.Size[1],                      0])
+        glVertex3fv([140, self.Size[1]-2*self.glfont.char_h, 0])
         glEnd()
-        self.textbuff.SetColor(grn)
         gthread = self.project.thread
         self.time_fdp = gthread.get_time()
         if self.time_fdp == 0:
@@ -250,15 +241,12 @@ class glsGraphCanvas(GLCanvas):
         else:
             fps_fdp = 1.0 / self.time_fdp
         fps_fdp = "FPS(fdp): %.2f "%(fps_fdp)
-        fps_pos = [0, self.Size[1]-self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_fdp)
-        #glPushMatrix()
-        #self.glfont.DrawString(fps_fdp, pos=fps_pos)
-        #glPopMatrix()
+        fps_pos = [0, self.Size[1]-self.glfont.char_h, 0]
+        self.glfont.DrawText(fps_fdp, fps_pos, grn)
         fps_ogl = 1.0 / self.time_draw
         fps_ogl = "FPS(ogl): %.2f"%(fps_ogl)
-        fps_pos = [0, self.Size[1]-2*self.textbuff.height, 0]
-        self.textbuff.DrawGL(fps_pos, text=fps_ogl)
+        fps_pos = [0, self.Size[1]-2*self.glfont.char_h, 0]
+        self.glfont.DrawText(fps_ogl, fps_pos, grn)
         return
     def OnDraw(self):
         # Clear buffer.

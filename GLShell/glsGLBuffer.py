@@ -46,5 +46,9 @@ class glsGLBuffer():
         if self.tex is not None:
             glBindTexture(GL_TEXTURE_2D, self.tex)
         return
+    def Save(self, path):
+        self.SyncDC()
+        self.bitmap.SaveFile(path, wx.BITMAP_TYPE_PNG)
+        return
 
 ################################################################

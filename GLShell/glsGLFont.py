@@ -7,7 +7,7 @@ from OpenGL.GL import *
 
 ################################################################
 
-# Fixed width/height fonts only for now.
+# Fixed width+height fonts only for now.
 class glsGLFont():
     def __init__(self, fontinfo):
         self.fontinfo = fontinfo
@@ -23,9 +23,10 @@ class glsGLFont():
         self.buff.dc.SetBackgroundMode(wx.TRANSPARENT)
         for c in range(256):
             char = chr(c)
-            x = c % 16
-            y = c / 16
-            self.buff.dc.DrawText(char, int(x*self.char_w), int(y*self.char_h))
+            x = c%16
+            y = int(c/16)
+            if c > 32 and c < 127 or c > 159:
+                self.buff.dc.DrawText(char, x*self.char_w, y*self.char_h)
         self.buff.SyncBuffer()
         self.buff.SyncTexture()
         w,h = self.char_w, self.char_h
@@ -40,14 +41,14 @@ class glsGLFont():
         self.buff.BindTexture()
         for c in range(256):
             char = chr(c)
-            x = c % 16
-            y = c / 16
+            x = c%16
+            y = int(c/16)
             tex_coords = [ [(x+0)/16.0, (y+1)/16.0],
                            [(x+0)/16.0, (y+0)/16.0],
                            [(x+1)/16.0, (y+0)/16.0],
                            [(x+1)/16.0, (y+1)/16.0] ]
             tex_coords = np.array(tex_coords, dtype=np.single)
-            glNewList(c, GL_COMPILE);
+            glNewList(self.display_lists+c, GL_COMPILE);
             glBegin(GL_QUADS)
             for off,coord in zip(offsets,tex_coords):
                 glTexCoord2fv(coord);
@@ -58,16 +59,18 @@ class glsGLFont():
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
         return
-    def DrawString(self, text, pos=(0,0), center=False, color=(1,1,1,1)):
+    def DrawText(self, text, pos=(0,0), color=(1,1,1,1), center=False):
         glColor4fv(color)
         glEnable(GL_TEXTURE_2D)
         self.buff.BindTexture()
         if center:
             pos[0] -= (len(text)*self.char_w) / 2.0
             pos[1] -= self.char_h / 2.0
+        glPushMatrix()
         glTranslatef(pos[0], pos[1], 0)
         glListBase(self.display_lists)
         glCallLists(len(text), GL_UNSIGNED_BYTE, bytes(text,"utf-8"))
+        glPopMatrix()
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
         return
