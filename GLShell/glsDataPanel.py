@@ -391,7 +391,8 @@ class glsDataPanel(wx.Window):
         self.Show(True)
         return
     def AddProject(self, project):
-        graph_panel = glsGraphPanel(self.notebook, project, self.settings)
+        graph_panel = glsGraphPanel(self.notebook, project, self.settings,
+                                    self.OnCloseTab)
         self.tabs.append(graph_panel)
         self.notebook.AddPage(graph_panel, " Graph '%s'"%(project.name))
         self.notebook.SetPageImage(len(self.tabs)-1, 0)

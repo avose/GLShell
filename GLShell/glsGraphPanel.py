@@ -1,11 +1,11 @@
 from wx.glcanvas import GLCanvas
 from OpenGL.GLU import *
 from OpenGL.GL import *
-from itertools import product
-import numpy as np
-import sys, math
-import wx
 import datetime
+import numpy as np
+import math
+import sys
+import wx
 
 from glsGLBuffer import glsGLBuffer
 from glsGLFont import glsGLFont
@@ -13,15 +13,29 @@ from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsProject import glsFile
 from glsProject import glsDir
+from glsIcons import glsIcons
+
+################################################################
+
+class glsGraphPopupMenu(wx.Menu):
+    ID_EXIT = 1000
+    def __init__(self, parent):
+        super(glsGraphPopupMenu, self).__init__()
+        self.icons = glsIcons()
+        item = wx.MenuItem(self, self.ID_EXIT, 'Close Graph')
+        item.SetBitmap(self.icons.Get('chart_organisation_delete'))
+        self.Append(item)
+        return
 
 ################################################################
 
 class glsGraphCanvas(GLCanvas):
-    def __init__(self, parent, project, size, settings):
+    def __init__(self, parent, project, size, settings, callback_close):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, size=size)
         self.project = project
         self.settings = settings
+        self.callback_close = callback_close
         self.graph_3D = settings.Get('graph_3D')
         self.settings.AddWatcher(self.OnChangeSettings)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -30,13 +44,14 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleDown)
+        self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleUp)
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
-        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.Bind(wx.EVT_MENU, self.OnMenuItem)
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
-        self.init = False
         self.glctx = None
         self.fps_max = 100
         self.mouse_down = [False, False, False, False]
@@ -44,6 +59,13 @@ class glsGraphCanvas(GLCanvas):
         self.zoom = 20.0
         self.time_draw = 1
         self.time_fdp = 1
+        self.selection = False
+        self.glctx = wx.glcanvas.GLContext(self)
+        self.SetCurrent(self.glctx)
+        self.InitGL()
+        self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
+        self.closing = False
+        self.pushframes_done = False
         wx.CallLater(10, self.PushFrames)
         return
     def InitGL(self):
@@ -74,18 +96,22 @@ class glsGraphCanvas(GLCanvas):
     def OnLeftDown(self, event):
         self.mouse_pos = event.GetPosition()
         self.mouse_down[0] = True
+        self.selection = True
         return
     def OnLeftUp(self, event):
         self.OnMove(event)
         self.mouse_down[0] = False
         return
-    def OnRightDown(self, event):
+    def OnMiddleDown(self, event):
         self.mouse_pos = event.GetPosition()
         self.mouse_down[3] = True
         return
-    def OnRightUp(self, event):
+    def OnMiddleUp(self, event):
         self.OnMove(event)
         self.mouse_down[3] = False
+        return
+    def OnRightDown(self, event):
+        self.PopupMenu(glsGraphPopupMenu(self), event.GetPosition())        
         return
     def OnMove(self, event):
         pos = event.GetPosition()
@@ -103,29 +129,50 @@ class glsGraphCanvas(GLCanvas):
         else:
             self.zoom /= 0.95
         return
+    def OnMenuItem(self, event):
+        id = event.GetId() 
+        if id == glsGraphPopupMenu.ID_EXIT:
+            self.OnClose()
+        return
     def OnPaint(self, event):
-        if not self.init:
-            self.glctx = wx.glcanvas.GLContext(self)
-            self.SetCurrent(self.glctx)
-            self.InitGL()
-            self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
-            self.init = True
-        self.SetCurrent(self.glctx)
         start = datetime.datetime.now()
         self.OnDraw()
         self.time_draw = datetime.datetime.now() - start
         self.time_draw = self.time_draw.total_seconds()
         return
+    def ProcessSelected(self, select):
+        print(select)
+        return
     def PushFrames(self):
+        if self.closing:
+            self.pushframes_done = True
+            return
+        self.Refresh()
+        wx.YieldIfNeeded()
+        next_draw = 1000.0/self.fps_max
+        next_draw = 5 if next_draw <= 5 else int(next_draw)
+        wx.CallLater(next_draw, self.PushFrames)
+        return
         start = datetime.datetime.now()
-        if self.init:
-            self.OnDraw()
+        '''
+        if self.selection:
+            select_max = 1000
+            select = np.zeros((select_max), dtype=np.uint32)
+            self.glctx.SetCurrent(self)
+            glSelectBuffer(select_max, select);
+            glRenderMode(GL_SELECT)
+            self.OnDraw(self.selection)
+            self.selection = False
+            select_count = glRenderMode(GL_RENDER);
+            self.ProcessSelected(select[:select_count]);
+        '''
+        self.OnDraw(self.selection)
         self.time_draw = (datetime.datetime.now() - start).total_seconds()
         next_draw = 1000.0/self.fps_max - self.time_draw
         next_draw = 5 if next_draw <= 5 else int(next_draw)
         wx.CallLater(next_draw, self.PushFrames)
         return
-    def DrawGraph(self):
+    def DrawGraph(self, selection):
         # Get graph and its settings.
         gthread = self.project.thread
         graph   = gthread.get_graph()
@@ -171,6 +218,9 @@ class glsGraphCanvas(GLCanvas):
                     glVertex3fv(pos)
             glEnd()
             # Draw nodes.
+            if selection:
+                glInitNames();
+                glPushName(0);
             for ni,node in enumerate(graph.nlist):
                 pos = np.array(graph.np_nodes[ni])
                 pos *= zoom
@@ -189,10 +239,14 @@ class glsGraphCanvas(GLCanvas):
                         glColor4fv(blu)
                         size = 8.0
                 glPointSize(size)
+                if selection:
+                    glLoadName(ni+1)
                 glBegin(GL_POINTS)
                 glVertex3fv(pos)
                 glEnd()
                 pos_nodes.append(self.Project3DTo2D(pos))
+            if selection:
+                glLoadName(0)
             # Draw labels.
             self.Set2D()
             for ni,node in enumerate(graph.nlist):
@@ -244,11 +298,13 @@ class glsGraphCanvas(GLCanvas):
         fps_pos = [0, self.Size[1]-2*self.glfont.char_h, 0]
         self.glfont.DrawText(fps_ogl, fps_pos, grn)
         return
-    def OnDraw(self):
+    def OnDraw(self, selection=False):
+        self.SetCurrent(self.glctx)
+        self.SetMatrices()
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # Draw the graph.
-        self.DrawGraph()
+        self.DrawGraph(selection)
         # Draw stats.
         self.DrawStats()
         # Swap buffers to show the scene.
@@ -290,22 +346,27 @@ class glsGraphCanvas(GLCanvas):
         glViewport(0, 0, self.Size[0], self.Size[1])
         return
     def OnClose(self, event=None):
-        self.settings.RemoveWatcher(self.OnChangeSettings)
-        self.project.thread.stop()
-        self.project.thread.join()
-        if event is not None:
-            event.Skip()
+        if not self.closing:
+            self.closing = True
+            self.settings.RemoveWatcher(self.OnChangeSettings)
+            self.project.thread.stop()
+            self.project.thread.join()
+        if not self.pushframes_done:
+            wx.CallLater(10, self.OnClose)
+            return
+        self.callback_close()        
         return
 
 ################################################################
 
 class glsGraphPanel(wx.Window):
-    def __init__(self, parent, project, settings):
+    def __init__(self, parent, project, settings, callback_close):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsGraphPanel, self).__init__(parent, style=style)
         self.project = project
         self.settings = settings
+        self.callback_close = callback_close
         self.SetMinSize( (320,320) )
         self.SetBackgroundColour( (255,0,0) )
         self.graph_canvas = None
@@ -316,11 +377,15 @@ class glsGraphPanel(wx.Window):
     def StartGraph(self):
         if self.graph_canvas is None:
             self.graph_canvas = glsGraphCanvas(self, self.project, size=(320,320),
-                                               settings=self.settings)
+                                               settings=self.settings,
+                                               callback_close=self.CloseGraph)
         return
-    def OnSize(self, event):
+    def OnSize(self, event=None):
         if self.graph_canvas is not None:
             self.graph_canvas.SetSize(0, 0, self.Size[0], self.Size[1])
+        return
+    def CloseGraph(self):
+        self.callback_close(self)
         return
     def OnClose(self, event=None):
         if self.graph_canvas is not None:

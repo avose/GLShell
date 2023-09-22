@@ -132,7 +132,8 @@ class glShell(wx.Frame):
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Toolbar.
-        self.toolbar = glsToolBar(self, self.settings, self.OnSearchFiles, self.OnSearchContents)
+        self.toolbar = glsToolBar(self, self.settings, self.OnSearchFiles,
+                                  self.OnSearchContents, self.OnOpenDir)
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         # DataPanel and TermsPanel side-by-side.
         self.min_term_size = (320, 92)
@@ -151,6 +152,9 @@ class glShell(wx.Frame):
         return
     def AddProject(self, proj):
         self.data_panel.AddProject(proj)
+        return
+    def OnOpenDir(self, text):
+        self.AddProject(glsp.glsProject(text, self.settings))
         return
     def OnSearchFiles(self, text):
         self.data_panel.SearchFiles(text)
