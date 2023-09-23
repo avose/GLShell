@@ -31,11 +31,11 @@ class glsGLFont():
         self.buff.SyncTexture()
         w,h = self.char_w, self.char_h
         self.display_lists = glGenLists(256)
-        offsets = np.array([ [0, 0],
-                             [0, h],
-                             [w, h],
-                             [w, 0] ],
-                           dtype=np.single)
+        self.offsets = np.array([ [0, 0],
+                                  [0, h],
+                                  [w, h],
+                                  [w, 0] ],
+                                dtype=np.single)
         glColor4f(1.0, 1.0, 1.0, 1.0)
         glEnable(GL_TEXTURE_2D)
         self.buff.BindTexture()
@@ -49,8 +49,8 @@ class glsGLFont():
                            [(x+1)/16.0, (y+1)/16.0] ]
             tex_coords = np.array(tex_coords, dtype=np.single)
             glNewList(self.display_lists+c, GL_COMPILE);
-            glBegin(GL_QUADS)
-            for off,coord in zip(offsets,tex_coords):
+            glBegin(GL_POLYGON)
+            for off,coord in zip(self.offsets,tex_coords):
                 glTexCoord2fv(coord);
                 glVertex2fv(off)
             glEnd()
@@ -59,15 +59,25 @@ class glsGLFont():
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
         return
-    def DrawText(self, text, pos=(0,0), color=(1,1,1,1), center=False):
-        glColor4fv(color)
-        glEnable(GL_TEXTURE_2D)
-        self.buff.BindTexture()
+    def DrawText(self, text, pos=(0,0), color=(1,1,1,1), center=False, background=False):
         if center:
             pos[0] -= (len(text)*self.char_w) / 2.0
             pos[1] -= self.char_h / 2.0
         glPushMatrix()
         glTranslatef(pos[0], pos[1], 0)
+        if background:
+            glColor4fv([0,0,0,0.80])
+            offsets = self.offsets.copy()
+            offsets[:,0] *= len(text)
+            offsets[:2,0] -= self.char_w / 2.0
+            offsets[2:,0] += self.char_w / 2.0
+            glBegin(GL_POLYGON)
+            for off in offsets:
+                glVertex2fv(off)
+            glEnd()
+        glColor4fv(color)
+        glEnable(GL_TEXTURE_2D)
+        self.buff.BindTexture()
         glListBase(self.display_lists)
         glCallLists(len(text), GL_UNSIGNED_BYTE, bytes(text,"utf-8"))
         glPopMatrix()

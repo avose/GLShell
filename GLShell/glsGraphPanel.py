@@ -38,6 +38,7 @@ class glsGraphCanvas(GLCanvas):
         self.callback_close = callback_close
         self.graph_3D = settings.Get('graph_3D')
         self.settings.AddWatcher(self.OnChangeSettings)
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -50,6 +51,10 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
         self.Bind(wx.EVT_MENU, self.OnMenuItem)
+        self.Bind(wx.EVT_CHAR, self.OnChar)
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+        self.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+        self.keys_down = {}
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
         self.glctx = None
@@ -93,10 +98,52 @@ class glsGraphCanvas(GLCanvas):
     def OnSize(self, event):
         self.SetMatrices()
         return
+    def OnChar(self, event):
+        key_map = { wx.WXK_UP:'w', wx.WXK_LEFT:'a', wx.WXK_DOWN:'s', wx.WXK_RIGHT:'d' }
+        key = event.GetKeyCode()
+        if key < 256:
+            key = chr(key)
+        elif key in key_map:
+            key = key_map[key]
+        if wx.WXK_TAB in self.keys_down:
+            #    self.rotate += dx + dy
+            if key == 'w':
+                self.rotate += 5
+            elif key == 'a':
+                self.rotate -= 5
+            elif key == 's':
+                self.rotate -= 5
+            elif key == 'd':
+                self.rotate += 5
+        else:
+            if key == 'w':
+                self.translate[1] += 5
+            elif key == 'a':
+                self.translate[0] -= 5
+            elif key == 's':
+                self.translate[1] -= 5
+            elif key == 'd':
+                self.translate[0] += 5
+        return
+    def OnKeyDown(self, event):
+        self.keys_down[event.GetKeyCode()] = True
+        if wx.WXK_CONTROL in self.keys_down or wx.WXK_SHIFT in self.keys_down:
+            self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
+        event.Skip()
+        return
+    def OnKeyUp(self, event):
+        if event.GetKeyCode() in self.keys_down:
+            del self.keys_down[event.GetKeyCode()]
+        if wx.WXK_SHIFT not in self.keys_down and wx.WXK_CONTROL not in self.keys_down:
+            self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+        event.Skip()
+        return
     def OnLeftDown(self, event):
+        if wx.WXK_CONTROL in self.keys_down:
+            self.selection = True
         self.mouse_pos = event.GetPosition()
         self.mouse_down[0] = True
-        self.selection = True
+        event.Skip()
         return
     def OnLeftUp(self, event):
         self.OnMove(event)
@@ -104,22 +151,25 @@ class glsGraphCanvas(GLCanvas):
         return
     def OnMiddleDown(self, event):
         self.mouse_pos = event.GetPosition()
-        self.mouse_down[3] = True
+        self.mouse_down[2] = True
         return
     def OnMiddleUp(self, event):
         self.OnMove(event)
-        self.mouse_down[3] = False
+        self.mouse_down[2] = False
         return
     def OnRightDown(self, event):
-        self.PopupMenu(glsGraphPopupMenu(self), event.GetPosition())        
+        self.PopupMenu(glsGraphPopupMenu(self), event.GetPosition())
         return
     def OnMove(self, event):
+        if (wx.WXK_CONTROL in self.keys_down or
+            wx.WXK_SHIFT in self.keys_down):
+            return
         pos = event.GetPosition()
         dx = (self.mouse_pos[0] - pos[0])*0.3
         dy = (self.mouse_pos[1] - pos[1])*0.3
-        if self.mouse_down[0]:
+        if self.mouse_down[0] and wx.WXK_TAB not in self.keys_down:
             self.translate += np.array((-dx, dy, 0), dtype=np.single)
-        if self.mouse_down[3]:
+        if self.mouse_down[2] or self.mouse_down[0] and wx.WXK_TAB in self.keys_down:
             self.rotate += dx + dy
         self.mouse_pos = pos
         return
@@ -130,7 +180,7 @@ class glsGraphCanvas(GLCanvas):
             self.zoom /= 0.95
         return
     def OnMenuItem(self, event):
-        id = event.GetId() 
+        id = event.GetId()
         if id == glsGraphPopupMenu.ID_EXIT:
             self.OnClose()
         return
@@ -140,39 +190,39 @@ class glsGraphCanvas(GLCanvas):
         self.time_draw = datetime.datetime.now() - start
         self.time_draw = self.time_draw.total_seconds()
         return
-    def ProcessSelected(self, select):
-        print(select)
+    def ProcessSelected(self, selected):
+        selected = [ (s[0], s[2][0]) for s in selected if len(s[2]) == 1 ]
+        selected.sort(key=lambda x: x[0])
+        if len(selected) == 0:
+            return
+        selected = selected[0][1] - 1
+        gthread = self.project.thread
+        graph = gthread.get_graph()
+        with gthread.lock:
+            graph.nlist[selected].selected = not graph.nlist[selected].selected
         return
     def PushFrames(self):
         if self.closing:
             self.pushframes_done = True
             return
-        self.Refresh()
-        wx.YieldIfNeeded()
-        next_draw = 1000.0/self.fps_max
-        next_draw = 5 if next_draw <= 5 else int(next_draw)
-        wx.CallLater(next_draw, self.PushFrames)
-        return
         start = datetime.datetime.now()
-        '''
         if self.selection:
-            select_max = 1000
+            select_max = 100000
             select = np.zeros((select_max), dtype=np.uint32)
             self.glctx.SetCurrent(self)
             glSelectBuffer(select_max, select);
             glRenderMode(GL_SELECT)
-            self.OnDraw(self.selection)
+            self.OnDraw()
             self.selection = False
-            select_count = glRenderMode(GL_RENDER);
-            self.ProcessSelected(select[:select_count]);
-        '''
-        self.OnDraw(self.selection)
+            selected = glRenderMode(GL_RENDER);
+            self.ProcessSelected(selected);
+        self.OnDraw()
         self.time_draw = (datetime.datetime.now() - start).total_seconds()
         next_draw = 1000.0/self.fps_max - self.time_draw
         next_draw = 5 if next_draw <= 5 else int(next_draw)
         wx.CallLater(next_draw, self.PushFrames)
         return
-    def DrawGraph(self, selection):
+    def DrawGraph(self):
         # Get graph and its settings.
         gthread = self.project.thread
         graph   = gthread.get_graph()
@@ -218,7 +268,7 @@ class glsGraphCanvas(GLCanvas):
                     glVertex3fv(pos)
             glEnd()
             # Draw nodes.
-            if selection:
+            if self.selection:
                 glInitNames();
                 glPushName(0);
             for ni,node in enumerate(graph.nlist):
@@ -227,34 +277,47 @@ class glsGraphCanvas(GLCanvas):
                 if not self.graph_3D:
                     pos[0] += self.Size[0]/2.0
                     pos[1] += self.Size[1]/2.0
-                if node.search_result == True:
-                    glColor4fv((1.0,0.0,1.0,1.0))
+                if node.selected:
+                    glColor4fv(red)
+                    size = 20.0
+                elif node.search_result:
+                    glColor4fv((1,1,1,1))
                     size = 20.0
                     pass
                 else:
                     if isinstance(node, glsDir):
-                        glColor4fv(red)
+                        glColor4fv(prp)
                         size = 10.0
                     else:
                         glColor4fv(blu)
                         size = 8.0
                 glPointSize(size)
-                if selection:
+                if self.selection:
                     glLoadName(ni+1)
                 glBegin(GL_POINTS)
                 glVertex3fv(pos)
                 glEnd()
                 pos_nodes.append(self.Project3DTo2D(pos))
-            if selection:
+            if self.selection:
                 glLoadName(0)
             # Draw labels.
             self.Set2D()
             for ni,node in enumerate(graph.nlist):
                 pos = pos_nodes[ni]
-                if node.search_result == True:
+                if node.selected:
+                    bckg = True
+                    yoff = 20
+                    color = red
+                    label = True
+                elif node.search_result:
+                    bckg = True
+                    yoff = 20
+                    color = (1,1,1,1)
                     label = True
                 else:
-                    if self.graph_3D:                        
+                    bckg = False
+                    yoff = 10
+                    if self.graph_3D:
                         if isinstance(node, glsDir):
                             color = ylw
                             label = True
@@ -268,8 +331,8 @@ class glsGraphCanvas(GLCanvas):
                         else:
                             color = prp
                             label = True if zoom >= 10 else False
-                if label is True:
-                    self.glfont.DrawText(node.name, [pos[0], pos[1]+10], color, True)
+                if label:
+                    self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff], color, True, bckg)
         return
     def DrawStats(self):
         self.Set2D()
@@ -278,7 +341,7 @@ class glsGraphCanvas(GLCanvas):
         blu = [0.0, 0.0, 1.0 ,1.0]
         ylw = [1.0, 1.0, 0.0 ,1.0]
         glColor4fv([0,0,0,0.75])
-        glBegin(GL_QUADS)
+        glBegin(GL_POLYGON)
         glVertex3fv([0,   self.Size[1]-2*self.glfont.char_h, 0])
         glVertex3fv([0,   self.Size[1],                      0])
         glVertex3fv([140, self.Size[1],                      0])
@@ -298,13 +361,13 @@ class glsGraphCanvas(GLCanvas):
         fps_pos = [0, self.Size[1]-2*self.glfont.char_h, 0]
         self.glfont.DrawText(fps_ogl, fps_pos, grn)
         return
-    def OnDraw(self, selection=False):
+    def OnDraw(self):
         self.SetCurrent(self.glctx)
         self.SetMatrices()
         # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # Draw the graph.
-        self.DrawGraph(selection)
+        self.DrawGraph()
         # Draw stats.
         self.DrawStats()
         # Swap buffers to show the scene.
@@ -318,8 +381,13 @@ class glsGraphCanvas(GLCanvas):
         self.viewport   = glGetIntegerv(GL_VIEWPORT)
         return
     def Set2D(self):
+        glViewport(0, 0, self.Size[0], self.Size[1])
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
+        if self.selection:
+            self.viewport = glGetIntegerv(GL_VIEWPORT)
+            gluPickMatrix(self.mouse_pos[0], self.viewport[3]-self.mouse_pos[1],
+                          20, 20, self.viewport);
         glOrtho(0.0, self.Size[0],
                 0.0, self.Size[1],
                 -0.01, 10.0)
@@ -327,8 +395,13 @@ class glsGraphCanvas(GLCanvas):
         glLoadIdentity()
         return
     def Set3D(self):
+        glViewport(0, 0, self.Size[0], self.Size[1])
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
+        if self.selection:
+            self.viewport = glGetIntegerv(GL_VIEWPORT)
+            gluPickMatrix(self.mouse_pos[0], self.viewport[3]-self.mouse_pos[1],
+                          20, 20, self.viewport);
         gluPerspective(75, self.Size[0]/self.Size[1], 1, 1000);
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
@@ -337,13 +410,10 @@ class glsGraphCanvas(GLCanvas):
                   0.0,  1.0,  0.0 ); # up vector
         return
     def SetMatrices(self):
-        # Projection and model view.
         if self.graph_3D:
             self.Set3D()
         else:
             self.Set2D()
-        # Viewport.
-        glViewport(0, 0, self.Size[0], self.Size[1])
         return
     def OnClose(self, event=None):
         if not self.closing:
@@ -354,7 +424,7 @@ class glsGraphCanvas(GLCanvas):
         if not self.pushframes_done:
             wx.CallLater(10, self.OnClose)
             return
-        self.callback_close()        
+        self.callback_close()
         return
 
 ################################################################

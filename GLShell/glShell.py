@@ -31,6 +31,11 @@
 from __future__ import print_function
 
 import os
+import platform
+if 'WAYLAND_DISPLAY' in os.environ and 'PYOPENGL_PLATFORM' not in os.environ:
+    os.environ['PYOPENGL_PLATFORM'] = 'egl'
+if "Ubuntu" in platform.version():
+    os.environ['PYOPENGL_PLATFORM'] = 'egl'
 import sys
 import wx
 
@@ -42,7 +47,7 @@ import glsProject as glsp
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.5"
+VERSION = "0.0.6"
 
 ################################################################
 

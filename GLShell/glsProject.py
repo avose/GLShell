@@ -20,6 +20,7 @@ class glsFile(glsFSObj):
     def __init__(self, path):
         super().__init__(path)
         self.search_result = False
+        self.selected = False
         return
     def __str__(self):
         return self.path + "@" + str(self.pos) + "+" + str(self.frc)
@@ -28,6 +29,7 @@ class glsDir(glsFSObj):
     def __init__(self, path):
         super().__init__(path)
         self.search_result = False
+        self.selected = False
         return
     def __str__(self):
         return self.path + "@" + str(self.pos) + "+" + str(self.frc)
