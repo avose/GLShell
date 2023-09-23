@@ -59,12 +59,12 @@ class glsGLFont():
         glBindTexture(GL_TEXTURE_2D, 0)
         glDisable(GL_TEXTURE_2D)
         return
-    def DrawText(self, text, pos=(0,0), color=(1,1,1,1), center=False, background=False):
+    def DrawText(self, text, pos=(0,0,0), color=(1,1,1,1), center=False, background=False):
         if center:
             pos[0] -= (len(text)*self.char_w) / 2.0
             pos[1] -= self.char_h / 2.0
         glPushMatrix()
-        glTranslatef(pos[0], pos[1], 0)
+        glTranslatef(pos[0], pos[1], -pos[2])
         if background:
             glColor4fv([0,0,0,0.80])
             offsets = self.offsets.copy()

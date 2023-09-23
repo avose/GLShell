@@ -304,6 +304,8 @@ class glsGraphCanvas(GLCanvas):
             self.Set2D()
             for ni,node in enumerate(graph.nlist):
                 pos = pos_nodes[ni]
+                if pos[2] > 1:
+                    continue
                 if node.selected:
                     bckg = True
                     yoff = 20
@@ -332,7 +334,8 @@ class glsGraphCanvas(GLCanvas):
                             color = prp
                             label = True if zoom >= 10 else False
                 if label:
-                    self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff], color, True, bckg)
+                    self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff, pos[2]],
+                                         color, True, bckg)
         return
     def DrawStats(self):
         self.Set2D()
