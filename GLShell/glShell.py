@@ -41,9 +41,9 @@ import wx
 
 from glsTermsPanel import glsTermsPanel
 from glsDataPanel import glsDataPanel
+from glsDirTree import glsDirTree
 from glsToolBar import glsToolBar
 from glsIcons import glsIcons
-import glsProject as glsp
 import glsSettings
 import glsHelp
 
@@ -56,7 +56,7 @@ class glShell(wx.Frame):
     ID_ABOUT    = 1002
     ID_SETTINGS = 1003
     ID_EXIT     = 1004
-    def __init__(self, app, project, settings):
+    def __init__(self, app, dirtree, settings):
         self.settings = settings
         self.settings.AddWatcher(self.OnChangeSettings)
         self.app = app
@@ -69,7 +69,7 @@ class glShell(wx.Frame):
         self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
         self.SetIcon(self.icon)
         self.InitUI()
-        self.data_panel.AddProject(project)
+        self.data_panel.AddDirTree(dirtree)
         return
     def OnChangeSettings(self, settings):
         return
@@ -155,11 +155,11 @@ class glShell(wx.Frame):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def AddProject(self, proj):
-        self.data_panel.AddProject(proj)
+    def AddDirTree(self, proj):
+        self.data_panel.AddDirTree(proj)
         return
     def OnOpenDir(self, text):
-        self.AddProject(glsp.glsProject(text, self.settings))
+        self.AddDirTree(glsDirTree(text, self.settings))
         return
     def OnSearchFiles(self, text):
         self.data_panel.SearchFiles(text)
@@ -188,10 +188,10 @@ class glShell(wx.Frame):
 if __name__ == '__main__':
     settings = glsSettings.glsSettings()
     settings.Load()
-    project_path = sys.argv[1] if len(sys.argv) == 2 else "."
-    project = glsp.glsProject(project_path, settings)
+    dirtree_path = sys.argv[1] if len(sys.argv) == 2 else "."
+    dirtree = glsDirTree(dirtree_path, settings)
     app = wx.App(0);
-    gl_shell = glShell(app, project, settings)
+    gl_shell = glShell(app, dirtree, settings)
     app.SetTopWindow(gl_shell)
     app.MainLoop()
 

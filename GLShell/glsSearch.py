@@ -5,7 +5,7 @@ import mimetypes
 from threading import Thread, Lock
 from multiprocessing import Process, Queue, Event
 
-from glsProject import glsFile
+from glsDirTree import glsFile
 from glsIcons import glsIcons
 
 ################################################################
@@ -29,19 +29,19 @@ class glsSearchProcess(Process):
         return
     def GetResults(self):
         if self.search.search_type == self.search.TYPE_FILES:
-            for pndx,project in enumerate(self.search.projects):
-                for result in self.SearchFiles(project):
+            for pndx,dirtree in enumerate(self.search.dirtrees):
+                for result in self.SearchFiles(dirtree):
                     yield (pndx, result)
         elif self.search.search_type == self.search.TYPE_CONTENTS:
-            for pndx,project in enumerate(self.search.projects):
-                for result in self.SearchContents(project):
+            for pndx,dirtree in enumerate(self.search.dirtrees):
+                for result in self.SearchContents(dirtree):
                     yield (pndx, result)
         return
-    def SearchFiles(self, project):
+    def SearchFiles(self, dirtree):
         if self.search.text is None or self.search.text == "":
             return
         stext = self.search.text
-        for nndx,node in enumerate(project.project.root.graph.nlist):
+        for nndx,node in enumerate(dirtree.dirtree.graph.nlist):
             if re.search(stext, node.name):
                 yield (nndx, node.abspath, None)
         return
@@ -60,11 +60,11 @@ class glsSearchProcess(Process):
             line = contents[start:]
             yield line_num, line.decode("utf-8")
         return
-    def SearchContents(self, project):
+    def SearchContents(self, dirtree):
         if self.search.text is None or self.search.text == "":
             return
         stext = self.search.text
-        for nndx,node in enumerate(project.project.root.graph.nlist):
+        for nndx,node in enumerate(dirtree.dirtree.graph.nlist):
             if not isinstance(node, glsFile):
                 continue
             mimetype = mimetypes.guess_type(node.abspath)[0]
@@ -88,8 +88,8 @@ class glsSearchProcess(Process):
 class glsSearch():
     TYPE_FILES = 1
     TYPE_CONTENTS = 2
-    def __init__(self, projects, text, search_type):
-        self.projects = projects
+    def __init__(self, dirtrees, text, search_type):
+        self.dirtrees = dirtrees
         self.text = text
         self.search_type = search_type
         self.results = []

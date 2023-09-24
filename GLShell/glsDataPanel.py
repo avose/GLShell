@@ -28,16 +28,16 @@ class glsDataPanel(wx.Window):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def AddProject(self, project):
-        graph_panel = glsGraphPanel(self.notebook, project, self.settings,
+    def AddDirTree(self, dirtree):
+        graph_panel = glsGraphPanel(self.notebook, dirtree, self.settings,
                                     self.OnCloseTab)
         self.tabs.append(graph_panel)
-        self.notebook.AddPage(graph_panel, " Graph '%s'"%(project.name))
+        self.notebook.AddPage(graph_panel, " Graph '%s'"%(dirtree.name))
         self.notebook.SetPageImage(len(self.tabs)-1, 0)
         self.notebook.SetSelection(len(self.tabs)-1)
         graph_panel.StartGraph()
         return
-    def GetProjects(self):
+    def GetDirTrees(self):
         return [ tab for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
     def AddSearch(self, search):
         result_panel = glsSearchResultPanel(self.notebook, search, self.OnResultOpen,
@@ -52,10 +52,10 @@ class glsDataPanel(wx.Window):
         self.notebook.SetSelection(len(self.tabs)-1)
         return
     def SearchFiles(self, text):
-        self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_FILES))
+        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.TYPE_FILES))
         return
     def SearchContents(self, text):
-        self.AddSearch(glsSearch(self.GetProjects(), text, glsSearch.TYPE_CONTENTS))
+        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.TYPE_CONTENTS))
         return
     def OnResultOpen(self, action_id, path, line=None):
         if action_id == glsSearchResultListPopupMenu.ID_OPEN_NEW:

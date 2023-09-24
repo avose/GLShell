@@ -36,8 +36,8 @@ class glsDir(glsFSObj):
 
 ################################################################
 
-class glsRoot(glsFSObj):
-    def __init__(self, settings, path="."):
+class glsDirTree(glsFSObj):
+    def __init__(self, path, settings):
         path = os.path.abspath(path)
         super().__init__(path)
         self.settings = settings
@@ -56,17 +56,7 @@ class glsRoot(glsFSObj):
                 self.dirs.append(node)
                 self.graph.add_node(node)
                 self.graph.add_edge( (root_node,node) )
-        return
-
-################################################################
-
-class glsProject:
-    def __init__(self, path, settings):
-        self.settings = settings
-        self.path = path
-        self.name = os.path.basename(os.path.abspath(self.path))
-        self.root = glsRoot(self.settings, path)
-        self.thread = glsFDPThread(self.settings, self.root.graph, speed=0.01)
+        self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
         self.thread.start()
         return
 

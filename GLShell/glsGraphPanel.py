@@ -11,8 +11,8 @@ from glsGLBuffer import glsGLBuffer
 from glsGLFont import glsGLFont
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
-from glsProject import glsFile
-from glsProject import glsDir
+from glsDirTree import glsFile
+from glsDirTree import glsDir
 from glsIcons import glsIcons
 
 ################################################################
@@ -30,10 +30,10 @@ class glsGraphPopupMenu(wx.Menu):
 ################################################################
 
 class glsGraphCanvas(GLCanvas):
-    def __init__(self, parent, project, size, settings, callback_close):
+    def __init__(self, parent, dirtree, size, settings, callback_close):
         #glattrs = wx.glcanvas.GLAttributes()
         GLCanvas.__init__(self, parent, id=-1, size=size)
-        self.project = project
+        self.dirtree = dirtree
         self.settings = settings
         self.callback_close = callback_close
         self.graph_3D = settings.Get('graph_3D')
@@ -196,7 +196,7 @@ class glsGraphCanvas(GLCanvas):
         if len(selected) == 0:
             return
         selected = selected[0][1] - 1
-        gthread = self.project.thread
+        gthread = self.dirtree.thread
         graph = gthread.get_graph()
         with gthread.lock:
             graph.nlist[selected].selected = not graph.nlist[selected].selected
@@ -224,7 +224,7 @@ class glsGraphCanvas(GLCanvas):
         return
     def DrawGraph(self):
         # Get graph and its settings.
-        gthread = self.project.thread
+        gthread = self.dirtree.thread
         graph   = gthread.get_graph()
         # Draw graph while holding the lock.
         with gthread.lock:
@@ -350,7 +350,7 @@ class glsGraphCanvas(GLCanvas):
         glVertex3fv([140, self.Size[1],                      0])
         glVertex3fv([140, self.Size[1]-2*self.glfont.char_h, 0])
         glEnd()
-        gthread = self.project.thread
+        gthread = self.dirtree.thread
         self.time_fdp = gthread.get_time()
         if self.time_fdp == 0:
             fps_fdp = 0
@@ -422,8 +422,8 @@ class glsGraphCanvas(GLCanvas):
         if not self.closing:
             self.closing = True
             self.settings.RemoveWatcher(self.OnChangeSettings)
-            self.project.thread.stop()
-            self.project.thread.join()
+            self.dirtree.thread.stop()
+            self.dirtree.thread.join()
         if not self.pushframes_done:
             wx.CallLater(10, self.OnClose)
             return
@@ -433,11 +433,11 @@ class glsGraphCanvas(GLCanvas):
 ################################################################
 
 class glsGraphPanel(wx.Window):
-    def __init__(self, parent, project, settings, callback_close):
+    def __init__(self, parent, dirtree, settings, callback_close):
         # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsGraphPanel, self).__init__(parent, style=style)
-        self.project = project
+        self.dirtree = dirtree
         self.settings = settings
         self.callback_close = callback_close
         self.SetMinSize( (320,320) )
@@ -449,7 +449,7 @@ class glsGraphPanel(wx.Window):
         return
     def StartGraph(self):
         if self.graph_canvas is None:
-            self.graph_canvas = glsGraphCanvas(self, self.project, size=(320,320),
+            self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=(320,320),
                                                settings=self.settings,
                                                callback_close=self.CloseGraph)
         return
