@@ -51,25 +51,40 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
                                 wx.FSW_EVENT_RENAME }
         self.watcher = wx.FileSystemWatcher()
         self.watcher.SetOwner(self)
-        self.AddDir(self.path)
+        self.ScanDir(self.path)
         self.thread.start()
         return
-    def AddDir(self, path):        
+    def ScanDir(self, path):        
         path = os.path.abspath(path)
-        self.watcher.AddTree(os.path.join(path, ""))
+        if os.path.exists(path):
+            try:
+                self.watcher.AddTree(os.path.join(path, ""))
+            except:
+                pass
+        else:
+            return
+        paths = []
         with self.thread.lock:
             for root, dirs, files in os.walk(self.path):
-                root_node = glsDir(root)
-                if root_node not in self.graph:
-                    self.graph.add_node(root_node)
+                root = os.path.abspath(root)
+                if root not in self.graph:
+                    self.graph.add_node(glsDir(root))
+                    paths.append(root)
                 for name in files:
-                    node = glsFile(os.path.join(root, name))
+                    path = os.path.join(root, name)
+                    paths.append(path)
+                    node = glsFile(path)
                     self.graph.add_node(node)
-                    self.graph.add_edge( (root_node, node) )
+                    self.graph.add_edge( (root, node) )
                 for name in dirs:
-                    node = glsDir(os.path.join(root, name))
+                    path = os.path.join(root, name)
+                    paths.append(path)
+                    node = glsDir(path)
                     self.graph.add_node(node)
-                    self.graph.add_edge( (root_node, node) )
+                    self.graph.add_edge( (root, node) )
+            for path in paths:
+                if path not in self.graph:
+                    self.graph.remove_node(path)
         self.thread.update()
         return
     def AddFile(self, path):
@@ -85,11 +100,14 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
     def AddPath(self, path):
         path = os.path.abspath(path)
         if os.path.isdir(path):
-            self.AddDir(path)
+            self.ScanDir(path)
         elif os.path.isfile(path):
             self.AddFile(path)
         return
     def DeletePath(self, path):
+        if path.endswith("/"):
+            self.ScanDir(self.path)
+            return
         path = os.path.abspath(path)
         with self.thread.lock:
             self.graph.remove_node(path)
