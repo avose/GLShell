@@ -68,7 +68,9 @@ class glsGraphCanvas(GLCanvas):
         self.glctx = wx.glcanvas.GLContext(self)
         self.SetCurrent(self.glctx)
         self.InitGL()
-        self.glfont = glsGLFont(wx.FontInfo(10).FaceName("Monospace"))
+        font_name = self.settings.Get('graph_font')
+        font_size = self.settings.Get('graph_font_size')
+        self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         self.closing = False
         self.pushframes_done = False
         wx.CallLater(10, self.PushFrames)
@@ -91,6 +93,9 @@ class glsGraphCanvas(GLCanvas):
         self.SetMatrices()
         return
     def OnChangeSettings(self, settings):
+        font_name = self.settings.Get('graph_font')
+        font_size = self.settings.Get('graph_font_size')
+        self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         return
     def OnDestroy(self, event):
         self.settings.RemoveWatcher(self.OnChangeSettings)

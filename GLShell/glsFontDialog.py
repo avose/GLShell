@@ -52,7 +52,7 @@ class glsFontPanel(wx.Panel):
         self.lb_font.SetSelection(wx.NOT_FOUND)
         self.sc_font_size.SetToolTip('Select font size')
         self.Show(True)
-        wx.CallLater(10, self.LoadFonts)
+        wx.CallAfter(self.LoadFonts)
         return
     def GetFonts(self):
         dc = wx.MemoryDC()
@@ -94,7 +94,8 @@ class glsFontPanel(wx.Panel):
         self.Refresh()
         return
     def OnOk(self, event):
-        self.callback_font(self.lb_font.GetStringSelection())
+        self.callback_font(self.lb_font.GetStringSelection(),
+                           self.sc_font_size.GetValue())
         self.Parent.Destroy()
         return
     def OnCancel(self, event):

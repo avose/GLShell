@@ -20,6 +20,8 @@ class glsSettings():
                                   "abcdefghijklmnopqrstuvwxyz"\
                                   "-z0123456789,./?%&#:_=+@~",
                    "graph_3D": True,
+                   "graph_font": "Monospace",
+                   "graph_font_size": 10,
                    "edit_path": "/usr/bin/emacs",
                    "edit_args": "-nw",
                    "edit_open": "\x18\x06{FILE}\x0a",
@@ -254,35 +256,44 @@ class TabGraph(wx.Panel):
     def __init__(self, parent, settings):
         wx.Panel.__init__(self, parent)
         self.settings = settings
-        main_box = wx.BoxSizer(wx.VERTICAL)
+        box_main = wx.BoxSizer(wx.VERTICAL)
         # Row one.
-        row1 = wx.BoxSizer(wx.HORIZONTAL)
         lblList = ['3D', '2D']
-        self.rbox = wx.RadioBox(self, label='Graph Rendering',
-                                pos=(80,10), choices=lblList ,
+        self.rbox = wx.RadioBox(self, label='Graph Rendering', choices=lblList,
                                 majorDimension=1, style=wx.RA_SPECIFY_ROWS)
         if self.settings.Get('graph_3D'):
             self.rbox.SetSelection(0)
         else:
             self.rbox.SetSelection(1)
-        row1.Add(self.rbox, 0, wx.ALIGN_CENTER | wx.ALL, 20)
-        main_box.Add(row1, 0, wx.ALIGN_CENTER | wx.ALL, 20)
+        box_main.Add(self.rbox, 0, wx.EXPAND | wx.ALL, 5)
         # Row two.
-        row2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_font = wx.Button(self, wx.ID_ANY, "Graph Font")
-        self.btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
-        row2.Add(self.btn_font, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        
-        self.tc_font = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
-        self.tc_font.SetValue("Sample Text")
-        row2.Add(self.tc_font, 1, wx.EXPAND | wx.RIGHT, 5)
-        main_box.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 5)
-        self.SetSizerAndFit(main_box)
+        btn_font = wx.Button(self, wx.ID_ANY, "Select Graph Font")
+        btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
+        box_main.Add(btn_font, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 5)
+        # Row three.
+        p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
+        p_sample.SetBackgroundColour((255,255,255))
+        self.st_sample = wx.StaticText(p_sample, -1, "Font Sample Text",
+                                       size=(-1, 64))
+        self.SetFontSelection(self.settings.Get('graph_font'),
+                              self.settings.Get('graph_font_size'))
+        box_samp = wx.BoxSizer(wx.VERTICAL)
+        box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
+        box_main.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        p_sample.SetSizerAndFit(box_samp)
+        self.SetSizerAndFit(box_main)
         return
     def OnFontDialog(self, event):
-        self.font_dialog = glsFontDialog(self, self.OnFont)
+        self.font_dialog = glsFontDialog(self, self.SetFontSelection)
         return
-    def OnFont(self, font_name):
+    def SetFontSelection(self, name, size):
+        self.font_name = name
+        self.font_size = size
+        self.st_sample.SetLabel(name+" Sample Text")
+        font = wx.Font(self.font_size, family=wx.DEFAULT,
+                       style=wx.NORMAL, weight=wx.NORMAL, underline=False,
+                       faceName=self.font_name)
+        self.st_sample.SetFont(font)
         return
     def Load(self):
         if self.settings.Get('graph_3D'):
@@ -290,6 +301,9 @@ class TabGraph(wx.Panel):
         else:
             dims = "2D"            
         self.rbox.SetStringSelection(dims)
+        self.SetFontSelection(self.settings.Get('graph_font'),
+                              self.settings.Get('graph_font_size'))
+        self.Refresh()
         return
     def Save(self):
         dims = self.rbox.GetStringSelection()
@@ -297,6 +311,8 @@ class TabGraph(wx.Panel):
             self.settings.Set('graph_3D', True)
         else:
             self.settings.Set('graph_3D', False)
+        self.settings.Set('graph_font', self.font_name)
+        self.settings.Set('graph_font_size', self.font_size)
         return
 
 ################################################################
@@ -305,7 +321,7 @@ class TabEditor(wx.Panel):
     def __init__(self, parent, settings):
         wx.Panel.__init__(self, parent)
         self.settings = settings
-        main_box = wx.BoxSizer(wx.VERTICAL)
+        box_main = wx.BoxSizer(wx.VERTICAL)
         # Row zero.
         row0 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_path = wx.StaticText(self, wx.ID_ANY, "Editor Path:")
@@ -315,7 +331,7 @@ class TabEditor(wx.Panel):
         self.tc_path.SetValue(edit_path)
         row0.Add(self.tc_path, 1, wx.ALL)
         row0.AddSpacer(5)
-        main_box.Add(row0, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
+        box_main.Add(row0, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
         # Row one.
         row1 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_args = wx.StaticText(self, wx.ID_ANY, "Arguments:")
@@ -324,12 +340,12 @@ class TabEditor(wx.Panel):
         self.tc_args.SetValue(str(settings.Get('edit_args')))
         row1.Add(self.tc_args, 1, wx.ALL)
         row1.AddSpacer(5)
-        main_box.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 5)
+        box_main.Add(row1, 0, wx.EXPAND | wx.BOTTOM, 5)
         # Row 2.
         row2 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_args = wx.StaticText(self, wx.ID_ANY, "Editor Commands:")
         row2.Add(self.st_edit_args, 0, wx.LEFT | wx.RIGHT, 5)
-        main_box.Add(row2, 0,  wx.BOTTOM, 5)
+        box_main.Add(row2, 0,  wx.BOTTOM, 5)
         # Row three.
         row3 = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_open = wx.Button(self, wx.ID_ANY, "Open File")
@@ -338,7 +354,7 @@ class TabEditor(wx.Panel):
         self.tc_open = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
         self.tc_open.SetValue(str(settings.Get('edit_open')))
         row3.Add(self.tc_open, 1, wx.EXPAND | wx.RIGHT, 5)
-        main_box.Add(row3, 0, wx.EXPAND | wx.BOTTOM, 5)
+        box_main.Add(row3, 0, wx.EXPAND | wx.BOTTOM, 5)
         # Row four.
         row4 = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_line = wx.Button(self, wx.ID_ANY, "Goto Line")
@@ -347,8 +363,8 @@ class TabEditor(wx.Panel):
         self.tc_line = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
         self.tc_line.SetValue(str(settings.Get('edit_line')))
         row4.Add(self.tc_line, 1, wx.EXPAND | wx.RIGHT, 5)
-        main_box.Add(row4, 0, wx.EXPAND | wx.BOTTOM, 5)
-        self.SetSizerAndFit(main_box)
+        box_main.Add(row4, 0, wx.EXPAND | wx.BOTTOM, 5)
+        self.SetSizerAndFit(box_main)
         return
     def OnOpenKeys(self, event):
         self.open_keys = KeyPressesFrame(self, self.SetOpenKeys)
@@ -384,7 +400,7 @@ class SettingsFrame(wx.Frame):
         self.settings = settings
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         # Create panel and notebook on the panel.
-        main_box = wx.BoxSizer(wx.VERTICAL)
+        box_main = wx.BoxSizer(wx.VERTICAL)
         self.icons = glsIcons()
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(self.icons.Get('cog'))
@@ -402,7 +418,7 @@ class SettingsFrame(wx.Frame):
         for t in range(len(self.tabs)):
             self.notebook.AddPage(self.tabs[t], self.tab_names[t])
             self.notebook.SetPageImage(t, t)
-        main_box.Add(self.notebook, 1, wx.EXPAND | wx.TOP)
+        box_main.Add(self.notebook, 1, wx.EXPAND | wx.TOP)
         # Create buttons.
         row_bottom = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_cancel = wx.Button(self, wx.ID_ANY, "Cancel")
@@ -425,9 +441,9 @@ class SettingsFrame(wx.Frame):
         self.btn_apply.Bind(wx.EVT_BUTTON, self.OnApply)
         self.btn_apply.SetBitmap(self.icons.Get('tick'))
         row_bottom.Add(self.btn_apply)
-        main_box.Add(row_bottom, 0)
+        box_main.Add(row_bottom, 0)
         # Set main box as frame sizer.
-        self.SetSizerAndFit(main_box)
+        self.SetSizerAndFit(box_main)
         self.Show(True)
         return
     def OnLoad(self, event):
