@@ -2,6 +2,7 @@ import os
 import wx
 import json
 
+from glsFontDialog import glsFontDialog
 from glsKeyPress import glsKeyPress
 from glsIcons import glsIcons
 
@@ -254,7 +255,8 @@ class TabGraph(wx.Panel):
         wx.Panel.__init__(self, parent)
         self.settings = settings
         main_box = wx.BoxSizer(wx.VERTICAL)
-        row = wx.BoxSizer(wx.HORIZONTAL)
+        # Row one.
+        row1 = wx.BoxSizer(wx.HORIZONTAL)
         lblList = ['3D', '2D']
         self.rbox = wx.RadioBox(self, label='Graph Rendering',
                                 pos=(80,10), choices=lblList ,
@@ -263,9 +265,24 @@ class TabGraph(wx.Panel):
             self.rbox.SetSelection(0)
         else:
             self.rbox.SetSelection(1)
-        row.Add(self.rbox, 0, wx.ALIGN_CENTER | wx.ALL, 20)
-        main_box.Add(row, 0, wx.ALIGN_CENTER | wx.ALL, 20)
+        row1.Add(self.rbox, 0, wx.ALIGN_CENTER | wx.ALL, 20)
+        main_box.Add(row1, 0, wx.ALIGN_CENTER | wx.ALL, 20)
+        # Row two.
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_font = wx.Button(self, wx.ID_ANY, "Graph Font")
+        self.btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
+        row2.Add(self.btn_font, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
+        
+        self.tc_font = wx.TextCtrl(self, wx.ID_ANY, style=wx.TE_READONLY)
+        self.tc_font.SetValue("Sample Text")
+        row2.Add(self.tc_font, 1, wx.EXPAND | wx.RIGHT, 5)
+        main_box.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 5)
         self.SetSizerAndFit(main_box)
+        return
+    def OnFontDialog(self, event):
+        self.font_dialog = glsFontDialog(self, self.OnFont)
+        return
+    def OnFont(self, font_name):
         return
     def Load(self):
         if self.settings.Get('graph_3D'):
