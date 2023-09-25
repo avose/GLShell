@@ -10,9 +10,10 @@ import datetime
 
 class fdpNode():
     def __init__(self,id):
+        self.id = id
         self.pos = np.random.random(size=3)
         self.frc = np.array([0,0,0], dtype=float)
-        self.id = id
+        self.edges = {}
         return
 
 class fdpGraph():
@@ -20,8 +21,6 @@ class fdpGraph():
         self.settings = settings
         self.nodes = {}
         self.edges = {}
-        self.nlist = []
-        self.nndxs = {}
         self.np_nodes = np.ndarray((0,3),dtype=np.single)
         self.np_edges = np.ndarray((0,2),dtype=np.intc)
         return
@@ -38,22 +37,60 @@ class fdpGraph():
         elif isinstance(key, str):
             return key in self.nodes
         return
-    def add_node(self,node):
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            return self.edges[key]
+        if isinstance(key, fdpNode):
+            return self.nodes[key.id]
+        return
+    def add_node(self, node):
         if node not in self:
             self.nodes[node.id] = node
-            self.nndxs[node.id] = len(self.nlist)
-            self.nlist.append(node)
-            self.np_nodes = np.vstack( (self.np_nodes,node.pos) )
+            self.np_nodes = np.vstack( (self.np_nodes, node.pos) )
         return
-    def add_edge(self,edge):
+    def add_edge(self, edge):
+        if edge in self:
+            return
+        if isinstance(edge[0], fdpNode):
+            edge = (edge[0].id, edge[1])
+        if isinstance(edge[1], fdpNode):
+            edge = (edge[0], edge[1].id)
+        self.edges[(edge[0], edge[1])] = edge
+        nodes_keys = list(self.nodes.keys())
+        edge_indices = ( nodes_keys.index(edge[0]), nodes_keys.index(edge[1]) )
+        self.np_edges = np.vstack( (self.np_edges, edge_indices) )
         for n in edge:
-            self.add_node(n)
-        if edge not in self:
-            self.edges[(edge[0].id,edge[1].id)] = edge
-            self.np_edges = np.vstack( (self.np_edges,
-                                        (self.nndxs[edge[0].id],self.nndxs[edge[1].id])) )
+            self.nodes[n].edges[edge] = edge
         return
-    def set_np_nodes(self,np_nodes):
+    def remove_edge(self, edge):
+        if not isinstance(edge, tuple):
+            edge = tuple(edge)
+        if edge not in self.edges:
+            return
+        edges_keys = list(self.edges.keys())
+        self.np_edges = np.delete(self.np_edges, edges_keys.index(edge), axis=0)
+        del self.edges[edge]
+        for n in edge:
+            if edge in self.nodes[n].edges:
+                del self.nodes[n].edges[edge]
+        return
+    def remove_node(self, node):
+        if isinstance(node, fdpNode):
+            node = node.id
+        if node not in self.nodes:
+            return
+        for edge in list(self.nodes[node].edges):
+            self.remove_edge(edge)
+        nodes_keys = list(self.nodes.keys())
+        self.np_nodes = np.delete(self.np_nodes, nodes_keys.index(node), axis=0)
+        del self.nodes[node]
+        self.np_edges = np.ndarray((0,2),dtype=np.intc)
+        for edge in self.edges:
+            nodes_keys = list(self.nodes.keys())
+            edge_indices = ( nodes_keys.index(edge[0]), nodes_keys.index(edge[1]) )
+            self.np_edges = np.vstack( (self.np_edges, edge_indices) )
+        return
+    def set_np_nodes(self, np_nodes):
         self.np_nodes = np_nodes
         return
     def get_np_nodes(self):
@@ -131,27 +168,28 @@ class glsFDPThread(Thread):
         Thread.__init__(self)
         self.settings = settings
         self.dims = 3 if self.settings.Get('graph_3D') else 2
-        self.graph = graph
-        self.speed = speed
-        self.nice  = nice
-        self.done  = False
-        self.first = True
-        self.lock  = Lock()
-        self.in_q  = Queue()
-        self.out_q = Queue()
-        self.time = 0
+        self.graph   = graph
+        self.speed   = speed
+        self.nice    = nice
+        self.done    = False
+        self.refresh = True
+        self.lock    = Lock()
+        self.in_q    = Queue()
+        self.out_q   = Queue()
+        self.time    = 0
         self.proc = glsFDPProcess(self.settings, self.in_q, self.out_q, self.speed)
         self.proc.start()
         return
     def run(self):
         while not self.done:
-            if self.first:
-                with self.lock:
+            with self.lock:
+                if self.refresh:
                     nodes = self.graph.get_np_nodes()
                     edges = self.graph.get_np_edges()
-            else:
-                nodes = None
-                edges = None
+                    self.refresh = False
+                else:
+                    nodes = None
+                    edges = None
             dims = 3 if self.settings.Get('graph_3D') else 2
             self.in_q.put(["run", nodes, edges, dims])
             data = False
@@ -162,10 +200,15 @@ class glsFDPThread(Thread):
                 except Empty:
                     sleep(self.nice/1000.0)
             with self.lock:
-                self.graph.set_np_nodes(nodes)
-                self.time = time
-                self.dims = dims
+                if not self.refresh:
+                    self.graph.set_np_nodes(nodes)
+                    self.time = time
+                    self.dims = dims
             sleep(self.nice/1000.0)
+        return
+    def update(self):
+        with self.lock:
+            self.refresh = True
         return
     def get_time(self):
         with self.lock:

@@ -52,11 +52,13 @@ VERSION = "0.0.6"
 ################################################################
 
 class glShell(wx.Frame):
-    ID_LICENSE  = 1000
-    ID_ABOUT    = 1002
-    ID_SETTINGS = 1003
-    ID_EXIT     = 1004
-    def __init__(self, app, dirtree, settings):
+    ID_OPEN_DIR  = 1000
+    ID_OPEN_FILE = 1001
+    ID_LICENSE   = 1002
+    ID_ABOUT     = 1003
+    ID_SETTINGS  = 1004
+    ID_EXIT      = 1005
+    def __init__(self, app, settings):
         self.settings = settings
         self.settings.AddWatcher(self.OnChangeSettings)
         self.app = app
@@ -69,11 +71,18 @@ class glShell(wx.Frame):
         self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
         self.SetIcon(self.icon)
         self.InitUI()
-        self.data_panel.AddDirTree(dirtree)
+        self.Bind(wx.EVT_TIMER, self.OnStart)
+        self.start = wx.Timer(self)
+        self.start.StartOnce()
+        return
+    def OnStart(self, event):
+        del self.start
+        path = sys.argv[1] if len(sys.argv) == 2 else "."
+        self.data_panel.AddDirTree(glsDirTree(path, settings))
         return
     def OnChangeSettings(self, settings):
         return
-    def OnCharHook(self,event):
+    def OnCharHook(self, event):
         event.DoAllowNextEvent()
         event.Skip()
         return
@@ -81,6 +90,12 @@ class glShell(wx.Frame):
         menubar = wx.MenuBar()
         # File menu.
         menu_file = wx.Menu()
+        item = wx.MenuItem(menu_file, self.ID_OPEN_FILE, text="Open File")
+        item.SetBitmap(self.icons.Get('monitor_add'))
+        menu_file.Append(item)
+        item = wx.MenuItem(menu_file, self.ID_OPEN_DIR, text="Open Directory")
+        item.SetBitmap(self.icons.Get('chart_organisation_add'))
+        menu_file.Append(item)
         item = wx.MenuItem(menu_file, self.ID_EXIT, text="Quit")
         item.SetBitmap(self.icons.Get('cross'))
         menu_file.Append(item)
@@ -108,24 +123,38 @@ class glShell(wx.Frame):
         self.license_frame = None
         return
     def MenuHandler(self, event):
-        id = event.GetId()
-        if id == self.ID_EXIT:
+        menu_id = event.GetId()
+        if menu_id == self.ID_EXIT:
             self.OnClose()
             self.Destroy()
             return
-        if id == self.ID_SETTINGS:
+        if menu_id == self.ID_OPEN_FILE:
+            style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+            with wx.FileDialog(self, style=style) as file_dialog:
+                if file_dialog.ShowModal() != wx.ID_OK:
+                    return
+                self.terms_panel.EditorStart(file_dialog.GetPath())
+            return
+        if menu_id == self.ID_OPEN_DIR:
+            with wx.DirDialog(self, defaultPath=os.getcwd(),
+                              style=wx.DD_DIR_MUST_EXIST) as dir_dialog:
+                if dir_dialog.ShowModal() != wx.ID_OK:
+                    return
+                self.AddDirTree(glsDirTree(dir_dialog.GetPath(), self.settings))
+            return
+        if menu_id == self.ID_SETTINGS:
             if self.settings_frame is None:
                 self.settings_frame = glsSettings.SettingsFrame(self, self.settings)
                 self.settings_frame.Show()
                 self.settings_frame.Raise()
             else:
                 self.settings_frame.Raise()
-        elif id == self.ID_ABOUT:
+        elif menu_id == self.ID_ABOUT:
             if self.about_frame is None:
                 self.about_frame = glsHelp.glsAboutFrame(self)
             else:
                 self.about_frame.Raise()
-        elif id == self.ID_LICENSE:
+        elif menu_id == self.ID_LICENSE:
             if self.license_frame is None:
                 self.license_frame = glsHelp.glsLicenseFrame(self)
             else:
@@ -155,8 +184,8 @@ class glShell(wx.Frame):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def AddDirTree(self, proj):
-        self.data_panel.AddDirTree(proj)
+    def AddDirTree(self, dirtree):
+        self.data_panel.AddDirTree(dirtree)
         return
     def OnOpenDir(self, text):
         self.AddDirTree(glsDirTree(text, self.settings))
@@ -188,10 +217,8 @@ class glShell(wx.Frame):
 if __name__ == '__main__':
     settings = glsSettings.glsSettings()
     settings.Load()
-    dirtree_path = sys.argv[1] if len(sys.argv) == 2 else "."
-    dirtree = glsDirTree(dirtree_path, settings)
     app = wx.App(0);
-    gl_shell = glShell(app, dirtree, settings)
+    gl_shell = glShell(app, settings)
     app.SetTopWindow(gl_shell)
     app.MainLoop()
 

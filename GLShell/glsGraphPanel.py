@@ -199,7 +199,8 @@ class glsGraphCanvas(GLCanvas):
         gthread = self.dirtree.thread
         graph = gthread.get_graph()
         with gthread.lock:
-            graph.nlist[selected].selected = not graph.nlist[selected].selected
+            nlist = list(graph.nodes.values())
+            nlist[selected].selected = not nlist[selected].selected
         return
     def PushFrames(self):
         if self.closing:
@@ -271,7 +272,7 @@ class glsGraphCanvas(GLCanvas):
             if self.selection:
                 glInitNames();
                 glPushName(0);
-            for ni,node in enumerate(graph.nlist):
+            for ni,node in enumerate(graph.nodes.values()):
                 pos = np.array(graph.np_nodes[ni])
                 pos *= zoom
                 if not self.graph_3D:
@@ -302,7 +303,7 @@ class glsGraphCanvas(GLCanvas):
                 glLoadName(0)
             # Draw labels.
             self.Set2D()
-            for ni,node in enumerate(graph.nlist):
+            for ni,node in enumerate(graph.nodes.values()):
                 pos = pos_nodes[ni]
                 if pos[2] > 1:
                     continue
