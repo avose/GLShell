@@ -47,14 +47,14 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
         self.graph = fdpGraph(self.settings)
         self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
         self.Bind(wx.EVT_FSWATCHER, self.OnFSChange)
-        self.watcher_events = { wx.FSW_EVENT_CREATE, wx.FSW_EVENT_DELETE,
-                                wx.FSW_EVENT_RENAME }
+        self.watcher_events = ( wx.FSW_EVENT_CREATE, wx.FSW_EVENT_DELETE,
+                                wx.FSW_EVENT_RENAME )
         self.watcher = wx.FileSystemWatcher()
         self.watcher.SetOwner(self)
         self.ScanDir(self.path)
         self.thread.start()
         return
-    def ScanDir(self, path):        
+    def ScanDir(self, path):
         path = os.path.abspath(path)
         if os.path.exists(path):
             try:
@@ -63,67 +63,38 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
                 pass
         else:
             return
-        paths = []
+        nodes = []
+        edges = []
+        for root, dirs, files in os.walk(self.path):
+            root = os.path.abspath(root)
+            nodes.append(glsDir(root))
+            for name in files:
+                node = glsFile(os.path.join(root, name))
+                nodes.append(node)
+                edges.append((root, node))
+            for name in dirs:
+                node = glsDir(os.path.join(root, name))
+                nodes.append(node)
+                edges.append((root, node))
+        new_graph = fdpGraph(self.settings)
+        for node in nodes:
+            new_graph.add_node(node)
+        for edge in edges:
+            new_graph.add_edge(edge)
         with self.thread.lock:
-            for root, dirs, files in os.walk(self.path):
-                root = os.path.abspath(root)
-                if root not in self.graph:
-                    self.graph.add_node(glsDir(root))
-                    paths.append(root)
-                for name in files:
-                    path = os.path.join(root, name)
-                    paths.append(path)
-                    node = glsFile(path)
-                    self.graph.add_node(node)
-                    self.graph.add_edge( (root, node) )
-                for name in dirs:
-                    path = os.path.join(root, name)
-                    paths.append(path)
-                    node = glsDir(path)
-                    self.graph.add_node(node)
-                    self.graph.add_edge( (root, node) )
-            for path in paths:
-                if path not in self.graph:
-                    self.graph.remove_node(path)
-        self.thread.update()
-        return
-    def AddFile(self, path):
-        path = os.path.abspath(path)
-        with self.thread.lock:
-            if path in self.graph:
-                return
-            parent = os.path.dirname(path)
-            self.graph.add_node(glsFile(path))
-            self.graph.add_edge( (parent, path) )
-        self.thread.update()
-        return
-    def AddPath(self, path):
-        path = os.path.abspath(path)
-        if os.path.isdir(path):
-            self.ScanDir(path)
-        elif os.path.isfile(path):
-            self.AddFile(path)
-        return
-    def DeletePath(self, path):
-        if path.endswith("/"):
-            self.ScanDir(self.path)
-            return
-        path = os.path.abspath(path)
-        with self.thread.lock:
-            self.graph.remove_node(path)
-        self.thread.update()
+            for n in self.graph.nodes.keys():
+                if n in new_graph.nndxs:
+                    old_pos = self.graph.np_nodes[self.graph.nndxs[n]]
+                    new_graph.nodes[n].pos = old_pos
+                    new_graph.np_nodes[new_graph.nndxs[n]] = old_pos
+            self.thread.update(new_graph, locked=True)
+            self.graph = new_graph
         return
     def OnFSChange(self, event):
         change_type = event.GetChangeType()
-        if change_type not in self.watcher_events:
+        if change_type in self.watcher_events:
+            self.ScanDir(self.path)
             return
-        if change_type == wx.FSW_EVENT_CREATE:
-            self.AddPath(event.GetPath())
-        elif change_type == wx.FSW_EVENT_DELETE:
-            self.DeletePath(event.GetPath())
-        elif change_type == wx.FSW_EVENT_RENAME:
-            self.DeletePath(event.GetPath())
-            self.AddPath(event.GetNewPath())
         return
 
 ################################################################

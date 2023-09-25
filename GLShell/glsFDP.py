@@ -1,4 +1,5 @@
 from multiprocessing import Process, Queue
+from collections import OrderedDict
 from threading import Thread, Lock
 from queue import Empty
 from time import sleep
@@ -13,14 +14,15 @@ class fdpNode():
         self.id = id
         self.pos = np.random.random(size=3)
         self.frc = np.array([0,0,0], dtype=float)
-        self.edges = {}
         return
 
 class fdpGraph():
     def __init__(self, settings):
         self.settings = settings
-        self.nodes = {}
-        self.edges = {}
+        self.nodes = OrderedDict()
+        self.edges = OrderedDict()
+        self.nndxs = {}
+        self.nlist = []
         self.np_nodes = np.ndarray((0,3),dtype=np.single)
         self.np_edges = np.ndarray((0,2),dtype=np.intc)
         return
@@ -46,6 +48,8 @@ class fdpGraph():
     def add_node(self, node):
         if node not in self:
             self.nodes[node.id] = node
+            self.nndxs[node.id] = len(self.nlist)
+            self.nlist.append(node)
             self.np_nodes = np.vstack( (self.np_nodes, node.pos) )
         return
     def add_edge(self, edge):
@@ -56,39 +60,8 @@ class fdpGraph():
         if isinstance(edge[1], fdpNode):
             edge = (edge[0], edge[1].id)
         self.edges[(edge[0], edge[1])] = edge
-        nodes_keys = list(self.nodes.keys())
-        edge_indices = ( nodes_keys.index(edge[0]), nodes_keys.index(edge[1]) )
+        edge_indices = ( self.nndxs[edge[0]], self.nndxs[edge[1]] )
         self.np_edges = np.vstack( (self.np_edges, edge_indices) )
-        for n in edge:
-            self.nodes[n].edges[edge] = edge
-        return
-    def remove_edge(self, edge):
-        if not isinstance(edge, tuple):
-            edge = tuple(edge)
-        if edge not in self.edges:
-            return
-        edges_keys = list(self.edges.keys())
-        self.np_edges = np.delete(self.np_edges, edges_keys.index(edge), axis=0)
-        del self.edges[edge]
-        for n in edge:
-            if edge in self.nodes[n].edges:
-                del self.nodes[n].edges[edge]
-        return
-    def remove_node(self, node):
-        if isinstance(node, fdpNode):
-            node = node.id
-        if node not in self.nodes:
-            return
-        for edge in list(self.nodes[node].edges):
-            self.remove_edge(edge)
-        nodes_keys = list(self.nodes.keys())
-        self.np_nodes = np.delete(self.np_nodes, nodes_keys.index(node), axis=0)
-        del self.nodes[node]
-        self.np_edges = np.ndarray((0,2),dtype=np.intc)
-        for edge in self.edges:
-            nodes_keys = list(self.nodes.keys())
-            edge_indices = ( nodes_keys.index(edge[0]), nodes_keys.index(edge[1]) )
-            self.np_edges = np.vstack( (self.np_edges, edge_indices) )
         return
     def set_np_nodes(self, np_nodes):
         self.np_nodes = np_nodes
@@ -206,8 +179,13 @@ class glsFDPThread(Thread):
                     self.dims = dims
             sleep(self.nice/1000.0)
         return
-    def update(self):
-        with self.lock:
+    def update(self, graph, locked=False):
+        if not locked:
+            with self.lock:
+                self.graph = graph
+                self.refresh = True
+        else:
+            self.graph = graph
             self.refresh = True
         return
     def get_time(self):
