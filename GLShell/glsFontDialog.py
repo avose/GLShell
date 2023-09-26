@@ -91,6 +91,8 @@ class glsFontPanel(wx.Panel):
                        underline=False, faceName=facename)
         self.st_sample.SetLabel(facename+" Sample Text")
         self.st_sample.SetFont(font)
+        self.Layout()
+        self.Fit()
         self.Refresh()
         return
     def OnOk(self, event):

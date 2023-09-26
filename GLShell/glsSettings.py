@@ -242,8 +242,8 @@ class TabTerminal(wx.Panel):
                               self.settings.Get('term_font_size'))
         box_samp = wx.BoxSizer(wx.VERTICAL)
         box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
-        vbox.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         p_sample.SetSizerAndFit(box_samp)
+        vbox.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         # Set vertical box as panel sizer.
         self.SetSizerAndFit(vbox)
         return
@@ -258,6 +258,8 @@ class TabTerminal(wx.Panel):
                        style=wx.NORMAL, weight=wx.NORMAL, underline=False,
                        faceName=self.font_name)
         self.st_sample.SetFont(font)
+        self.Layout()
+        self.Fit()
         return
     def Load(self):
         self.tc_shellpath.SetValue(self.settings.Get('shell_path'))
@@ -328,6 +330,8 @@ class TabGraph(wx.Panel):
                        style=wx.NORMAL, weight=wx.NORMAL, underline=False,
                        faceName=self.font_name)
         self.st_sample.SetFont(font)
+        self.Layout()
+        self.Fit()
         return
     def Load(self):
         if self.settings.Get('graph_3D'):
