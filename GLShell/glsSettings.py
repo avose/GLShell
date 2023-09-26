@@ -19,6 +19,8 @@ class glsSettings():
                    "term_wchars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"\
                                   "abcdefghijklmnopqrstuvwxyz"\
                                   "-z0123456789,./?%&#:_=+@~",
+                   "term_font": "Monospace",
+                   "term_font_size": 11,
                    "graph_3D": True,
                    "graph_font": "Monospace",
                    "graph_font_size": 10,
@@ -227,8 +229,35 @@ class TabTerminal(wx.Panel):
         self.cp_bgcolor.SetColour(settings.Get('term_bgcolor'))
         grid2.Add(self.cp_bgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)        
         vbox.Add(grid2, 0, wx.BOTTOM, 5)
+        # Row five.
+        btn_font = wx.Button(self, wx.ID_ANY, "Select Terminal Font")
+        btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
+        vbox.Add(btn_font, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 5)
+        # Row six.
+        p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
+        p_sample.SetBackgroundColour((255,255,255))
+        self.st_sample = wx.StaticText(p_sample, -1, "Font Sample Text",
+                                       size=(-1, 64))
+        self.SetFontSelection(self.settings.Get('term_font'),
+                              self.settings.Get('term_font_size'))
+        box_samp = wx.BoxSizer(wx.VERTICAL)
+        box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
+        vbox.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        p_sample.SetSizerAndFit(box_samp)
         # Set vertical box as panel sizer.
         self.SetSizerAndFit(vbox)
+        return
+    def OnFontDialog(self, event):
+        self.font_dialog = glsFontDialog(self, self.SetFontSelection)
+        return
+    def SetFontSelection(self, name, size):
+        self.font_name = name
+        self.font_size = size
+        self.st_sample.SetLabel(name+" Sample Text")
+        font = wx.Font(self.font_size, family=wx.DEFAULT,
+                       style=wx.NORMAL, weight=wx.NORMAL, underline=False,
+                       faceName=self.font_name)
+        self.st_sample.SetFont(font)
         return
     def Load(self):
         self.tc_shellpath.SetValue(self.settings.Get('shell_path'))
@@ -237,6 +266,9 @@ class TabTerminal(wx.Panel):
         self.cb_termcolor.SetValue(self.settings.Get('term_color'))
         self.cp_fgcolor.SetColour(self.settings.Get('term_fgcolor'))
         self.cp_bgcolor.SetColour(self.settings.Get('term_bgcolor'))
+        self.SetFontSelection(self.settings.Get('term_font'),
+                              self.settings.Get('term_font_size'))
+        self.Refresh()
         return
     def Save(self):
         shell_path               = self.tc_shellpath.GetValue()
@@ -248,6 +280,8 @@ class TabTerminal(wx.Panel):
         self.settings.Set('term_fgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue()))
         color = self.cp_bgcolor.GetColour()
         self.settings.Set('term_bgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue()))
+        self.settings.Set('term_font', self.font_name)
+        self.settings.Set('term_font_size', self.font_size)
         return
 
 ################################################################

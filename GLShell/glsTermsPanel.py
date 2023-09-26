@@ -128,13 +128,9 @@ class glsTerminalPanel(wx.Window):
         wx.CallLater(10, self.MonitorTerminal)
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
-        self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
-        self.font = wx.Font(self.fontinfo)
-        dc = wx.MemoryDC()
-        dc.SetFont(self.font)
-        w,h = dc.GetTextExtent("X")
-        self.char_w = w
-        self.char_h = h
+        self.char_w = None
+        self.char_h = None
+        self.SetFont()
         # Setup terminal emulator.
         self.rows = int((self.Size[1]-10) / self.char_h)
         self.cols = int((self.Size[0]-10) / self.char_w)
@@ -237,7 +233,25 @@ class glsTerminalPanel(wx.Window):
             pass
         self.output_wait = True
         return
+    def SetFont(self):
+        self.font_name = self.settings.Get('term_font')
+        self.font_size = self.settings.Get('term_font_size')
+        self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
+        self.font = wx.Font(self.fontinfo)
+        dc = wx.MemoryDC()
+        dc.SetFont(self.font)
+        w,h = dc.GetTextExtent("X")
+        if (self.char_w is None or self.char_w != w or
+            self.char_h is None or self.char_h != h):
+            resize = True
+        else:
+            resize = False
+        self.char_w = w
+        self.char_h = h
+        return resize
     def OnChangeSettings(self, settings):
+        if self.SetFont():
+            self.OnSize()
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -412,7 +426,7 @@ class glsTerminalPanel(wx.Window):
         return self.settings.Get('term_bgcolor')
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
-            self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
+            self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
             if style & self.terminal.RENDITION_STYLE_UNDERLINE:
                 self.fontinfo = self.fontinfo.Underlined()
             if style & self.terminal.RENDITION_STYLE_BOLD:
@@ -548,7 +562,7 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
-    def OnSize(self, event):
+    def OnSize(self, event=None):
         self.rows = int((self.Size[1]-10) / self.char_h)
         self.cols = int((self.Size[0]-10) / self.char_w)
         self.UpdateScrollbar()
