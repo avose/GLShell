@@ -12,7 +12,7 @@ import datetime
 class fdpNode():
     def __init__(self,id):
         self.id = id
-        self.pos = np.random.random(size=3)
+        self.pos = (np.random.random(size=3) - 0.5) * 3
         self.frc = np.array([0,0,0], dtype=float)
         return
 
@@ -125,6 +125,7 @@ class glsFDPProcess(Process):
                 for e in range(len(edges)):
                     aforces[edges[e,0]] += eforces[e]
                     aforces[edges[e,1]] -= eforces[e]
+                aforces[aforces>10] = 10
                 nodes += aforces * self.speed
                 if dims == 2:
                     nodes[:,2] = 0
