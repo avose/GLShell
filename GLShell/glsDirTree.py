@@ -46,6 +46,7 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
         self.settings = settings
         self.graph = fdpGraph(self.settings)
         self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
+        self.rescan = False
         self.Bind(wx.EVT_FSWATCHER, self.OnFSChange)
         self.watcher_events = ( wx.FSW_EVENT_CREATE, wx.FSW_EVENT_DELETE,
                                 wx.FSW_EVENT_RENAME )
@@ -89,11 +90,14 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
                     new_graph.np_nodes[new_graph.nndxs[n]] = old_pos
             self.thread.update(new_graph, locked=True)
             self.graph = new_graph
+        self.rescan = False
         return
     def OnFSChange(self, event):
         change_type = event.GetChangeType()
         if change_type in self.watcher_events:
-            self.ScanDir(self.path)
+            if not self.rescan:
+                self.rescan = True
+                wx.CallLater(10, self.ScanDir, self.path)
             return
         return
 
