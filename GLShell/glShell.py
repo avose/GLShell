@@ -187,8 +187,10 @@ class glShell(wx.Frame):
     def AddDirTree(self, dirtree):
         self.data_panel.AddDirTree(dirtree)
         return
-    def OnOpenDir(self, text):
-        self.AddDirTree(glsDirTree(text, self.settings))
+    def OnOpenDir(self, path):
+        if path == "":
+            return
+        self.AddDirTree(glsDirTree(path, self.settings))
         return
     def OnSearchFiles(self, text):
         self.data_panel.SearchFiles(text)
