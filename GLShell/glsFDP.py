@@ -21,7 +21,7 @@ class fdpGraph():
         self.settings = settings
         self.nodes = OrderedDict()
         self.edges = OrderedDict()
-        self.nndxs = {}
+        self.nndxs = OrderedDict()
         self.nlist = []
         self.np_nodes = np.ndarray((0,3),dtype=np.single)
         self.np_edges = np.ndarray((0,2),dtype=np.intc)
@@ -98,6 +98,8 @@ class glsFDPProcess(Process):
                 self.converged = False
             if edges is not None:
                 self.edges = np.array(edges)
+                self.converged = False
+            if self.dims != dims:
                 self.converged = False
             nodes = self.nodes
             edges = self.edges
@@ -211,10 +213,6 @@ class glsFDPThread(Thread):
     def set_speed(self, speed):
         with self.lock:
             self.speed = speed
-        return
-    def get_graph(self):
-        with self.lock:
-            return self.graph
         return
     def stop(self):
         self.in_q.put(["stop", None, None, None])
