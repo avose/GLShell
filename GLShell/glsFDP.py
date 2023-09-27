@@ -86,6 +86,7 @@ class glsFDPProcess(Process):
         self.nodes = None
         self.edges = None
         self.done  = False
+        self.converged = False
         return
     def run(self):
         while(True):
@@ -94,45 +95,55 @@ class glsFDPProcess(Process):
                 break
             if nodes is not None:
                 self.nodes = np.array(nodes)
+                self.converged = False
             if edges is not None:
                 self.edges = np.array(edges)
+                self.converged = False
             nodes = self.nodes
             edges = self.edges
             start = datetime.datetime.now()
             if self.dims == 2 and dims == 3:
                 nodes[:,2] = np.random.rand(nodes.shape[0])
             self.dims = dims
-            for step in range(self.steps):
-                # See: https://sparrow.dev/pairwise-distance-in-numpy/
-                vectors = nodes[:,None,:] - nodes[None,:,:]
-                dists = np.linalg.norm(vectors, axis=-1)
-                vectors *= 0.1
-                dists0 = np.array(dists)
-                dists0[dists0>30.0] = 30.0
-                dists0[dists0<0.1] = 0.1
-                dists0 = (dists0**3)[:,:,np.newaxis]
-                forces = np.divide(np.transpose(vectors,axes=(1,0,2)),
-                                   dists0,
-                                   out=np.zeros_like(vectors),
-                                   where=dists0!=0)
-                aforces = np.zeros_like(nodes)
-                af_rows = np.sum(forces,axis=0)
-                af_cols = np.sum(forces,axis=1)
-                aforces += af_rows - af_cols
-                dists = dists**3
-                dists[dists>40.0] = 40.0
-                eforces = vectors[edges[:,1], edges[:,0]] * dists[edges[:,1], edges[:,0], np.newaxis]
-                for e in range(len(edges)):
-                    aforces[edges[e,0]] += eforces[e]
-                    aforces[edges[e,1]] -= eforces[e]
-                aforces[aforces>10] = 10
-                nodes += aforces * self.speed
-                if dims == 2:
-                    nodes[:,2] = 0
-                time = datetime.datetime.now() - start
-                time = time.total_seconds()
+            if not self.converged:
+                for step in range(self.steps):
+                    # See: https://sparrow.dev/pairwise-distance-in-numpy/
+                    vectors = nodes[:,None,:] - nodes[None,:,:]
+                    dists = np.linalg.norm(vectors, axis=-1)
+                    vectors *= 0.1
+                    dists0 = np.array(dists)
+                    dists0[dists0>30.0] = 30.0
+                    dists0[dists0<0.1] = 0.1
+                    dists0 = (dists0**3)[:,:,np.newaxis]
+                    forces = np.divide(np.transpose(vectors,axes=(1,0,2)),
+                                       dists0,
+                                       out=np.zeros_like(vectors),
+                                       where=dists0!=0)
+                    aforces = np.zeros_like(nodes)
+                    af_rows = np.sum(forces,axis=0)
+                    af_cols = np.sum(forces,axis=1)
+                    aforces += af_rows - af_cols
+                    dists = dists**3
+                    dists[dists>40.0] = 40.0
+                    eforces = vectors[edges[:,1], edges[:,0]]
+                    eforces *= dists[edges[:,1],edges[:,0], np.newaxis]
+                    for e in range(len(edges)):
+                        aforces[edges[e,0]] += eforces[e]
+                        aforces[edges[e,1]] -= eforces[e]
+                    aforces[aforces>10] = 10
+                    nodes += aforces * self.speed
+                    if dims == 2:
+                        nodes[:,2] = 0
+                    time = datetime.datetime.now() - start
+                    time = time.total_seconds()
+                max_force = np.amax(aforces)
+                if max_force < 0.01:
+                    self.converged = True
             self.out_q.put([np.array(nodes), time/self.steps, dims])
-            sleep(self.nice/1000.0)
+            if self.converged:
+                sleep(1.0/50.0)
+            else:
+                sleep(self.nice/1000.0)
         return
 
 ################################################################
