@@ -316,17 +316,10 @@ class glsGraphCanvas(GLCanvas):
         # Draw graph edges.
         graph = self.gthread.graph
         glColor4fv(self.grn)
-        glBegin(GL_LINES)
-        for ei in range(graph.np_edges.shape[0]):
-            e = graph.np_edges[ei]
-            for n in e:
-                pos = np.array(graph.np_nodes[n])
-                pos *= zoom
-                if not self.graph_3D:
-                    pos[0] += self.Size[0]/2.0
-                    pos[1] += self.Size[1]/2.0
-                glVertex3fv(pos)
-        glEnd()
+        glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges);
+        glDisableClientState(GL_VERTEX_ARRAY);
         return
     def DrawNodes(self, zoom):
         # Draw graph nodes.
@@ -337,10 +330,6 @@ class glsGraphCanvas(GLCanvas):
             glPushName(0);
         for ni,node in enumerate(graph.nodes.values()):
             pos = np.array(graph.np_nodes[ni])
-            pos *= zoom
-            if not self.graph_3D:
-                pos[0] += self.Size[0]/2.0
-                pos[1] += self.Size[1]/2.0
             if node.selected:
                 glColor4fv(self.red)
                 size = 20.0
@@ -423,7 +412,9 @@ class glsGraphCanvas(GLCanvas):
                 glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
                 glRotatef(self.rotate, 0, 0, 1)
                 glTranslatef(-self.Size[0]/2.0, -self.Size[1]/2.0, 0)
+                glTranslatef(self.Size[0]/2.0, self.Size[1]/2.0, 0)
                 zoom = self.zoom
+            glScalef(zoom, zoom, zoom)
             # Save 2D screen coordinates for the nodes.
             self.Record3DTo2DMatrices()
             # Draw edges.
