@@ -139,10 +139,11 @@ class glsFDPProcess(Process):
                 max_force = np.amax(aforces)
                 if max_force < 0.01:
                     self.converged = True
-            self.out_q.put([np.array(nodes), time/self.steps, dims])
             if self.converged:
+                self.out_q.put(None)
                 sleep(1.0/50.0)
             else:
+                self.out_q.put([np.array(nodes), time/self.steps, dims])
                 sleep(self.nice/1000.0)
         return
 
@@ -180,16 +181,20 @@ class glsFDPThread(Thread):
             data = False
             while not data:
                 try:
-                    nodes,time,dims = self.out_q.get_nowait()
+                    response = self.out_q.get_nowait()
                     data = True
                 except Empty:
                     sleep(self.nice/1000.0)
-            with self.lock:
-                if not self.refresh:
-                    self.graph.set_np_nodes(nodes)
-                    self.time = time
-                    self.dims = dims
-            sleep(self.nice/1000.0)
+            if response is not None:
+                nodes,time,dims = response
+                with self.lock:
+                    if not self.refresh:
+                        self.graph.set_np_nodes(nodes)
+                        self.time = time
+                        self.dims = dims
+                sleep(self.nice/1000.0)
+            else:
+                sleep(1/50.0)
         return
     def update(self, graph, locked=False):
         if not locked:
