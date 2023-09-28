@@ -9,8 +9,13 @@ from glsIcons import glsIcons
 ################################################################
 
 class glsDataPanel(wx.Window):
-    ID_OPEN_DIR  = 1000
-    ID_SEARCH    = 1002
+    ID_OPEN_DIR   = 1000
+    ID_SEARCH     = 1001
+    ID_SEL_ALL    = 1002
+    ID_SEL_NONE   = 1003
+    ID_SEL_IVRT   = 1004
+    ID_SHOW_FILES = 1005
+    ID_SHOW_DIRS  = 1006
     def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
@@ -19,6 +24,11 @@ class glsDataPanel(wx.Window):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
         self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
+        self.Bind(wx.EVT_TOOL, self.OnSelAll, id=self.ID_SEL_ALL)
+        self.Bind(wx.EVT_TOOL, self.OnSelNone, id=self.ID_SEL_NONE)
+        self.Bind(wx.EVT_TOOL, self.OnSelIvrt, id=self.ID_SEL_IVRT)
+        self.Bind(wx.EVT_TOOL, self.OnShowFiles, id=self.ID_SHOW_FILES)
+        self.Bind(wx.EVT_TOOL, self.OnShowDirs, id=self.ID_SHOW_DIRS)
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
@@ -28,6 +38,21 @@ class glsDataPanel(wx.Window):
         toolbar.AddTool(self.ID_SEARCH, "Search",
                         self.icons.Get('magnifier'), wx.NullBitmap,
                         wx.ITEM_NORMAL, 'Search', "Search", None)
+        toolbar.AddTool(self.ID_SEL_ALL, "Select All",
+                        self.icons.Get('chart_line_add'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Select All', "Select All", None)
+        toolbar.AddTool(self.ID_SEL_IVRT, "Select Inverse",
+                        self.icons.Get('chart_line'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Select Inverse', "Select Inverse", None)
+        toolbar.AddTool(self.ID_SEL_NONE, "Select None",
+                        self.icons.Get('chart_line_delete'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Select None', "Select None", None)
+        toolbar.AddTool(self.ID_SHOW_FILES, "Show Files",
+                        self.icons.Get('script'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Show Files', "Show Files", None)
+        toolbar.AddTool(self.ID_SHOW_DIRS, "Hide Files",
+                        self.icons.Get('folder'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Hide Files', "Hide Files", None)
         self.toolbar = toolbar
         self.toolbar.Realize()
         box_main.Add(self.toolbar, 0, wx.EXPAND)
@@ -47,6 +72,21 @@ class glsDataPanel(wx.Window):
         return
     def OnSearch(self, event):
         print('search')
+        return
+    def OnSelAll(self, event):
+        print('selall')
+        return
+    def OnSelNone(self, event):
+        print('selnone')
+        return
+    def OnSelIvrt(self, event):
+        print('selivrt')
+        return
+    def OnShowFiles(self, event):
+        print('showfiles')
+        return
+    def OnShowDirs(self, event):
+        print('showdirs')
         return
     def AddDirTree(self, dirtree):
         graph_panel = glsGraphPanel(self.notebook, dirtree, self.settings,

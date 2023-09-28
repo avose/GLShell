@@ -393,7 +393,7 @@ class glsGraphCanvas(GLCanvas):
         self.refresh = False
         return
     def PushFrames(self):
-        # Draw frames repeatedly and handle node selection modes.
+        # Draw frames repeatedly.
         wx.YieldIfNeeded()
         if self.closing:
             self.done = True
