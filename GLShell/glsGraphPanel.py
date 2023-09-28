@@ -19,10 +19,12 @@ from glsIcons import glsIcons
 ################################################################
 
 class glsGraphPopupMenu(wx.Menu):
-    ID_EXIT     = 1000
-    ID_SEL_ALL  = 1001
-    ID_SEL_NONE = 1002
-    ID_SEL_IVRT = 1003
+    ID_EXIT       = 1000
+    ID_SEL_ALL    = 1001
+    ID_SEL_NONE   = 1002
+    ID_SEL_IVRT   = 1003
+    ID_SHOW_FILES = 1004
+    ID_SHOW_DIRS  = 1005
     def __init__(self, parent):
         super(glsGraphPopupMenu, self).__init__()
         self.icons = glsIcons()
@@ -35,6 +37,14 @@ class glsGraphPopupMenu(wx.Menu):
         item = wx.MenuItem(self, self.ID_SEL_NONE, 'Select None')
         item.SetBitmap(self.icons.Get('chart_line_delete'))
         self.Append(item)
+        item = wx.MenuItem(self, self.ID_SHOW_FILES, 'Files && Directories', kind=wx.ITEM_RADIO)
+        self.ri_files = item
+        self.Append(self.ri_files)
+        self.ri_files.Check(parent.show_files)
+        item = wx.MenuItem(self, self.ID_SHOW_DIRS, 'Directories Only', kind=wx.ITEM_RADIO)
+        self.ri_dirs = item
+        self.Append(self.ri_dirs)
+        self.ri_dirs.Check(not parent.show_files)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Graph')
         item.SetBitmap(self.icons.Get('chart_organisation_delete'))
         self.Append(item)
@@ -77,6 +87,7 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_CHAR, self.OnChar)
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         self.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+        self.show_files = True
         self.keys_down = {}
         self.translate = np.array((0, 0, 0), dtype=np.single)
         self.rotate = 0
@@ -101,26 +112,24 @@ class glsGraphCanvas(GLCanvas):
         self.node_styles = { glsDirTree.KIND_DIR: (self.orn, 10.0, True, 10.0, self.ylw, False),
                              glsDirTree.KIND_FILE: (self.blu, 8.0, False, 10.0, self.prp, False),
                              glsDirTree.KIND_SELECT: (self.red, 15.0, True, 20.0, self.red, True),
-                             glsDirTree.KIND_RESULT: (self.wht, 15.0, True, 20.0, self.wht, True) }
-        self.kind_order = [ glsDirTree.KIND_SELECT, glsDirTree.KIND_RESULT,
-                            glsDirTree.KIND_DIR, glsDirTree.KIND_FILE ]
+                             glsDirTree.KIND_RESULT: (self.wht, 15.0, True, 20.0, self.wht, True),
+                             glsDirTree.KIND_NONE: (self.red, 20.0, True, 20.0, self.red, True) }
+        self.kind_order = [ glsDirTree.KIND_SELECT, glsDirTree.KIND_RESULT, glsDirTree.KIND_DIR,
+                            glsDirTree.KIND_FILE, glsDirTree.KIND_NONE ]
         wx.CallLater(10, self.PushFrames)
         return
     def InitGL(self):
         # Initialize OpenGL settings.
         glDisable(GL_LIGHTING)
-        # Lighting, clear color, clear depth.
         glEnable(GL_DEPTH_TEST)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClearDepth(0.0)
-        # Enable alpha blending.
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_LINE_SMOOTH);
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
         glEnable(GL_POINT_SMOOTH);
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-        # Set projection and model view.
         self.SetMatrices()
         return
     def OnChangeSettings(self, settings):
@@ -136,30 +145,17 @@ class glsGraphCanvas(GLCanvas):
     def OnChar(self, event):
         # Handle keyboard key character event.
         key_map = { wx.WXK_UP:'w', wx.WXK_LEFT:'a', wx.WXK_DOWN:'s', wx.WXK_RIGHT:'d' }
+        key_delta = {'w':(1,5), 'a':(0,-5), 's':(1,-5), 'd':(0,5) }
         key = event.GetKeyCode()
         if key < 256:
             key = chr(key)
         elif key in key_map:
             key = key_map[key]
         if wx.WXK_TAB in self.keys_down:
-            #    self.rotate += dx + dy
-            if key == 'w':
-                self.rotate += 5
-            elif key == 'a':
-                self.rotate -= 5
-            elif key == 's':
-                self.rotate -= 5
-            elif key == 'd':
-                self.rotate += 5
+            self.rotate += key_delta.get(key, (0,0))[1]
         else:
-            if key == 'w':
-                self.translate[1] += 5
-            elif key == 'a':
-                self.translate[0] -= 5
-            elif key == 's':
-                self.translate[1] -= 5
-            elif key == 'd':
-                self.translate[0] += 5
+            delta = key_delta.get(key, (0,0))
+            self.translate[delta[0]] += delta[1]
         return
     def OnKeyDown(self, event):
         # Handle keyboard key down event.
@@ -246,6 +242,10 @@ class glsGraphCanvas(GLCanvas):
             self.dirtree.SelectNone()
         elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
             self.dirtree.SelectInverse()
+        elif menu_id == glsGraphPopupMenu.ID_SHOW_FILES:
+            self.show_files = True
+        elif menu_id == glsGraphPopupMenu.ID_SHOW_DIRS:
+            self.show_files = False
         return
     def OnPaint(self, event):
         # Handle paint event.
@@ -268,11 +268,11 @@ class glsGraphCanvas(GLCanvas):
             return
         if self.SelectionBoxValid():
             selected = [ s[1] for s in selected ]
-            self.dirtree.SelectionAdd(selected)
+            self.dirtree.SelectAdd(selected)
         else:
             selected.sort(key=lambda x: x[0])
             selected = [ selected[0][1] ]
-            self.dirtree.SelectionToggle(selected)
+            self.dirtree.SelectToggle(selected)
         return
     def PushFrames(self):
         # Draw frames repeatedly and handle node selection modes.
@@ -309,7 +309,12 @@ class glsGraphCanvas(GLCanvas):
         glColor4fv(self.grn)
         glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
         glEnableClientState(GL_VERTEX_ARRAY)
-        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges)
+        kinds = self.kind_order.copy()
+        if not self.show_files:
+            kinds = [ glsDirTree.KIND_DIR ]
+        for kind in kinds:
+            edges = graph.np_ekinds[kind]
+            glDrawElements(GL_LINES, len(edges)*2, GL_UNSIGNED_INT, edges)
         return
     def DrawNodes(self, zoom):
         # Draw graph nodes.
@@ -326,8 +331,11 @@ class glsGraphCanvas(GLCanvas):
             return
         glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
         glEnableClientState(GL_VERTEX_ARRAY)
-        for kind in self.kind_order:
-            nodes = graph.np_kinds[kind]
+        kinds = self.kind_order.copy()
+        if not self.show_files:
+            kinds.remove(glsDirTree.KIND_FILE)
+        for kind in kinds:
+            nodes = graph.np_nkinds[kind]
             color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
             glColor4fv(color)
             glPointSize(size)
@@ -339,8 +347,8 @@ class glsGraphCanvas(GLCanvas):
         else:
             always_label = True if zoom >= 60 else False
         drawn = {}
-        for kind in self.kind_order:
-            nodes = graph.np_kinds[kind]
+        for kind in kinds:
+            nodes = graph.np_nkinds[kind]
             color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
             label = True if always_label else label
             for ndx in nodes:
@@ -383,9 +391,7 @@ class glsGraphCanvas(GLCanvas):
             glScalef(zoom, zoom, zoom)
             # Save 2D screen coordinates for the nodes.
             self.Record3DTo2DMatrices()
-            # Draw edges.
             self.DrawEdges(zoom)
-            # Draw nodes.
             self.DrawNodes(zoom)
         return
     def DrawSelectionBox(self):
@@ -440,15 +446,10 @@ class glsGraphCanvas(GLCanvas):
         # Draw everything.
         self.SetCurrent(self.glctx)
         self.SetMatrices()
-        # Clear buffer.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        # Draw the graph.
         self.DrawGraph()
-        # Draw selection box.
         self.DrawSelectionBox()
-        # Draw stats.
         self.DrawStats()
-        # Swap buffers to show the scene.
         self.SwapBuffers()
         return
     def Project3DTo2D(self, pos):

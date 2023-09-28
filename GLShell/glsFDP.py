@@ -13,23 +13,28 @@ class fdpNode():
     def __init__(self, nid, kind):
         self.nid = nid
         self.pos = (np.random.random(size=3) - 0.5) * 3
-        self.frc = np.array([0,0,0], dtype=float)
         self.kind = kind
+        self.edges = {}
         return
 
 class fdpGraph():
     def __init__(self, settings, kinds):
         self.settings = settings
         self.kinds = kinds
+        self.kind_none = 0
         self.edges = OrderedDict()
         self.nodes = OrderedDict()
+        self.endxs = OrderedDict()
         self.nndxs = OrderedDict()
+        self.elist = []
         self.nlist = []
         self.np_edges = np.ndarray((0,2),dtype=np.intc)
         self.np_nodes = np.ndarray((0,3),dtype=np.single)
-        self.np_kinds = []
+        self.np_ekinds = []
+        self.np_nkinds = []
         for k in range(self.kinds):
-            self.np_kinds.append(np.ndarray((0, 1), dtype=np.intc))
+            self.np_ekinds.append(np.ndarray((0, 2), dtype=np.intc))
+            self.np_nkinds.append(np.ndarray((0, 1), dtype=np.intc))
         return
     def __contains__(self, key):
         if isinstance(key, tuple):
@@ -57,7 +62,7 @@ class fdpGraph():
             self.nndxs[node.nid] = ndx
             self.nlist.append(node)
             self.np_nodes = np.vstack( (self.np_nodes, node.pos) )
-            self.np_kinds[node.kind] = np.vstack( (self.np_kinds[node.kind], ndx) )
+            self.np_nkinds[node.kind] = np.vstack( (self.np_nkinds[node.kind], ndx) )
         return
     def add_edge(self, edge):
         if edge in self:
@@ -66,9 +71,18 @@ class fdpGraph():
             edge = (edge[0].nid, edge[1])
         if isinstance(edge[1], fdpNode):
             edge = (edge[0], edge[1].nid)
-        self.edges[(edge[0], edge[1])] = edge
+        ndx = len(self.elist)
+        self.edges[edge] = edge
+        self.endxs[edge] = ndx
+        self.elist.append(edge)
+        for nid in edge:
+            self.nodes[nid].edges[edge] = edge
         edge_indices = ( self.nndxs[edge[0]], self.nndxs[edge[1]] )
         self.np_edges = np.vstack( (self.np_edges, edge_indices) )
+        kind = self.nlist[edge_indices[0]].kind
+        if kind != self.nlist[edge_indices[1]].kind:
+            kind = self.kind_none
+        self.np_ekinds[kind] = np.vstack( (self.np_ekinds[kind], edge_indices) )
         return
     def set_np_nodes(self, np_nodes):
         self.np_nodes = np_nodes
@@ -95,6 +109,28 @@ class glsFDPProcess(Process):
         self.done  = False
         self.converged = False
         return
+    def forces_nodes(self, nodes, dists, vectors):
+        dists = np.array(dists)
+        dists[dists > 30.0] = 30.0
+        dists[dists < 0.1] = 0.1
+        dists = (dists**3)[:,:,np.newaxis]
+        forces = np.divide(np.transpose(vectors, axes=(1,0,2)),
+                           dists,
+                           out=np.zeros_like(vectors),
+                           where=dists!=0)
+        forces_rows = np.sum(forces, axis=0)
+        forces_cols = np.sum(forces, axis=1)
+        return forces_rows - forces_cols
+    def forces_edges(self, edges, dists, vectors, node_count):
+        dists = dists**3
+        dists[dists > 40.0] = 40.0
+        eforces = vectors[edges[:,1], edges[:,0]]
+        eforces *= dists[edges[:,1], edges[:,0], np.newaxis]
+        forces = np.zeros( (node_count, 3) )
+        for e in range(len(edges)):
+            forces[edges[e,0]] += eforces[e]
+            forces[edges[e,1]] -= eforces[e]
+        return forces
     def run(self):
         while(True):
             cmd, nodes, edges, dims = self.in_q.get()
@@ -120,32 +156,16 @@ class glsFDPProcess(Process):
                     vectors = nodes[:,None,:] - nodes[None,:,:]
                     dists = np.linalg.norm(vectors, axis=-1)
                     vectors *= 0.1
-                    dists0 = np.array(dists)
-                    dists0[dists0>30.0] = 30.0
-                    dists0[dists0<0.1] = 0.1
-                    dists0 = (dists0**3)[:,:,np.newaxis]
-                    forces = np.divide(np.transpose(vectors,axes=(1,0,2)),
-                                       dists0,
-                                       out=np.zeros_like(vectors),
-                                       where=dists0!=0)
-                    aforces = np.zeros_like(nodes)
-                    af_rows = np.sum(forces,axis=0)
-                    af_cols = np.sum(forces,axis=1)
-                    aforces += af_rows - af_cols
-                    dists = dists**3
-                    dists[dists>40.0] = 40.0
-                    eforces = vectors[edges[:,1], edges[:,0]]
-                    eforces *= dists[edges[:,1],edges[:,0], np.newaxis]
-                    for e in range(len(edges)):
-                        aforces[edges[e,0]] += eforces[e]
-                        aforces[edges[e,1]] -= eforces[e]
-                    aforces[aforces>10] = 10
-                    nodes += aforces * self.speed
+                    nforces = self.forces_nodes(nodes, dists, vectors)
+                    eforces = self.forces_edges(edges, dists, vectors, nodes.shape[0])
+                    forces = nforces + eforces
+                    forces[forces > 10] = 10
+                    nodes += forces * self.speed
                     if dims == 2:
                         nodes[:,2] = 0
                     time = datetime.datetime.now() - start
                     time = time.total_seconds()
-                max_force = np.amax(aforces)
+                max_force = np.amax(forces)
                 if max_force < 0.01:
                     self.converged = True
             if self.converged:
@@ -166,6 +186,7 @@ class glsFDPThread(Thread):
         self.graph   = graph
         self.speed   = speed
         self.nice    = nice
+        self.kinds   = list(range(self.graph.kinds))
         self.done    = False
         self.refresh = True
         self.lock    = Lock()
@@ -181,10 +202,12 @@ class glsFDPThread(Thread):
                 if self.refresh:
                     nodes = self.graph.get_np_nodes()
                     edges = self.graph.get_np_edges()
+                    kinds = self.kinds
                     self.refresh = False
                 else:
                     nodes = None
                     edges = None
+                    kinds = None
             dims = 3 if self.settings.Get('graph_3D') else 2
             self.in_q.put(["run", nodes, edges, dims])
             data = False
@@ -212,6 +235,11 @@ class glsFDPThread(Thread):
                 self.refresh = True
         else:
             self.graph = graph
+            self.refresh = True
+        return
+    def set_kinds(self, kinds):
+        with self.lock:
+            self.kinds = kinds
             self.refresh = True
         return
     def get_time(self):
