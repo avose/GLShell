@@ -13,6 +13,7 @@ from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsDirTree import glsFile
 from glsDirTree import glsDir
+from glsDirTree import glsDirTree
 from glsIcons import glsIcons
 
 ################################################################
@@ -47,7 +48,9 @@ class glsGraphCanvas(GLCanvas):
     grn = [0.0, 1.0, 0.0, 1.0]
     blu = [0.0, 0.0, 1.0, 1.0]
     ylw = [1.0, 1.0, 0.0, 1.0]
+    orn = [1.0, 0.6, 0.0, 1.0]
     prp = [1.0, 0.3, 1.0, 1.0]
+    wht = [1.0, 1.0, 1.0, 1.0]
     def __init__(self, parent, dirtree, size, settings, callback_close):
         # Initialize glsGraphCanvas.
         GLCanvas.__init__(self, parent, id=-1, size=size)
@@ -94,6 +97,13 @@ class glsGraphCanvas(GLCanvas):
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         self.closing = False
         self.pushframes_done = False
+        # node_style = (color, size, label, yoff, lcolor, bkgrnd)
+        self.node_styles = { glsDirTree.KIND_DIR: (self.orn, 10.0, True, 10.0, self.ylw, False),
+                             glsDirTree.KIND_FILE: (self.blu, 8.0, False, 10.0, self.prp, False),
+                             glsDirTree.KIND_SELECT: (self.red, 15.0, True, 20.0, self.red, True),
+                             glsDirTree.KIND_RESULT: (self.wht, 15.0, True, 20.0, self.wht, True) }
+        self.kind_order = [ glsDirTree.KIND_SELECT, glsDirTree.KIND_RESULT,
+                            glsDirTree.KIND_DIR, glsDirTree.KIND_FILE ]
         wx.CallLater(10, self.PushFrames)
         return
     def InitGL(self):
@@ -231,15 +241,11 @@ class glsGraphCanvas(GLCanvas):
         if menu_id == glsGraphPopupMenu.ID_EXIT:
             self.OnClose()
         elif menu_id == glsGraphPopupMenu.ID_SEL_ALL:
-            for node in self.IterateNodes():
-                node.selected = True
+            self.dirtree.SelectAll()
         elif menu_id == glsGraphPopupMenu.ID_SEL_NONE:
-            for node in self.IterateNodes():
-                node.selected = False
+            self.dirtree.SelectNone()
         elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
-            for node in self.IterateNodes():
-                node.selected = not node.selected
-            pass
+            self.dirtree.SelectInverse()
         return
     def OnPaint(self, event):
         # Handle paint event.
@@ -247,19 +253,6 @@ class glsGraphCanvas(GLCanvas):
         self.OnDraw()
         self.time_draw = datetime.datetime.now() - start
         self.time_draw = self.time_draw.total_seconds()
-        return
-    def IterateNodes(self):
-        # Convenient, clean, but slow iteration over graph nodes.
-        with self.lock:
-            for node in self.gthread.graph.nlist:
-                yield node
-        return
-    def IterateEdges(self):
-        # Convenient, clean, but slow iteration over graph edges.
-        with self.lock:
-            graph = self.gthread.graph
-            for e in graph.np_edges:
-                yield e, graph.nlist[e[0]], graph.nlist[e[1]]
         return
     def SelectionBoxValid(self):
         # Retrun True if mouse selection box is filled and valid, else false.
@@ -273,15 +266,13 @@ class glsGraphCanvas(GLCanvas):
                      if len(s[2]) == 1  and s[2][0] >= 1 ]
         if len(selected) == 0:
             return
-        with self.lock:
-            nlist = list(self.gthread.graph.nodes.values())
-            if self.SelectionBoxValid():
-                for s in selected:
-                    nlist[s[1]].selected = True
-            else:
-                selected.sort(key=lambda x: x[0])
-                s = selected[0][1]
-                nlist[s].selected = not nlist[s].selected
+        if self.SelectionBoxValid():
+            selected = [ s[1] for s in selected ]
+            self.dirtree.SelectionAdd(selected)
+        else:
+            selected.sort(key=lambda x: x[0])
+            selected = [ selected[0][1] ]
+            self.dirtree.SelectionToggle(selected)
         return
     def PushFrames(self):
         # Draw frames repeatedly and handle node selection modes.
@@ -318,77 +309,52 @@ class glsGraphCanvas(GLCanvas):
         glColor4fv(self.grn)
         glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
         glEnableClientState(GL_VERTEX_ARRAY)
-        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges);
-        glDisableClientState(GL_VERTEX_ARRAY);
+        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges)
         return
     def DrawNodes(self, zoom):
         # Draw graph nodes.
         graph = self.gthread.graph
-        pos_nodes = []
         if self.selection:
             glInitNames();
             glPushName(0);
-        for ni,node in enumerate(graph.nodes.values()):
-            pos = np.array(graph.np_nodes[ni])
-            if node.selected:
-                glColor4fv(self.red)
-                size = 20.0
-            elif node.search_result:
-                glColor4fv((1,1,1,1))
-                size = 20.0
-                pass
-            else:
-                if isinstance(node, glsDir):
-                    glColor4fv(self.prp)
-                    size = 10.0
-                else:
-                    glColor4fv(self.blu)
-                    size = 8.0
-            glPointSize(size)
-            if self.selection:
+            for ni,pos in enumerate(graph.np_nodes):
                 glLoadName(ni+1)
-            glBegin(GL_POINTS)
-            glVertex3fv(pos)
-            glEnd()
-            pos_nodes.append(self.Project3DTo2D(pos))
-        if self.selection:
+                glBegin(GL_POINTS)
+                glVertex3fv(pos)
+                glEnd()
             glLoadName(0)
+            return
+        glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        for kind in self.kind_order:
+            nodes = graph.np_kinds[kind]
+            color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
+            glColor4fv(color)
+            glPointSize(size)
+            glDrawElements(GL_POINTS, len(nodes), GL_UNSIGNED_INT, nodes)
         # Draw node labels.
         self.Set2D()
-        for ni,node in enumerate(graph.nodes.values()):
-            pos = pos_nodes[ni]
-            if pos[2] > 1:
-                continue
-            if node.selected:
-                bckg = True
-                yoff = 20
-                color = self.red
-                label = True
-            elif node.search_result:
-                bckg = True
-                yoff = 20
-                color = (1,1,1,1)
-                label = True
-            else:
-                bckg = False
-                yoff = 10
-                if self.graph_3D:
-                    if isinstance(node, glsDir):
-                        color = self.ylw
-                        label = True
-                    else:
-                        color = self.prp
-                        label = True if zoom >= 1.5 else False
-                else:
-                    if isinstance(node, glsDir):
-                        color = self.ylw
-                        label = True
-                    else:
-                        color = self.prp
-                        label = True if zoom >= 60 else False
-            if label:
-                self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff, pos[2]],
-                                     color, True, bckg)
+        if self.graph_3D:
+            always_label = True if zoom >= 1.5 else False
+        else:
+            always_label = True if zoom >= 60 else False
+        drawn = {}
+        for kind in self.kind_order:
+            nodes = graph.np_kinds[kind]
+            color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
+            label = True if always_label else label
+            for ndx in nodes:
+                ndx = ndx[0]
+                if ndx in drawn:
+                    continue
+                drawn[ndx] = True
+                pos = self.Project3DTo2D(graph.np_nodes[ndx])
+                if pos[2] > 1:
+                    continue
+                node = graph.nlist[ndx]
+                if label:
+                    self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff, pos[2]],
+                                         lcolor, True, bkgrnd)
         return
     def DrawGraph(self):
         # Draw graph while holding the lock.

@@ -1,6 +1,7 @@
 import os
 import sys
 import wx
+import numpy as np
 
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
@@ -9,18 +10,18 @@ from glsFDP import glsFDPThread
 ################################################################
 
 class glsFSObj(fdpNode):
-    def __init__(self, path):
+    def __init__(self, path, kind):
         self.path = path
         self.name = os.path.basename(self.path)
         self.abspath = os.path.abspath(self.path)
-        super().__init__(self.abspath)
+        super().__init__(self.abspath, kind)
         return
 
 ################################################################
     
 class glsFile(glsFSObj):
     def __init__(self, path):
-        super().__init__(path)
+        super().__init__(path, glsDirTree.KIND_FILE)
         self.search_result = False
         self.selected = False
         return
@@ -29,7 +30,7 @@ class glsFile(glsFSObj):
 
 class glsDir(glsFSObj):
     def __init__(self, path):
-        super().__init__(path)
+        super().__init__(path, glsDirTree.KIND_DIR)
         self.search_result = False
         self.selected = False
         return
@@ -38,13 +39,20 @@ class glsDir(glsFSObj):
 
 ################################################################
 
-class glsDirTree(glsFSObj, wx.EvtHandler):
+class glsDirTree(wx.EvtHandler):
+    KIND_DIR    = 0
+    KIND_FILE   = 1
+    KIND_SELECT = 2
+    KIND_RESULT = 3
+    KINDS       = 4
     def __init__(self, path, settings):
         wx.EvtHandler.__init__(self)
         path = os.path.abspath(path)
-        glsFSObj.__init__(self, path)
+        self.path = path
+        self.name = os.path.basename(self.path)
+        self.abspath = os.path.abspath(self.path)
         self.settings = settings
-        self.graph = fdpGraph(self.settings)
+        self.graph = fdpGraph(self.settings, self.KINDS)
         self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
         self.rescan = False
         self.Bind(wx.EVT_FSWATCHER, self.OnFSChange)
@@ -77,7 +85,7 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
                 node = glsDir(os.path.join(root, name))
                 nodes.append(node)
                 edges.append((root, node))
-        new_graph = fdpGraph(self.settings)
+        new_graph = fdpGraph(self.settings, self.KINDS)
         for node in nodes:
             new_graph.add_node(node)
         for edge in edges:
@@ -99,6 +107,55 @@ class glsDirTree(glsFSObj, wx.EvtHandler):
                 self.rescan = True
                 wx.CallLater(10, self.ScanDir, self.path)
             return
+        return
+    def SelectionAdd(self, selected):
+        if selected is None or len(selected) == 0:
+            return
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            selected = np.reshape(np.array(selected, dtype=np.intc), (len(selected),1))
+            kinds = np.vstack( (kinds, selected) )
+            kinds = np.unique(kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectionToggle(self, selected):
+        if selected is None or len(selected) == 0:
+            return
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            for s in selected:
+                ndx = np.where(kinds == s)[0]
+                if len(ndx):
+                    kinds = np.delete(kinds, ndx)
+                else:
+                    kinds = np.vstack( (kinds, s) )
+            kinds = np.unique(kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectAll(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = np.array(range(len(self.graph.nlist)), dtype=np.intc)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectNone(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            graph.np_kinds[glsDirTree.KIND_SELECT] = np.ndarray((0, 1), dtype=np.intc)
+        return
+    def SelectInverse(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            every = np.array(range(len(self.graph.nlist)), dtype=np.intc)
+            kinds = np.delete(every, kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
         return
 
 ################################################################

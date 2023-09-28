@@ -10,32 +10,37 @@ import datetime
 ################################################################
 
 class fdpNode():
-    def __init__(self,id):
-        self.id = id
+    def __init__(self, nid, kind):
+        self.nid = nid
         self.pos = (np.random.random(size=3) - 0.5) * 3
         self.frc = np.array([0,0,0], dtype=float)
+        self.kind = kind
         return
 
 class fdpGraph():
-    def __init__(self, settings):
+    def __init__(self, settings, kinds):
         self.settings = settings
-        self.nodes = OrderedDict()
+        self.kinds = kinds
         self.edges = OrderedDict()
+        self.nodes = OrderedDict()
         self.nndxs = OrderedDict()
         self.nlist = []
-        self.np_nodes = np.ndarray((0,3),dtype=np.single)
         self.np_edges = np.ndarray((0,2),dtype=np.intc)
+        self.np_nodes = np.ndarray((0,3),dtype=np.single)
+        self.np_kinds = []
+        for k in range(self.kinds):
+            self.np_kinds.append(np.ndarray((0, 1), dtype=np.intc))
         return
     def __contains__(self, key):
         if isinstance(key, tuple):
             tup = key
             if isinstance(key[0], fdpNode):
-                tup = (tup[0].id,tup[1])
+                tup = (tup[0].nid,tup[1])
             if isinstance(key[1], fdpNode):
-                tup = (tup[0],tup[1].id)
+                tup = (tup[0],tup[1].nid)
             return tup in self.edges
         elif isinstance(key, fdpNode):
-            return key.id in self.nodes
+            return key.nid in self.nodes
         elif isinstance(key, str):
             return key in self.nodes
         return
@@ -43,22 +48,24 @@ class fdpGraph():
         if isinstance(key, tuple):
             return self.edges[key]
         if isinstance(key, fdpNode):
-            return self.nodes[key.id]
+            return self.nodes[key.nid]
         return
     def add_node(self, node):
         if node not in self:
-            self.nodes[node.id] = node
-            self.nndxs[node.id] = len(self.nlist)
+            ndx = len(self.nlist)
+            self.nodes[node.nid] = node
+            self.nndxs[node.nid] = ndx
             self.nlist.append(node)
             self.np_nodes = np.vstack( (self.np_nodes, node.pos) )
+            self.np_kinds[node.kind] = np.vstack( (self.np_kinds[node.kind], ndx) )
         return
     def add_edge(self, edge):
         if edge in self:
             return
         if isinstance(edge[0], fdpNode):
-            edge = (edge[0].id, edge[1])
+            edge = (edge[0].nid, edge[1])
         if isinstance(edge[1], fdpNode):
-            edge = (edge[0], edge[1].id)
+            edge = (edge[0], edge[1].nid)
         self.edges[(edge[0], edge[1])] = edge
         edge_indices = ( self.nndxs[edge[0]], self.nndxs[edge[1]] )
         self.np_edges = np.vstack( (self.np_edges, edge_indices) )
