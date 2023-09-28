@@ -129,7 +129,7 @@ class glsSearchResultListPopupMenu(wx.Menu):
         item.SetBitmap(self.icons.Get('monitor'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close')
-        item.SetBitmap(self.icons.Get('zoom_out'))
+        item.SetBitmap(self.icons.Get('magnifier_zoom_out'))
         self.Append(item)
         return
 

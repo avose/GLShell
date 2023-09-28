@@ -738,6 +738,8 @@ class glsTermsPanel(wx.Window):
     ID_TERM_NEW   = 1004
     ID_COPY       = 1005
     ID_PASTE      = 1006
+    ID_VERTICAL   = 1007
+    ID_HORIZONTAL = 1008
     def __init__(self, parent, settings, min_term_size,
                  callback_searchfiles, callback_searchcontents):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -753,7 +755,11 @@ class glsTermsPanel(wx.Window):
                   (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
                   (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnCopy),
-                  (self.ID_PASTE, "Paste", 'page_paste', self.OnPaste) ]
+                  (self.ID_PASTE, "Paste", 'page_paste', self.OnPaste),
+                  (self.ID_VERTICAL, "Split Vertical", 'application_tile_vertical',
+                   self.OnVertical),
+                  (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_horizontal',
+                   self.OnHorizontal) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
@@ -793,6 +799,12 @@ class glsTermsPanel(wx.Window):
         return
     def OnCopy(self, event):
         print('copy')
+        return
+    def OnVertical(self, event):
+        print('split vertical')
+        return
+    def OnHorizontal(self, event):
+        print('split horizontal')
         return
     def CallbackCurrentNotebook(self, notebook):
         for nb in self.notebooks:
