@@ -13,6 +13,7 @@ from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsDirTree import glsFile
 from glsDirTree import glsDir
+from glsDirTree import glsDirTree
 from glsIcons import glsIcons
 
 ################################################################
@@ -48,6 +49,7 @@ class glsGraphCanvas(GLCanvas):
     blu = [0.0, 0.0, 1.0, 1.0]
     ylw = [1.0, 1.0, 0.0, 1.0]
     prp = [1.0, 0.3, 1.0, 1.0]
+    wht = [1.0, 1.0, 1.0, 1.0]
     def __init__(self, parent, dirtree, size, settings, callback_close):
         # Initialize glsGraphCanvas.
         GLCanvas.__init__(self, parent, id=-1, size=size)
@@ -94,6 +96,10 @@ class glsGraphCanvas(GLCanvas):
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         self.closing = False
         self.pushframes_done = False
+        self.node_styles = { glsDirTree.KIND_DIR: (self.prp, 10.0),
+                             glsDirTree.KIND_FILE: (self.blu, 8.0),
+                             glsDirTree.KIND_SELECT: (self.red, 15.0),
+                             glsDirTree.KIND_RESULT: (self.wht, 15.0) }
         wx.CallLater(10, self.PushFrames)
         return
     def InitGL(self):
@@ -274,14 +280,22 @@ class glsGraphCanvas(GLCanvas):
         if len(selected) == 0:
             return
         with self.lock:
-            nlist = list(self.gthread.graph.nodes.values())
+            graph = self.gthread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
             if self.SelectionBoxValid():
-                for s in selected:
-                    nlist[s[1]].selected = True
+                selected = [ s[1] for s in selected ]
+                selected = np.reshape(np.array(selected, dtype=np.intc), (len(selected),1))
+                kinds = np.vstack( (kinds, selected) )
             else:
                 selected.sort(key=lambda x: x[0])
-                s = selected[0][1]
-                nlist[s].selected = not nlist[s].selected
+                selected = selected[0][1]
+                ndx = np.where(kinds == selected)[0]
+                if len(ndx):
+                    kinds = np.delete(kinds, ndx)
+                else:
+                    kinds = np.vstack( (kinds, selected) )
+                kinds = np.reshape(np.unique(kinds), (len(kinds),1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
         return
     def PushFrames(self):
         # Draw frames repeatedly and handle node selection modes.
@@ -318,41 +332,32 @@ class glsGraphCanvas(GLCanvas):
         glColor4fv(self.grn)
         glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
         glEnableClientState(GL_VERTEX_ARRAY)
-        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges);
-        glDisableClientState(GL_VERTEX_ARRAY);
+        glDrawElements(GL_LINES, len(graph.np_edges)*2, GL_UNSIGNED_INT, graph.np_edges)
         return
     def DrawNodes(self, zoom):
         # Draw graph nodes.
         graph = self.gthread.graph
-        pos_nodes = []
         if self.selection:
             glInitNames();
             glPushName(0);
-        for ni,node in enumerate(graph.nodes.values()):
-            pos = np.array(graph.np_nodes[ni])
-            if node.selected:
-                glColor4fv(self.red)
-                size = 20.0
-            elif node.search_result:
-                glColor4fv((1,1,1,1))
-                size = 20.0
-                pass
-            else:
-                if isinstance(node, glsDir):
-                    glColor4fv(self.prp)
-                    size = 10.0
-                else:
-                    glColor4fv(self.blu)
-                    size = 8.0
-            glPointSize(size)
-            if self.selection:
+            for ni,pos in enumerate(graph.np_nodes):
                 glLoadName(ni+1)
-            glBegin(GL_POINTS)
-            glVertex3fv(pos)
-            glEnd()
-            pos_nodes.append(self.Project3DTo2D(pos))
-        if self.selection:
+                glBegin(GL_POINTS)
+                glVertex3fv(pos)
+                glEnd()
             glLoadName(0)
+        else:
+            glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
+            glEnableClientState(GL_VERTEX_ARRAY)
+            for kind in range(glsDirTree.KINDS):
+                nodes = graph.np_kinds[kind]
+                color, size = self.node_styles[kind]
+                glColor4fv(color)
+                glPointSize(size)
+                glDrawElements(GL_POINTS, len(nodes), GL_UNSIGNED_INT, nodes)
+        return
+        pos_nodes = []
+        pos_nodes.append(self.Project3DTo2D(pos))
         # Draw node labels.
         self.Set2D()
         for ni,node in enumerate(graph.nodes.values()):
