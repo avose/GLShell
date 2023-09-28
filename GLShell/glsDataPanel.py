@@ -12,53 +12,35 @@ class glsDataPanel(wx.Window):
     ID_RESCAN     = 1000
     ID_OPEN_DIR   = 1001
     ID_SEARCH     = 1002
-    ID_SEL_ALL    = 1003
-    ID_SEL_NONE   = 1004
-    ID_SEL_IVRT   = 1005
-    ID_SHOW_FILES = 1006
-    ID_SHOW_DIRS  = 1007
+    ID_SEARCH_OPT = 1003
+    ID_SEL_ALL    = 1004
+    ID_SEL_NONE   = 1005
+    ID_SEL_IVRT   = 1006
+    ID_SHOW_FILES = 1007
+    ID_SHOW_DIRS  = 1008
     def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
         self.settings = settings
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.Bind(wx.EVT_TOOL, self.OnRescan, id=self.ID_RESCAN)
-        self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
-        self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
-        self.Bind(wx.EVT_TOOL, self.OnSelAll, id=self.ID_SEL_ALL)
-        self.Bind(wx.EVT_TOOL, self.OnSelNone, id=self.ID_SEL_NONE)
-        self.Bind(wx.EVT_TOOL, self.OnSelIvrt, id=self.ID_SEL_IVRT)
-        self.Bind(wx.EVT_TOOL, self.OnShowFiles, id=self.ID_SHOW_FILES)
-        self.Bind(wx.EVT_TOOL, self.OnShowDirs, id=self.ID_SHOW_DIRS)
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
-        toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        toolbar.AddTool(self.ID_RESCAN, "Rescan Directory Tree",
-                        self.icons.Get('arrow_refresh'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Rescan Directory Tree', "Rescan Directory Tree", None)
-        toolbar.AddTool(self.ID_OPEN_DIR, "Open Directory",
-                        self.icons.Get('chart_organisation_add'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Open Directory', "Open Directory", None)
-        toolbar.AddTool(self.ID_SEARCH, "Search",
-                        self.icons.Get('magnifier'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Search', "Search", None)
-        toolbar.AddTool(self.ID_SEL_ALL, "Select All",
-                        self.icons.Get('chart_line_add'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Select All', "Select All", None)
-        toolbar.AddTool(self.ID_SEL_IVRT, "Select Inverse",
-                        self.icons.Get('chart_line'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Select Inverse', "Select Inverse", None)
-        toolbar.AddTool(self.ID_SEL_NONE, "Select None",
-                        self.icons.Get('chart_line_delete'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Select None', "Select None", None)
-        toolbar.AddTool(self.ID_SHOW_FILES, "Show Files",
-                        self.icons.Get('script'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Show Files', "Show Files", None)
-        toolbar.AddTool(self.ID_SHOW_DIRS, "Hide Files",
-                        self.icons.Get('folder'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Hide Files', "Hide Files", None)
-        self.toolbar = toolbar
+        self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        tools = [ (self.ID_RESCAN, "Rescan Directory Tree", 'arrow_refresh', self.OnRescan),
+                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnOpenDir),
+                  (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
+                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
+                  (self.ID_SEL_ALL, "Select All", 'chart_line_add', self.OnSelAll),
+                  (self.ID_SEL_IVRT, "Select Inverse", 'chart_line', self.OnSelIvrt),
+                  (self.ID_SEL_NONE, "Select None", 'chart_line_delete', self.OnSelNone),
+                  (self.ID_SHOW_FILES, "Show Files", 'script', self.OnShowFiles),
+                  (self.ID_SHOW_DIRS, "Hide Files", 'folder', self.OnShowDirs) ]
+        for tool in tools:
+            tid, text, icon, callback = tool
+            self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
+                                 wx.ITEM_NORMAL, text, text, None)
+            self.Bind(wx.EVT_TOOL, callback, id=tid)
         self.toolbar.Realize()
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         self.image_list = wx.ImageList(16, 16)
@@ -80,6 +62,9 @@ class glsDataPanel(wx.Window):
         return
     def OnSearch(self, event):
         print('search')
+        return
+    def OnSearchCustom(self, event):
+        print('search custom')
         return
     def OnSelAll(self, event):
         print('selall')

@@ -745,34 +745,20 @@ class glsTermsPanel(wx.Window):
         self.settings = settings
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
-        self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
-        self.Bind(wx.EVT_TOOL, self.OnTermNew, id=self.ID_TERM_NEW)
-        self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
-        self.Bind(wx.EVT_TOOL, self.OnSearchCustom, id=self.ID_SEARCH_OPT)
-        self.Bind(wx.EVT_TOOL, self.OnCopy, id=self.ID_COPY)
-        self.Bind(wx.EVT_TOOL, self.OnPaste, id=self.ID_PASTE)
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
-        toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        toolbar.AddTool(self.ID_TERM_NEW, "New Terminal",
-                        self.icons.Get('monitor_add'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'New Terminal', "New Terminal", None)
-        toolbar.AddTool(self.ID_OPEN_DIR, "Open Directory",
-                        self.icons.Get('chart_organisation_add'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Open Directory', "Open Directory", None)
-        toolbar.AddTool(self.ID_SEARCH, "Search",
-                        self.icons.Get('magnifier'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Search', "Search", None)
-        toolbar.AddTool(self.ID_SEARCH_OPT, "Custom Search",
-                        self.icons.Get('zoom_in'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Custom Search', "Custom Search", None)
-        toolbar.AddTool(self.ID_COPY, "Copy",
-                        self.icons.Get('script_add'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Copy', "Copy", None)
-        toolbar.AddTool(self.ID_PASTE, "Paste",
-                        self.icons.Get('script_edit'), wx.NullBitmap,
-                        wx.ITEM_NORMAL, 'Paste', "Paste", None)
-        self.toolbar = toolbar
+        self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        tools = [ (self.ID_TERM_NEW, "New Terminal", 'monitor_add', self.OnTermNew),
+                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnOpenDir),
+                  (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
+                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
+                  (self.ID_COPY, "Copy", 'script_add', self.OnCopy),
+                  (self.ID_PASTE, "Paste", 'script_edit', self.OnPaste) ]
+        for tool in tools:
+            tid, text, icon, callback = tool
+            self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
+                                 wx.ITEM_NORMAL, text, text, None)
+            self.Bind(wx.EVT_TOOL, callback, id=tid)
         self.toolbar.Realize()
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
