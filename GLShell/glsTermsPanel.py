@@ -17,16 +17,6 @@ from glsIcons import glsIcons
 
 ################################################################
 
-def PrintStringAsAscii(s):
-    for ch in s:
-        if ch in string.printable:
-            print(ch, end="")
-        else:
-            print(ord(ch), end="")
-    return
-
-################################################################
-
 class glsTermPanelPopupMenu(wx.Menu):
     ID_NEW_TERM        = 1000
     ID_COPY            = 1001
@@ -86,7 +76,6 @@ class glsTerminalPanel(wx.Window):
     def __init__(self, parent, settings, callback_close, callback_title,
                  callback_searchfiles, callback_searchcontents,
                  callback_setcurrent, min_size):
-        # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
         # This also appears to influence some aspects of minimum size.
@@ -200,7 +189,7 @@ class glsTerminalPanel(wx.Window):
         return True
     def ChildOuputNotifier(self):
         inp_set = [ self.io ]
-        while (not self.stop_output_notifier and self.ChildIsAlive()):
+        while not self.stop_output_notifier and self.ChildIsAlive():
             if self.output_wait:
                 inp_ready, out_ready, err_ready = select.select(inp_set, [], [], 0)
                 if self.io in inp_ready:
@@ -535,20 +524,14 @@ class glsTerminalPanel(wx.Window):
         # Draw with double buffering.
         dc = wx.MemoryDC()
         dc.SelectObject(self.dc_buffer)
-        # Clear.
         dc.Clear()
         brush = wx.Brush((0,0,0))
         dc.SetBrush(brush)
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
-        # Get scrolling information.
         scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
-        # Draw the screen text.
         self.DrawScreen(dc, scroll)
-        # Draw the cursor.
         self.DrawCursor(dc, scroll)
-        # Draw the current selection.
         self.DrawSelection(dc)
-        # Switch to the real window dc and draw the buffer.
         del dc
         dc = wx.BufferedPaintDC(self, self.dc_buffer)
         return
@@ -670,7 +653,6 @@ class glsTermNotebook(wx.Window):
     def __init__(self, parent, settings, min_term_size,
                  callback_searchfiles, callback_searchcontents,
                  callback_current):
-        # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
         self.callback_searchfiles = callback_searchfiles
@@ -749,15 +731,50 @@ class glsTermNotebook(wx.Window):
 ################################################################
 
 class glsTermsPanel(wx.Window):
+    ID_OPEN_DIR   = 1000
+    ID_OPEN_FILE  = 1001
+    ID_SEARCH     = 1002
+    ID_SEARCH_OPT = 1003
+    ID_TERM_NEW   = 1004
+    ID_COPY       = 1005
+    ID_PASTE      = 1006
     def __init__(self, parent, settings, min_term_size,
                  callback_searchfiles, callback_searchcontents):
-        # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.settings = settings
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
+        self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
+        self.Bind(wx.EVT_TOOL, self.OnTermNew, id=self.ID_TERM_NEW)
+        self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
+        self.Bind(wx.EVT_TOOL, self.OnSearchCustom, id=self.ID_SEARCH_OPT)
+        self.Bind(wx.EVT_TOOL, self.OnCopy, id=self.ID_COPY)
+        self.Bind(wx.EVT_TOOL, self.OnPaste, id=self.ID_PASTE)
+        self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
+        toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        toolbar.AddTool(self.ID_TERM_NEW, "New Terminal",
+                        self.icons.Get('monitor_add'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'New Terminal', "New Terminal", None)
+        toolbar.AddTool(self.ID_OPEN_DIR, "Open Directory",
+                        self.icons.Get('chart_organisation_add'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Open Directory', "Open Directory", None)
+        toolbar.AddTool(self.ID_SEARCH, "Search",
+                        self.icons.Get('magnifier'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Search', "Search", None)
+        toolbar.AddTool(self.ID_SEARCH_OPT, "Custom Search",
+                        self.icons.Get('zoom_in'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Custom Search', "Custom Search", None)
+        toolbar.AddTool(self.ID_COPY, "Copy",
+                        self.icons.Get('script_add'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Copy', "Copy", None)
+        toolbar.AddTool(self.ID_PASTE, "Paste",
+                        self.icons.Get('script_edit'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Paste', "Paste", None)
+        self.toolbar = toolbar
+        self.toolbar.Realize()
+        box_main.Add(self.toolbar, 0, wx.EXPAND)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
         self.splitter.SetMinimumPaneSize(min_term_size[1])
         self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size,
@@ -772,6 +789,24 @@ class glsTermsPanel(wx.Window):
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+    def OnOpenDir(self, event):
+        print('open dir')
+        return
+    def OnTermNew(self, event):
+        print('new terminal')
+        return
+    def OnSearch(self, event):
+        print('search')
+        return
+    def OnSearchCustom(self, event):
+        print('search custom')
+        return
+    def OnPaste(self, event):
+        print('paste')
+        return
+    def OnCopy(self, event):
+        print('copy')
         return
     def CallbackCurrentNotebook(self, notebook):
         for nb in self.notebooks:

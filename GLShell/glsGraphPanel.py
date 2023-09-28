@@ -70,7 +70,7 @@ class glsGraphCanvas(GLCanvas):
         self.settings = settings
         self.callback_close = callback_close
         self.graph_3D = settings.Get('graph_3D')
-        self.settings.AddWatcher(self.OnChangeSettings)
+        self.settings.AddWatcher(self.OnSettingsChange)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
@@ -87,6 +87,9 @@ class glsGraphCanvas(GLCanvas):
         self.Bind(wx.EVT_CHAR, self.OnChar)
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         self.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+        self.done = False
+        self.closing = False
+        self.refresh = True
         self.show_files = True
         self.keys_down = {}
         self.translate = np.array((0, 0, 0), dtype=np.single)
@@ -100,14 +103,10 @@ class glsGraphCanvas(GLCanvas):
         self.time_fdp = 1
         self.selection = False
         self.selection_box = [ [None, None], [None, None]]
-        self.glctx = wx.glcanvas.GLContext(self)
-        self.SetCurrent(self.glctx)
         self.InitGL()
         font_name = self.settings.Get('graph_font')
         font_size = self.settings.Get('graph_font_size')
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
-        self.closing = False
-        self.pushframes_done = False
         # node_style = (color, size, label, yoff, lcolor, bkgrnd)
         self.node_styles = { glsDirTree.KIND_DIR: (self.orn, 10.0, True, 10.0, self.ylw, False),
                              glsDirTree.KIND_FILE: (self.blu, 8.0, False, 10.0, self.prp, False),
@@ -116,10 +115,12 @@ class glsGraphCanvas(GLCanvas):
                              glsDirTree.KIND_NONE: (self.red, 20.0, True, 20.0, self.red, True) }
         self.kind_order = [ glsDirTree.KIND_SELECT, glsDirTree.KIND_RESULT, glsDirTree.KIND_DIR,
                             glsDirTree.KIND_FILE, glsDirTree.KIND_NONE ]
-        wx.CallLater(10, self.PushFrames)
+        wx.CallAfter(self.PushFrames)
         return
     def InitGL(self):
         # Initialize OpenGL settings.
+        self.glctx = wx.glcanvas.GLContext(self)
+        self.SetCurrent(self.glctx)
         glDisable(GL_LIGHTING)
         glEnable(GL_DEPTH_TEST)
         glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -132,176 +133,69 @@ class glsGraphCanvas(GLCanvas):
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
         self.SetMatrices()
         return
-    def OnChangeSettings(self, settings):
+    def OnSettingsChange(self, settings):
         # Handle settings change.
         font_name = self.settings.Get('graph_font')
         font_size = self.settings.Get('graph_font_size')
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         return
-    def OnSize(self, event):
-        # Handle resize event.
-        self.SetMatrices()
+    def Project3DTo2D(self, pos):
+        # Map point from 3D to 2D.
+        return gluProject(*pos, self.model_view, self.projection, self.viewport)
+    def Record3DTo2DMatrices(self):
+        # Save matrices for mapping from 3D to 2D coordinates.
+        self.model_view = glGetDoublev(GL_MODELVIEW_MATRIX)
+        self.projection = glGetDoublev(GL_PROJECTION_MATRIX)
+        self.viewport   = glGetIntegerv(GL_VIEWPORT)
         return
-    def OnChar(self, event):
-        # Handle keyboard key character event.
-        key_map = { wx.WXK_UP:'w', wx.WXK_LEFT:'a', wx.WXK_DOWN:'s', wx.WXK_RIGHT:'d' }
-        key_delta = {'w':(1,5), 'a':(0,-5), 's':(1,-5), 'd':(0,5) }
-        key = event.GetKeyCode()
-        if key < 256:
-            key = chr(key)
-        elif key in key_map:
-            key = key_map[key]
-        if wx.WXK_TAB in self.keys_down:
-            self.rotate += key_delta.get(key, (0,0))[1]
-        else:
-            delta = key_delta.get(key, (0,0))
-            self.translate[delta[0]] += delta[1]
-        return
-    def OnKeyDown(self, event):
-        # Handle keyboard key down event.
-        self.keys_down[event.GetKeyCode()] = True
-        if wx.WXK_CONTROL in self.keys_down or wx.WXK_SHIFT in self.keys_down:
-            self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
-        event.Skip()
-        return
-    def OnKeyUp(self, event):
-        # Handle keyboard key up event.
-        if event.GetKeyCode() in self.keys_down:
-            del self.keys_down[event.GetKeyCode()]
-        if wx.WXK_SHIFT not in self.keys_down and wx.WXK_CONTROL not in self.keys_down:
-            self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-        event.Skip()
-        return
-    def OnLeftDown(self, event):
-        # Handle left mouse button down event.
-        self.mouse_pos = event.GetPosition()
-        self.mouse_down[0] = True
-        if wx.WXK_CONTROL in self.keys_down:
-            self.selection = True
-        if wx.WXK_SHIFT in self.keys_down:
-            self.selection_box = [ [self.mouse_pos[0], self.mouse_pos[1]],
-                                   [None, None] ]
-        event.Skip()
-        return
-    def OnLeftUp(self, event):
-        # Handle left mouse button up event.
-        if self.SelectionBoxValid():
-            self.selection = True
-        else:
-            self.selection_box = [ [None, None], [None, None]]
-        self.OnMouseMove(event)
-        self.mouse_down[0] = False
-        return
-    def OnMiddleDown(self, event):
-        # Handle middle mouse button down event.
-        self.mouse_pos = event.GetPosition()
-        self.mouse_down[2] = True
-        return
-    def OnMiddleUp(self, event):
-        # Handle middle mouse button up event.
-        self.OnMouseMove(event)
-        self.mouse_down[2] = False
-        return
-    def OnRightDown(self, event):
-        # Handle right mouse button down event.
-        self.PopupMenu(glsGraphPopupMenu(self), event.GetPosition())
-        return
-    def OnMouseMove(self, event):
-        # Handle mouse motion event.
-        pos = event.GetPosition()
-        if self.SelectionBoxStarted():
-            self.selection_box[1] = [ pos[0], pos[1] ]
-            self.mouse_pos = pos
-            return
-        if (wx.WXK_CONTROL in self.keys_down or
-            wx.WXK_SHIFT in self.keys_down):
-            return
-        dx = (self.mouse_pos[0] - pos[0])*0.3
-        dy = (self.mouse_pos[1] - pos[1])*0.3
-        if self.mouse_down[0] and wx.WXK_TAB not in self.keys_down:
-            self.translate += np.array((-dx, dy, 0), dtype=np.single)
-        if self.mouse_down[2] or self.mouse_down[0] and wx.WXK_TAB in self.keys_down:
-            self.rotate += dx + dy
-        self.mouse_pos = pos
-        return
-    def OnWheel(self, event):
-        # Handle zoom / mouse wheel event.
-        if event.GetWheelRotation() < 0:
-            self.zoom *= 0.95
-        else:
-            self.zoom /= 0.95
-        return
-    def OnMenuItem(self, event):
-        # Handle menu item event.
-        menu_id = event.GetId()
-        if menu_id == glsGraphPopupMenu.ID_EXIT:
-            self.OnClose()
-        elif menu_id == glsGraphPopupMenu.ID_SEL_ALL:
-            self.dirtree.SelectAll()
-        elif menu_id == glsGraphPopupMenu.ID_SEL_NONE:
-            self.dirtree.SelectNone()
-        elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
-            self.dirtree.SelectInverse()
-        elif menu_id == glsGraphPopupMenu.ID_SHOW_FILES:
-            self.show_files = True
-        elif menu_id == glsGraphPopupMenu.ID_SHOW_DIRS:
-            self.show_files = False
-        return
-    def OnPaint(self, event):
-        # Handle paint event.
-        start = datetime.datetime.now()
-        self.OnDraw()
-        self.time_draw = datetime.datetime.now() - start
-        self.time_draw = self.time_draw.total_seconds()
-        return
-    def SelectionBoxValid(self):
-        # Retrun True if mouse selection box is filled and valid, else false.
-        return None not in self.selection_box[0] and None not in self.selection_box[1]
-    def SelectionBoxStarted(self):
-        # Retrun True if mouse selection box is started, else false.
-        return None not in self.selection_box[0]
-    def ProcessSelected(self, selected):
-        # selected = [(dist, dist, [id+1]), ...]
-        selected = [ (s[0], s[2][0]-1) for s in selected
-                     if len(s[2]) == 1  and s[2][0] >= 1 ]
-        if len(selected) == 0:
+    def SetPickMatrix(self):
+        # Applies picking matrix for node selection.
+        if not self.selection:
             return
         if self.SelectionBoxValid():
-            selected = [ s[1] for s in selected ]
-            self.dirtree.SelectAdd(selected)
-        else:
-            selected.sort(key=lambda x: x[0])
-            selected = [ selected[0][1] ]
-            self.dirtree.SelectToggle(selected)
-        return
-    def PushFrames(self):
-        # Draw frames repeatedly and handle node selection modes.
-        if self.closing:
-            self.pushframes_done = True
-            return
-        start = datetime.datetime.now()
-        if self.selection and self.SelectionBoxValid():
+            x = (self.selection_box[0][0] + self.selection_box[1][0]) / 2.0
+            y = (self.selection_box[0][1] + self.selection_box[1][1]) / 2.0
             w = abs(self.selection_box[1][0] - self.selection_box[0][0])
             h = abs(self.selection_box[1][1] - self.selection_box[0][1])
-            if w < 1 or h < 1:
-                self.selection_box = [ [None, None], [None, None] ]
-                self.selection = False
-        if self.selection:
-            select_max = 100000
-            select = np.zeros((select_max), dtype=np.uint32)
-            self.glctx.SetCurrent(self)
-            glSelectBuffer(select_max, select);
-            glRenderMode(GL_SELECT)
-            self.OnDraw()
-            selected = glRenderMode(GL_RENDER);
-            self.ProcessSelected(selected);
-            self.selection = False
-            self.selection_box = [ [None, None], [None, None] ]
-        self.OnDraw()
-        self.time_draw = (datetime.datetime.now() - start).total_seconds()
-        next_draw = 1000.0/self.fps_max - self.time_draw
-        next_draw = 5 if next_draw <= 5 else int(next_draw)
-        wx.CallLater(next_draw, self.PushFrames)
+        else:
+            x = self.mouse_pos[0]
+            y = self.mouse_pos[1]
+            w = 20
+            h = 20
+        self.viewport = glGetIntegerv(GL_VIEWPORT)
+        gluPickMatrix(x, self.viewport[3]-y, w, h, self.viewport);
+        return
+    def Set2D(self):
+        # Setup OpenGL matrices for 2D drawing.
+        glViewport(0, 0, self.Size[0], self.Size[1])
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        self.SetPickMatrix()
+        glOrtho(0.0, self.Size[0],
+                0.0, self.Size[1],
+                -0.01, 10.0)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        return
+    def Set3D(self):
+        # Setup OpenGL matrices for 3D drawing.
+        glViewport(0, 0, self.Size[0], self.Size[1])
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        self.SetPickMatrix()
+        gluPerspective(75, self.Size[0]/self.Size[1], 1, 1000);
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        gluLookAt(0.0,  0.0, 10.0,   # eye
+                  0.0,  0.0,  0.0,   # center
+                  0.0,  1.0,  0.0 ); # up vector
+        return
+    def SetMatrices(self):
+        # Set OpenGL matrices for 2D or 3D drawing.
+        if self.graph_3D:
+            self.Set3D()
+        else:
+            self.Set2D()
         return
     def DrawEdges(self, zoom):
         # Draw graph edges.
@@ -452,114 +346,228 @@ class glsGraphCanvas(GLCanvas):
         self.DrawStats()
         self.SwapBuffers()
         return
-    def Project3DTo2D(self, pos):
-        # Map point from 3D to 2D.
-        return gluProject(*pos, self.model_view, self.projection, self.viewport)
-    def Record3DTo2DMatrices(self):
-        # Save matrices for mapping from 3D to 2D coordinates.
-        self.model_view = glGetDoublev(GL_MODELVIEW_MATRIX)
-        self.projection = glGetDoublev(GL_PROJECTION_MATRIX)
-        self.viewport   = glGetIntegerv(GL_VIEWPORT)
-        return
-    def SetPickMatrix(self):
-        # Applies picking matrix for node selection.
-        if not self.selection:
+    def SelectionBoxValid(self):
+        # Retrun True if mouse selection box is filled and valid, else false.
+        return None not in self.selection_box[0] and None not in self.selection_box[1]
+    def SelectionBoxStarted(self):
+        # Retrun True if mouse selection box is started, else false.
+        return None not in self.selection_box[0]
+    def ProcessSelected(self, selected):
+        # selected = [(dist, dist, [id+1]), ...]
+        selected = [ (s[0], s[2][0]-1) for s in selected
+                     if len(s[2]) == 1  and s[2][0] >= 1 ]
+        if len(selected) == 0:
             return
         if self.SelectionBoxValid():
-            x = (self.selection_box[0][0] + self.selection_box[1][0]) / 2.0
-            y = (self.selection_box[0][1] + self.selection_box[1][1]) / 2.0
+            selected = [ s[1] for s in selected ]
+            self.dirtree.SelectAdd(selected)
+        else:
+            selected.sort(key=lambda x: x[0])
+            selected = [ selected[0][1] ]
+            self.dirtree.SelectToggle(selected)
+        return
+    def OnPaint(self, event):
+        # Draw the scene and handle node selection modes.
+        if self.closing:
+            return
+        start = datetime.datetime.now()
+        if self.selection and self.SelectionBoxValid():
             w = abs(self.selection_box[1][0] - self.selection_box[0][0])
             h = abs(self.selection_box[1][1] - self.selection_box[0][1])
+            if w < 1 or h < 1:
+                self.selection_box = [ [None, None], [None, None] ]
+                self.selection = False
+        if self.selection:
+            select_max = 100000
+            select = np.zeros((select_max), dtype=np.uint32)
+            self.glctx.SetCurrent(self)
+            glSelectBuffer(select_max, select);
+            glRenderMode(GL_SELECT)
+            self.OnDraw()
+            selected = glRenderMode(GL_RENDER);
+            self.ProcessSelected(selected);
+            self.selection = False
+            self.selection_box = [ [None, None], [None, None] ]
+        self.OnDraw()
+        self.time_draw = (datetime.datetime.now() - start).total_seconds()
+        self.refresh = False
+        return
+    def PushFrames(self):
+        # Draw frames repeatedly and handle node selection modes.
+        wx.YieldIfNeeded()
+        if self.closing:
+            self.done = True
+            return
+        if not self.refresh:
+            self.refresh = True
+            self.Refresh()
+        wx.CallLater(int(1000.0/self.fps_max), self.PushFrames)
+        return
+    def OnChar(self, event):
+        # Handle keyboard key character event.
+        key_map = { wx.WXK_UP:'w', wx.WXK_LEFT:'a', wx.WXK_DOWN:'s', wx.WXK_RIGHT:'d' }
+        key_delta = {'w':(1,5), 'a':(0,-5), 's':(1,-5), 'd':(0,5) }
+        key = event.GetKeyCode()
+        if key < 256:
+            key = chr(key)
+        elif key in key_map:
+            key = key_map[key]
+        if wx.WXK_TAB in self.keys_down:
+            self.rotate += key_delta.get(key, (0,0))[1]
         else:
-            x = self.mouse_pos[0]
-            y = self.mouse_pos[1]
-            w = 20
-            h = 20
-        self.viewport = glGetIntegerv(GL_VIEWPORT)
-        gluPickMatrix(x, self.viewport[3]-y, w, h, self.viewport);
+            delta = key_delta.get(key, (0,0))
+            self.translate[delta[0]] += delta[1]
         return
-    def Set2D(self):
-        # Setup OpenGL matrices for 2D drawing.
-        glViewport(0, 0, self.Size[0], self.Size[1])
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        self.SetPickMatrix()
-        glOrtho(0.0, self.Size[0],
-                0.0, self.Size[1],
-                -0.01, 10.0)
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+    def OnKeyDown(self, event):
+        # Handle keyboard key down event.
+        self.keys_down[event.GetKeyCode()] = True
+        if wx.WXK_CONTROL in self.keys_down or wx.WXK_SHIFT in self.keys_down:
+            self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
+        event.Skip()
         return
-    def Set3D(self):
-        # Setup OpenGL matrices for 3D drawing.
-        glViewport(0, 0, self.Size[0], self.Size[1])
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        self.SetPickMatrix()
-        gluPerspective(75, self.Size[0]/self.Size[1], 1, 1000);
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        gluLookAt(0.0,  0.0, 10.0,   # eye
-                  0.0,  0.0,  0.0,   # center
-                  0.0,  1.0,  0.0 ); # up vector
+    def OnKeyUp(self, event):
+        # Handle keyboard key up event.
+        if event.GetKeyCode() in self.keys_down:
+            del self.keys_down[event.GetKeyCode()]
+        if wx.WXK_SHIFT not in self.keys_down and wx.WXK_CONTROL not in self.keys_down:
+            self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+        event.Skip()
         return
-    def SetMatrices(self):
-        # Set OpenGL matrices for 2D or 3D drawing.
-        if self.graph_3D:
-            self.Set3D()
+    def OnLeftDown(self, event):
+        # Handle left mouse button down event.
+        self.mouse_pos = event.GetPosition()
+        self.mouse_down[0] = True
+        if wx.WXK_CONTROL in self.keys_down:
+            self.selection = True
+        if wx.WXK_SHIFT in self.keys_down:
+            self.selection_box = [ [self.mouse_pos[0], self.mouse_pos[1]],
+                                   [None, None] ]
+        event.Skip()
+        return
+    def OnLeftUp(self, event):
+        # Handle left mouse button up event.
+        if self.SelectionBoxValid():
+            self.selection = True
         else:
-            self.Set2D()
+            self.selection_box = [ [None, None], [None, None]]
+        self.OnMouseMove(event)
+        self.mouse_down[0] = False
+        return
+    def OnMiddleDown(self, event):
+        # Handle middle mouse button down event.
+        self.mouse_pos = event.GetPosition()
+        self.mouse_down[2] = True
+        return
+    def OnMiddleUp(self, event):
+        # Handle middle mouse button up event.
+        self.OnMouseMove(event)
+        self.mouse_down[2] = False
+        return
+    def OnRightDown(self, event):
+        # Handle right mouse button down event.
+        self.PopupMenu(glsGraphPopupMenu(self), event.GetPosition())
+        return
+    def OnMouseMove(self, event):
+        # Handle mouse motion event.
+        pos = event.GetPosition()
+        if self.SelectionBoxStarted():
+            self.selection_box[1] = [ pos[0], pos[1] ]
+            self.mouse_pos = pos
+            return
+        if (wx.WXK_CONTROL in self.keys_down or
+            wx.WXK_SHIFT in self.keys_down):
+            return
+        dx = (self.mouse_pos[0] - pos[0])*0.3
+        dy = (self.mouse_pos[1] - pos[1])*0.3
+        if self.mouse_down[0] and wx.WXK_TAB not in self.keys_down:
+            self.translate += np.array((-dx, dy, 0), dtype=np.single)
+        if self.mouse_down[2] or self.mouse_down[0] and wx.WXK_TAB in self.keys_down:
+            self.rotate += dx + dy
+        self.mouse_pos = pos
+        return
+    def OnWheel(self, event):
+        # Handle zoom / mouse wheel event.
+        if event.GetWheelRotation() < 0:
+            self.zoom *= 0.95
+        else:
+            self.zoom /= 0.95
+        return
+    def OnMenuItem(self, event):
+        # Handle menu item event.
+        menu_id = event.GetId()
+        if menu_id == glsGraphPopupMenu.ID_EXIT:
+            self.OnClose()
+        elif menu_id == glsGraphPopupMenu.ID_SEL_ALL:
+            self.dirtree.SelectAll()
+        elif menu_id == glsGraphPopupMenu.ID_SEL_NONE:
+            self.dirtree.SelectNone()
+        elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
+            self.dirtree.SelectInverse()
+        elif menu_id == glsGraphPopupMenu.ID_SHOW_FILES:
+            self.show_files = True
+        elif menu_id == glsGraphPopupMenu.ID_SHOW_DIRS:
+            self.show_files = False
+        return
+    def OnSize(self, event):
+        # Handle resize event.
+        self.SetMatrices()
         return
     def OnClose(self, event=None):
         # Handle close event.
         if not self.closing:
             self.closing = True
-            self.settings.RemoveWatcher(self.OnChangeSettings)
+            self.settings.RemoveWatcher(self.OnSettingsChange)
             self.dirtree.thread.stop()
             self.dirtree.thread.join()
-        if not self.pushframes_done:
+        if not self.done:
             wx.CallLater(10, self.OnClose)
             return
         self.callback_close()
         return
     def OnDestroy(self, event):
         # Handle destroy event.
-        self.settings.RemoveWatcher(self.OnChangeSettings)
+        if not self.closing:
+            self.closing = True
+            self.settings.RemoveWatcher(self.OnSettingsChange)
+            self.dirtree.thread.stop()
+            self.dirtree.thread.join()
         return
 
 ################################################################
 
 class glsGraphPanel(wx.Window):
     def __init__(self, parent, dirtree, settings, callback_close):
-        # Call super.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsGraphPanel, self).__init__(parent, style=style)
         self.dirtree = dirtree
         self.settings = settings
         self.callback_close = callback_close
         self.SetMinSize( (320,320) )
-        self.SetBackgroundColour( (255,0,0) )
-        self.graph_canvas = None
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.SetBackgroundColour( (255,0,0) )
+        self.graph_canvas = None
         self.Show(True)
         return
     def StartGraph(self):
-        if self.graph_canvas is None:
-            self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=(320,320),
-                                               settings=self.settings,
-                                               callback_close=self.CloseGraph)
+        if self.graph_canvas is not None:
+            return
+        self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=(320,320),
+                                           settings=self.settings,
+                                           callback_close=self.CloseGraph)
         return
     def OnSize(self, event=None):
-        if self.graph_canvas is not None:
-            self.graph_canvas.SetSize(0, 0, self.Size[0], self.Size[1])
+        if self.graph_canvas is None:
+            return
+        self.graph_canvas.SetSize(0, 0, self.Size[0], self.Size[1])
         return
     def CloseGraph(self):
         self.callback_close(self)
         return
     def OnClose(self, event=None):
-        if self.graph_canvas is not None:
-            self.graph_canvas.OnClose()
+        if self.graph_canvas is None:
+            return
+        self.graph_canvas.OnClose()
         return
 
 ################################################################

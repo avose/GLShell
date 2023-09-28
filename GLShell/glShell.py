@@ -42,7 +42,6 @@ import wx
 from glsTermsPanel import glsTermsPanel
 from glsDataPanel import glsDataPanel
 from glsDirTree import glsDirTree
-from glsToolBar import glsToolBar
 from glsIcons import glsIcons
 import glsSettings
 import glsHelp
@@ -165,10 +164,6 @@ class glShell(wx.Frame):
         self.InitMenuBar()
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
-        # Toolbar.
-        self.toolbar = glsToolBar(self, self.settings, self.OnSearchFiles,
-                                  self.OnSearchContents, self.OnOpenDir)
-        box_main.Add(self.toolbar, 0, wx.EXPAND)
         # DataPanel and TermsPanel side-by-side.
         self.min_term_size = (320, 92)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)

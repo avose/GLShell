@@ -95,24 +95,28 @@ class fdpGraph():
 ################################################################
     
 class glsFDPProcess(Process):
-    def __init__(self, settings, in_q, out_q, speed, steps=10, nice=1):
+    def __init__(self, settings, in_q, out_q, speed):
         Process.__init__(self)
         self.settings = settings
         self.dims = 3 if self.settings.Get('graph_3D') else 2
-        self.in_q  = in_q
+        self.in_q = in_q
         self.out_q = out_q
-        self.nice  = nice
+        self.nice = 1
         self.speed = speed
-        self.steps = steps
+        self.steps = 1
+        self.steps_max = 100
+        self.steps_total = 0
         self.nodes = None
         self.edges = None
-        self.done  = False
+        self.nkinds = None
+        self.ekinds = None
+        self.done = False
         self.converged = False
         return
+    def anneal_force(self, steps):
+        return 3 + 1.0 / (0.1 * ((steps+300) / 500.0) ** 1.5)
     def forces_nodes(self, nodes, dists, vectors):
         dists = np.array(dists)
-        dists[dists > 30.0] = 30.0
-        dists[dists < 0.1] = 0.1
         dists = (dists**3)[:,:,np.newaxis]
         forces = np.divide(np.transpose(vectors, axes=(1,0,2)),
                            dists,
@@ -123,7 +127,6 @@ class glsFDPProcess(Process):
         return forces_rows - forces_cols
     def forces_edges(self, edges, dists, vectors, node_count):
         dists = dists**3
-        dists[dists > 40.0] = 40.0
         eforces = vectors[edges[:,1], edges[:,0]]
         eforces *= dists[edges[:,1], edges[:,0], np.newaxis]
         forces = np.zeros( (node_count, 3) )
@@ -133,7 +136,7 @@ class glsFDPProcess(Process):
         return forces
     def run(self):
         while(True):
-            cmd, nodes, edges, dims = self.in_q.get()
+            cmd, nodes, edges, nkinds, ekinds, dims = self.in_q.get()
             if cmd == "stop":
                 break
             if nodes is not None:
@@ -142,10 +145,18 @@ class glsFDPProcess(Process):
             if edges is not None:
                 self.edges = np.array(edges)
                 self.converged = False
+            if nkinds is not None:
+                self.nkinds = nkinds
+                self.converged = False
+            if ekinds is not None:
+                self.ekinds = ekinds
+                self.converged = False
             if self.dims != dims:
                 self.converged = False
             nodes = self.nodes
             edges = self.edges
+            nkinds = self.nkinds
+            ekinds = self.ekinds
             start = datetime.datetime.now()
             if self.dims == 2 and dims == 3:
                 nodes[:,2] = np.random.rand(nodes.shape[0])
@@ -159,14 +170,23 @@ class glsFDPProcess(Process):
                     nforces = self.forces_nodes(nodes, dists, vectors)
                     eforces = self.forces_edges(edges, dists, vectors, nodes.shape[0])
                     forces = nforces + eforces
-                    forces[forces > 10] = 10
+                    mag = np.linalg.norm(forces, axis=-1)
+                    anneal = self.anneal_force(self.steps_total)
+                    mag_mask = mag > anneal
+                    forces[mag_mask] = np.multiply(forces[mag_mask],
+                                                   anneal / mag[mag_mask, np.newaxis])
                     nodes += forces * self.speed
                     if dims == 2:
                         nodes[:,2] = 0
                     time = datetime.datetime.now() - start
                     time = time.total_seconds()
-                max_force = np.amax(forces)
-                if max_force < 0.01:
+                    # Auto-scale steps based on runtime.
+                    if time > 0.01 and self.steps > 1:
+                        self.steps -= 1
+                    elif time < 0.01 and self.steps < self.steps_max:
+                        self.steps += 1
+                    self.steps_total += 1
+                if np.amax(forces) < 0.01:
                     self.converged = True
             if self.converged:
                 self.out_q.put(None)
@@ -200,16 +220,18 @@ class glsFDPThread(Thread):
         while not self.done:
             with self.lock:
                 if self.refresh:
+                    self.refresh = False
                     nodes = self.graph.get_np_nodes()
                     edges = self.graph.get_np_edges()
-                    kinds = self.kinds
-                    self.refresh = False
+                    nkinds = np.vstack([ self.graph.np_nkinds[k] for k in self.kinds ])
+                    ekinds = np.vstack([ self.graph.np_ekinds[k] for k in self.kinds ])
                 else:
-                    nodes = None
-                    edges = None
-                    kinds = None
+                    nodes  = None
+                    edges  = None
+                    nkinds = None
+                    ekinds = None
             dims = 3 if self.settings.Get('graph_3D') else 2
-            self.in_q.put(["run", nodes, edges, dims])
+            self.in_q.put(["run", nodes, edges, nkinds, ekinds, dims])
             data = False
             while not data:
                 try:
@@ -218,7 +240,7 @@ class glsFDPThread(Thread):
                 except Empty:
                     sleep(self.nice/1000.0)
             if response is not None:
-                nodes,time,dims = response
+                nodes, time, dims = response
                 with self.lock:
                     if not self.refresh:
                         self.graph.set_np_nodes(nodes)
@@ -250,7 +272,7 @@ class glsFDPThread(Thread):
             self.speed = speed
         return
     def stop(self):
-        self.in_q.put(["stop", None, None, None])
+        self.in_q.put(["stop", None, None, None, None, None])
         self.done = True
         return
 

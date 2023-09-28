@@ -9,14 +9,28 @@ from glsIcons import glsIcons
 ################################################################
 
 class glsDataPanel(wx.Window):
+    ID_OPEN_DIR  = 1000
+    ID_SEARCH    = 1002
     def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
         self.settings = settings
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        box_main = wx.BoxSizer(wx.VERTICAL)
+        self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
+        self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
         self.icons = glsIcons()
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        toolbar.AddTool(self.ID_OPEN_DIR, "Open Directory",
+                        self.icons.Get('chart_organisation_add'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Open Directory', "Open Directory", None)
+        toolbar.AddTool(self.ID_SEARCH, "Search",
+                        self.icons.Get('magnifier'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Search', "Search", None)
+        self.toolbar = toolbar
+        self.toolbar.Realize()
+        box_main.Add(self.toolbar, 0, wx.EXPAND)
         self.image_list = wx.ImageList(16, 16)
         self.image_list.Add(self.icons.Get('chart_organisation'))
         self.image_list.Add(self.icons.Get('magnifier'))
@@ -27,6 +41,12 @@ class glsDataPanel(wx.Window):
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+    def OnOpenDir(self, event):
+        print('open dir')
+        return
+    def OnSearch(self, event):
+        print('search')
         return
     def AddDirTree(self, dirtree):
         graph_panel = glsGraphPanel(self.notebook, dirtree, self.settings,
