@@ -34,7 +34,7 @@ class glsDataPanel(wx.Window):
                   (self.ID_SEL_ALL, "Select All", 'chart_line_add', self.OnSelAll),
                   (self.ID_SEL_IVRT, "Select Inverse", 'chart_line', self.OnSelIvrt),
                   (self.ID_SEL_NONE, "Select None", 'chart_line_delete', self.OnSelNone),
-                  (self.ID_SHOW_FILES, "Show Files", 'script', self.OnShowFiles),
+                  (self.ID_SHOW_FILES, "Show Files", 'page', self.OnShowFiles),
                   (self.ID_SHOW_DIRS, "Hide Files", 'folder', self.OnShowDirs) ]
         for tool in tools:
             tid, text, icon, callback = tool

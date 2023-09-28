@@ -31,10 +31,10 @@ class glsTermPanelPopupMenu(wx.Menu):
         item.SetBitmap(self.icons.Get('monitor_add'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_COPY, 'Copy')
-        item.SetBitmap(self.icons.Get('script_add'))
+        item.SetBitmap(self.icons.Get('page_copy'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_PASTE, 'Paste')
-        item.SetBitmap(self.icons.Get('script_edit'))
+        item.SetBitmap(self.icons.Get('page_paste'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents')
         item.SetBitmap(self.icons.Get('magnifier'))
@@ -752,8 +752,8 @@ class glsTermsPanel(wx.Window):
                   (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnOpenDir),
                   (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
                   (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
-                  (self.ID_COPY, "Copy", 'script_add', self.OnCopy),
-                  (self.ID_PASTE, "Paste", 'script_edit', self.OnPaste) ]
+                  (self.ID_COPY, "Copy", 'page_copy', self.OnCopy),
+                  (self.ID_PASTE, "Paste", 'page_paste', self.OnPaste) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
