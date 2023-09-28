@@ -9,19 +9,21 @@ from glsIcons import glsIcons
 ################################################################
 
 class glsDataPanel(wx.Window):
-    ID_OPEN_DIR   = 1000
-    ID_SEARCH     = 1001
-    ID_SEL_ALL    = 1002
-    ID_SEL_NONE   = 1003
-    ID_SEL_IVRT   = 1004
-    ID_SHOW_FILES = 1005
-    ID_SHOW_DIRS  = 1006
+    ID_RESCAN     = 1000
+    ID_OPEN_DIR   = 1001
+    ID_SEARCH     = 1002
+    ID_SEL_ALL    = 1003
+    ID_SEL_NONE   = 1004
+    ID_SEL_IVRT   = 1005
+    ID_SHOW_FILES = 1006
+    ID_SHOW_DIRS  = 1007
     def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
         self.settings = settings
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Bind(wx.EVT_TOOL, self.OnRescan, id=self.ID_RESCAN)
         self.Bind(wx.EVT_TOOL, self.OnOpenDir, id=self.ID_OPEN_DIR)
         self.Bind(wx.EVT_TOOL, self.OnSearch, id=self.ID_SEARCH)
         self.Bind(wx.EVT_TOOL, self.OnSelAll, id=self.ID_SEL_ALL)
@@ -32,6 +34,9 @@ class glsDataPanel(wx.Window):
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        toolbar.AddTool(self.ID_RESCAN, "Rescan Directory Tree",
+                        self.icons.Get('arrow_refresh'), wx.NullBitmap,
+                        wx.ITEM_NORMAL, 'Rescan Directory Tree', "Rescan Directory Tree", None)
         toolbar.AddTool(self.ID_OPEN_DIR, "Open Directory",
                         self.icons.Get('chart_organisation_add'), wx.NullBitmap,
                         wx.ITEM_NORMAL, 'Open Directory', "Open Directory", None)
@@ -66,6 +71,9 @@ class glsDataPanel(wx.Window):
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+    def OnRescan(self, event):
+        print('rescan')
         return
     def OnOpenDir(self, event):
         print('open dir')
