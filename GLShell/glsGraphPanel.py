@@ -48,6 +48,7 @@ class glsGraphCanvas(GLCanvas):
     grn = [0.0, 1.0, 0.0, 1.0]
     blu = [0.0, 0.0, 1.0, 1.0]
     ylw = [1.0, 1.0, 0.0, 1.0]
+    orn = [1.0, 0.6, 0.0, 1.0]
     prp = [1.0, 0.3, 1.0, 1.0]
     wht = [1.0, 1.0, 1.0, 1.0]
     def __init__(self, parent, dirtree, size, settings, callback_close):
@@ -96,10 +97,13 @@ class glsGraphCanvas(GLCanvas):
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         self.closing = False
         self.pushframes_done = False
-        self.node_styles = { glsDirTree.KIND_DIR: (self.prp, 10.0),
-                             glsDirTree.KIND_FILE: (self.blu, 8.0),
-                             glsDirTree.KIND_SELECT: (self.red, 15.0),
-                             glsDirTree.KIND_RESULT: (self.wht, 15.0) }
+        # node_style = (color, size, label, yoff, lcolor, bkgrnd)
+        self.node_styles = { glsDirTree.KIND_DIR: (self.orn, 10.0, True, 10.0, self.ylw, False),
+                             glsDirTree.KIND_FILE: (self.blu, 8.0, False, 10.0, self.prp, False),
+                             glsDirTree.KIND_SELECT: (self.red, 15.0, True, 20.0, self.red, True),
+                             glsDirTree.KIND_RESULT: (self.wht, 15.0, True, 20.0, self.wht, True) }
+        self.kind_order = [ glsDirTree.KIND_SELECT, glsDirTree.KIND_RESULT,
+                            glsDirTree.KIND_DIR, glsDirTree.KIND_FILE ]
         wx.CallLater(10, self.PushFrames)
         return
     def InitGL(self):
@@ -319,54 +323,38 @@ class glsGraphCanvas(GLCanvas):
                 glVertex3fv(pos)
                 glEnd()
             glLoadName(0)
-        else:
-            glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
-            glEnableClientState(GL_VERTEX_ARRAY)
-            for kind in range(glsDirTree.KINDS):
-                nodes = graph.np_kinds[kind]
-                color, size = self.node_styles[kind]
-                glColor4fv(color)
-                glPointSize(size)
-                glDrawElements(GL_POINTS, len(nodes), GL_UNSIGNED_INT, nodes)
-        return
-        pos_nodes = []
-        pos_nodes.append(self.Project3DTo2D(pos))
+            return
+        glVertexPointer(3, GL_FLOAT, 0, graph.np_nodes)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        for kind in self.kind_order:
+            nodes = graph.np_kinds[kind]
+            color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
+            glColor4fv(color)
+            glPointSize(size)
+            glDrawElements(GL_POINTS, len(nodes), GL_UNSIGNED_INT, nodes)
         # Draw node labels.
         self.Set2D()
-        for ni,node in enumerate(graph.nodes.values()):
-            pos = pos_nodes[ni]
-            if pos[2] > 1:
-                continue
-            if node.selected:
-                bckg = True
-                yoff = 20
-                color = self.red
-                label = True
-            elif node.search_result:
-                bckg = True
-                yoff = 20
-                color = (1,1,1,1)
-                label = True
-            else:
-                bckg = False
-                yoff = 10
-                if self.graph_3D:
-                    if isinstance(node, glsDir):
-                        color = self.ylw
-                        label = True
-                    else:
-                        color = self.prp
-                        label = True if zoom >= 1.5 else False
-                else:
-                    if isinstance(node, glsDir):
-                        color = self.ylw
-                        label = True
-                    else:
-                        color = self.prp
-                        label = True if zoom >= 60 else False
-            if label:
-                self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff, pos[2]],
-                                     color, True, bckg)
+        if self.graph_3D:
+            always_label = True if zoom >= 1.5 else False
+        else:
+            always_label = True if zoom >= 60 else False
+        drawn = {}
+        for kind in self.kind_order:
+            nodes = graph.np_kinds[kind]
+            color, size, label, yoff, lcolor, bkgrnd = self.node_styles[kind]
+            label = True if always_label else label
+            for ndx in nodes:
+                ndx = ndx[0]
+                if ndx in drawn:
+                    continue
+                drawn[ndx] = True
+                pos = self.Project3DTo2D(graph.np_nodes[ndx])
+                if pos[2] > 1:
+                    continue
+                node = graph.nlist[ndx]
+                if label:
+                    self.glfont.DrawText(node.name, [pos[0], pos[1]+yoff, pos[2]],
+                                         lcolor, True, bkgrnd)
         return
     def DrawGraph(self):
         # Draw graph while holding the lock.
