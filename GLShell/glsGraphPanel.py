@@ -237,15 +237,11 @@ class glsGraphCanvas(GLCanvas):
         if menu_id == glsGraphPopupMenu.ID_EXIT:
             self.OnClose()
         elif menu_id == glsGraphPopupMenu.ID_SEL_ALL:
-            for node in self.IterateNodes():
-                node.selected = True
+            self.dirtree.SelectAll()
         elif menu_id == glsGraphPopupMenu.ID_SEL_NONE:
-            for node in self.IterateNodes():
-                node.selected = False
+            self.dirtree.SelectNone()
         elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
-            for node in self.IterateNodes():
-                node.selected = not node.selected
-            pass
+            self.dirtree.SelectInverse()
         return
     def OnPaint(self, event):
         # Handle paint event.
@@ -253,19 +249,6 @@ class glsGraphCanvas(GLCanvas):
         self.OnDraw()
         self.time_draw = datetime.datetime.now() - start
         self.time_draw = self.time_draw.total_seconds()
-        return
-    def IterateNodes(self):
-        # Convenient, clean, but slow iteration over graph nodes.
-        with self.lock:
-            for node in self.gthread.graph.nlist:
-                yield node
-        return
-    def IterateEdges(self):
-        # Convenient, clean, but slow iteration over graph edges.
-        with self.lock:
-            graph = self.gthread.graph
-            for e in graph.np_edges:
-                yield e, graph.nlist[e[0]], graph.nlist[e[1]]
         return
     def SelectionBoxValid(self):
         # Retrun True if mouse selection box is filled and valid, else false.
@@ -279,23 +262,13 @@ class glsGraphCanvas(GLCanvas):
                      if len(s[2]) == 1  and s[2][0] >= 1 ]
         if len(selected) == 0:
             return
-        with self.lock:
-            graph = self.gthread.graph
-            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
-            if self.SelectionBoxValid():
-                selected = [ s[1] for s in selected ]
-                selected = np.reshape(np.array(selected, dtype=np.intc), (len(selected),1))
-                kinds = np.vstack( (kinds, selected) )
-            else:
-                selected.sort(key=lambda x: x[0])
-                selected = selected[0][1]
-                ndx = np.where(kinds == selected)[0]
-                if len(ndx):
-                    kinds = np.delete(kinds, ndx)
-                else:
-                    kinds = np.vstack( (kinds, selected) )
-                kinds = np.reshape(np.unique(kinds), (len(kinds),1))
-            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        if self.SelectionBoxValid():
+            selected = [ s[1] for s in selected ]
+            self.dirtree.SelectionAdd(selected)
+        else:
+            selected.sort(key=lambda x: x[0])
+            selected = [ selected[0][1] ]
+            self.dirtree.SelectionToggle(selected)
         return
     def PushFrames(self):
         # Draw frames repeatedly and handle node selection modes.

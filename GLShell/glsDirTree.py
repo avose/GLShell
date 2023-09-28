@@ -1,6 +1,7 @@
 import os
 import sys
 import wx
+import numpy as np
 
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
@@ -108,6 +109,53 @@ class glsDirTree(wx.EvtHandler):
             return
         return
     def SelectionAdd(self, selected):
+        if selected is None or len(selected) == 0:
+            return
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            selected = np.reshape(np.array(selected, dtype=np.intc), (len(selected),1))
+            kinds = np.vstack( (kinds, selected) )
+            kinds = np.unique(kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectionToggle(self, selected):
+        if selected is None or len(selected) == 0:
+            return
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            for s in selected:
+                ndx = np.where(kinds == s)[0]
+                if len(ndx):
+                    kinds = np.delete(kinds, ndx)
+                else:
+                    kinds = np.vstack( (kinds, s) )
+            kinds = np.unique(kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectAll(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = np.array(range(len(self.graph.nlist)), dtype=np.intc)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
+        return
+    def SelectNone(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            graph.np_kinds[glsDirTree.KIND_SELECT] = np.ndarray((0, 1), dtype=np.intc)
+        return
+    def SelectInverse(self):
+        with self.thread.lock:
+            graph = self.thread.graph
+            kinds = graph.np_kinds[glsDirTree.KIND_SELECT]
+            every = np.array(range(len(self.graph.nlist)), dtype=np.intc)
+            kinds = np.delete(every, kinds)
+            kinds = np.reshape(kinds, (len(kinds), 1))
+            graph.np_kinds[glsDirTree.KIND_SELECT] = kinds
         return
 
 ################################################################
