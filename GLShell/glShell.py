@@ -188,6 +188,7 @@ class glShell(wx.Frame):
         pad = 50
         sash_sz = self.splitter.GetSashSize()
         dpanel_sz = (self.min_term_size[0], -1)
+        orig_sz = tuple(self.Size)
         self.tpanel_size = tpanel_sz
         self.splitter.SetMinSize( (dpanel_sz[0] + sash_sz + tpanel_sz[0] + pad,
                                    tpanel_sz[1] + pad) )
@@ -195,7 +196,9 @@ class glShell(wx.Frame):
         self.SetMinSize((50,50))
         self.Layout()
         self.Fit()
-        self.SetMinSize((self.Size[0],self.Size[1]))
+        self.SetMinSize(self.Size)
+        new_sz = (max(self.Size[0], orig_sz[0]), max(self.Size[1], orig_sz[1]))
+        self.SetSize(-1, -1, *new_sz)
         return
     def OnSplitChanging(self, event):
         graph_size = self.min_term_size[0]
