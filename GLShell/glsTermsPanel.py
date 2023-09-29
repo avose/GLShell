@@ -748,6 +748,8 @@ class glsTermsPanel(wx.Window):
         self.callback_layout = callback_layout
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
+        self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.VetoEvent)
+        self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.VetoEvent)
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
@@ -783,6 +785,9 @@ class glsTermsPanel(wx.Window):
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        wx.CallAfter(self.OnHorizontal)
+        return
+    def VetoEvent(self, event):
         return
     def OnOpenDir(self, event):
         print('open dir')
@@ -802,7 +807,7 @@ class glsTermsPanel(wx.Window):
     def OnCopy(self, event):
         print('copy')
         return
-    def OnHorizontal(self, event):
+    def OnHorizontal(self, event=None):
         pad = 50
         splitter_size = (self.min_term_size[0] + pad,
                          self.min_term_size[1]*2 +
@@ -816,7 +821,7 @@ class glsTermsPanel(wx.Window):
         self.callback_layout((splitter_size[0],
                               splitter_size[1] + self.toolbar.Size[1] + pad))
         return
-    def OnVertical(self, event):
+    def OnVertical(self, event=None):
         pad = 50
         splitter_size = (self.min_term_size[0]*2 +
                          self.splitter.GetSashSize() + pad,

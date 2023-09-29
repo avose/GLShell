@@ -66,6 +66,8 @@ class glShell(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.OnSplitChanging)
+        self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.OnSplitChanged)
         self.icons = glsIcons()
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
@@ -186,6 +188,7 @@ class glShell(wx.Frame):
         pad = 50
         sash_sz = self.splitter.GetSashSize()
         dpanel_sz = (self.min_term_size[0], -1)
+        self.tpanel_size = tpanel_sz
         self.splitter.SetMinSize( (dpanel_sz[0] + sash_sz + tpanel_sz[0] + pad,
                                    tpanel_sz[1] + pad) )
         self.splitter.Layout()
@@ -193,6 +196,18 @@ class glShell(wx.Frame):
         self.Layout()
         self.Fit()
         self.SetMinSize((self.Size[0],self.Size[1]))
+        return
+    def OnSplitChanging(self, event):
+        graph_size = self.min_term_size[0]
+        sash_pos = event.GetSashPosition()
+        sash_max = self.splitter.Size[0] - self.tpanel_size[0]
+        if sash_pos < graph_size:
+            event.SetSashPosition(graph_size)
+        if sash_pos > sash_max:
+            event.SetSashPosition(sash_max)
+        return
+    def OnSplitChanged(self, event):
+        self.OnSplitChanging(event)
         return
     def OnSize(self, event):
         self.Layout()
