@@ -65,6 +65,7 @@ class glShell(wx.Frame):
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
         self.icons = glsIcons()
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
@@ -168,9 +169,11 @@ class glShell(wx.Frame):
         self.min_term_size = (320, 92)
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
         self.splitter.SetMinimumPaneSize(self.min_term_size[0])
+        self.splitter.SetMinSize( (self.min_term_size[0]*2+100, self.min_term_size[1]*2+150) )
         # Terminals.
         self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size,
-                                         self.OnSearchFiles, self.OnSearchContents)
+                                         self.OnChildLayout, self.OnSearchFiles,
+                                         self.OnSearchContents)
         # Data panel.
         self.data_panel = glsDataPanel(self.splitter, self.settings, self.terms_panel)
         # Finalize UI layout.
@@ -178,6 +181,22 @@ class glShell(wx.Frame):
         self.splitter.SplitVertically(self.data_panel, self.terms_panel)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+    def OnChildLayout(self, tpanel_sz):
+        pad = 50
+        sash_sz = self.splitter.GetSashSize()
+        dpanel_sz = (self.min_term_size[0], -1)
+        self.splitter.SetMinSize( (dpanel_sz[0] + sash_sz + tpanel_sz[0] + pad,
+                                   tpanel_sz[1] + pad) )
+        self.splitter.Layout()
+        self.SetMinSize((50,50))
+        self.Layout()
+        self.Fit()
+        self.SetMinSize((self.Size[0],self.Size[1]))
+        return
+    def OnSize(self, event):
+        self.Layout()
+        event.Skip()
         return
     def AddDirTree(self, dirtree):
         self.data_panel.AddDirTree(dirtree)

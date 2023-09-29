@@ -740,11 +740,12 @@ class glsTermsPanel(wx.Window):
     ID_PASTE      = 1006
     ID_VERTICAL   = 1007
     ID_HORIZONTAL = 1008
-    def __init__(self, parent, settings, min_term_size,
+    def __init__(self, parent, settings, min_term_size, callback_layout,
                  callback_searchfiles, callback_searchcontents):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.settings = settings
+        self.callback_layout = callback_layout
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
         self.icons = glsIcons()
@@ -756,10 +757,10 @@ class glsTermsPanel(wx.Window):
                   (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnCopy),
                   (self.ID_PASTE, "Paste", 'page_paste', self.OnPaste),
-                  (self.ID_VERTICAL, "Split Vertical", 'application_tile_vertical',
-                   self.OnVertical),
-                  (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_horizontal',
-                   self.OnHorizontal) ]
+                  (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_vertical',
+                   self.OnHorizontal),
+                  (self.ID_VERTICAL, "Split Vertical", 'application_tile_horizontal',
+                   self.OnVertical) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
@@ -767,13 +768,14 @@ class glsTermsPanel(wx.Window):
             self.Bind(wx.EVT_TOOL, callback, id=tid)
         self.toolbar.Realize()
         box_main.Add(self.toolbar, 0, wx.EXPAND)
+        self.min_term_size = min_term_size
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
-        self.splitter.SetMinimumPaneSize(min_term_size[1])
-        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, min_term_size,
+        self.splitter.SetMinimumPaneSize(self.min_term_size[1])
+        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, self.min_term_size,
                                            self.callback_searchfiles,
                                            self.callback_searchcontents,
                                            self.CallbackCurrentNotebook),
-                           glsTermNotebook(self.splitter, self.settings, min_term_size,
+                           glsTermNotebook(self.splitter, self.settings, self.min_term_size,
                                            self.callback_searchfiles,
                                            self.callback_searchcontents,
                                            self.CallbackCurrentNotebook), ]
@@ -800,11 +802,33 @@ class glsTermsPanel(wx.Window):
     def OnCopy(self, event):
         print('copy')
         return
-    def OnVertical(self, event):
-        print('split vertical')
-        return
     def OnHorizontal(self, event):
-        print('split horizontal')
+        pad = 50
+        splitter_size = (self.min_term_size[0] + pad,
+                         self.min_term_size[1]*2 +
+                         self.splitter.GetSashSize() + pad)
+        self.splitter.SetSplitMode(wx.SPLIT_HORIZONTAL)
+        self.splitter.SetMinimumPaneSize(self.min_term_size[1])
+        self.splitter.SetMinSize(splitter_size)
+        self.splitter.Layout()
+        self.Layout()
+        self.Refresh()
+        self.callback_layout((splitter_size[0],
+                              splitter_size[1] + self.toolbar.Size[1] + pad))
+        return
+    def OnVertical(self, event):
+        pad = 50
+        splitter_size = (self.min_term_size[0]*2 +
+                         self.splitter.GetSashSize() + pad,
+                         self.min_term_size[1] + pad)
+        self.splitter.SetSplitMode(wx.SPLIT_VERTICAL)
+        self.splitter.SetMinimumPaneSize(self.min_term_size[0])
+        self.splitter.SetMinSize(splitter_size)
+        self.splitter.Layout()
+        self.Layout()
+        self.Refresh()
+        self.callback_layout((splitter_size[0],
+                              splitter_size[1] + self.toolbar.Size[1] + pad))
         return
     def CallbackCurrentNotebook(self, notebook):
         for nb in self.notebooks:
