@@ -1,4 +1,4 @@
-from wx.glcanvas import GLCanvas
+from wx.glcanvas import GLCanvas, WX_GL_DEPTH_SIZE
 from OpenGL.GLU import *
 from OpenGL.GL import *
 import datetime
@@ -63,7 +63,8 @@ class glsGraphCanvas(GLCanvas):
     wht = [1.0, 1.0, 1.0, 1.0]
     def __init__(self, parent, dirtree, size, settings, callback_close):
         # Initialize glsGraphCanvas.
-        GLCanvas.__init__(self, parent, id=-1, size=size)
+        attrs = [ WX_GL_DEPTH_SIZE, 24, 0 ];
+        GLCanvas.__init__(self, parent, -1, size=size, attribList=attrs)
         self.dirtree = dirtree
         self.gthread = self.dirtree.thread
         self.lock = self.gthread.lock
@@ -122,9 +123,11 @@ class glsGraphCanvas(GLCanvas):
         self.glctx = wx.glcanvas.GLContext(self)
         self.SetCurrent(self.glctx)
         glDisable(GL_LIGHTING)
+        glDepthFunc(GL_LEQUAL)
+        glDepthMask(GL_TRUE)
+        glClearDepth(1.0)
         glEnable(GL_DEPTH_TEST)
         glClearColor(0.0, 0.0, 0.0, 1.0)
-        glClearDepth(0.0)
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_LINE_SMOOTH);
