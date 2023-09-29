@@ -1,5 +1,6 @@
 import wx
 
+from glsPlaceHolder import glsPlaceHolder
 from glsGraphPanel import glsGraphPanel
 from glsSearch import  glsSearchResultListPopupMenu
 from glsSearch import glsSearchResultPanel
@@ -18,6 +19,9 @@ class glsDataPanel(wx.Window):
     ID_SEL_IVRT   = 1006
     ID_SHOW_FILES = 1007
     ID_SHOW_DIRS  = 1008
+    ICON_GRAPH     = 0
+    ICON_SEARCH    = 1
+    ICON_PLACEHLDR = 2
     def __init__(self, parent, settings, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
@@ -46,6 +50,7 @@ class glsDataPanel(wx.Window):
         self.image_list = wx.ImageList(16, 16)
         self.image_list.Add(self.icons.Get('chart_organisation'))
         self.image_list.Add(self.icons.Get('magnifier'))
+        self.image_list.Add(self.icons.Get('error'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
@@ -82,17 +87,19 @@ class glsDataPanel(wx.Window):
         print('showdirs')
         return
     def AddDirTree(self, dirtree):
+        self.RemovePlaceHolder()
         graph_panel = glsGraphPanel(self.notebook, dirtree, self.settings,
                                     self.OnCloseTab)
         self.tabs.append(graph_panel)
         self.notebook.AddPage(graph_panel, " Graph '%s'"%(dirtree.name))
-        self.notebook.SetPageImage(len(self.tabs)-1, 0)
+        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_GRAPH)
         self.notebook.SetSelection(len(self.tabs)-1)
         graph_panel.StartGraph()
         return
     def GetDirTrees(self):
         return [ tab for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
     def AddSearch(self, search):
+        self.RemovePlaceHolder()
         result_panel = glsSearchResultPanel(self.notebook, search, self.OnResultOpen,
                                             self.OnCloseTab)
         self.tabs.append(result_panel)
@@ -101,7 +108,7 @@ class glsDataPanel(wx.Window):
         elif search.search_type == search.TYPE_CONTENTS:
             type_text = "Contents"
         self.notebook.AddPage(result_panel, " Search %s '%s'"%(type_text, search.text))
-        self.notebook.SetPageImage(len(self.tabs)-1, 1)
+        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_SEARCH)
         self.notebook.SetSelection(len(self.tabs)-1)
         return
     def SearchFiles(self, text):
@@ -128,11 +135,28 @@ class glsDataPanel(wx.Window):
                     self.notebook.SendSizeEvent()
                     self.tabs.remove(closing)
             self.tabs_closing.remove(closing)
+        self.AddPlaceHolder()
         return
     def OnCloseTab(self, tab):
         if tab not in self.tabs_closing:
             self.tabs_closing.append(tab)
         wx.CallLater(10, self.CloseTabs)
+        return
+    def RemovePlaceHolder(self):
+        if len(self.tabs) != 1 or not isinstance(self.tabs[0], glsPlaceHolder):
+            return
+        self.notebook.DeletePage(0)
+        self.notebook.SendSizeEvent()
+        self.tabs.remove(self.tabs[0])
+        return
+    def AddPlaceHolder(self):
+        if len(self.tabs):
+            return
+        placeholder = glsPlaceHolder(self.notebook, "All Data Tabs Are Closed")
+        self.tabs.append(placeholder)
+        self.notebook.AddPage(placeholder, " No Data")
+        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)
+        self.notebook.SetSelection(len(self.tabs)-1)
         return
     def OnClose(self, event=None):
         for tab in self.tabs:
