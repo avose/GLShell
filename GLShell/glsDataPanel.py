@@ -19,6 +19,7 @@ class glsDataPanel(wx.Window):
     ID_SEL_IVRT   = 1006
     ID_SHOW_FILES = 1007
     ID_SHOW_DIRS  = 1008
+    ID_EXIT       = 1009
     ICON_GRAPH     = 0
     ICON_SEARCH    = 1
     ICON_PLACEHLDR = 2
@@ -31,15 +32,16 @@ class glsDataPanel(wx.Window):
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        tools = [ (self.ID_RESCAN, "Rescan Directory Tree", 'arrow_refresh', self.OnRescan),
-                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnOpenDir),
-                  (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
-                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
-                  (self.ID_SEL_ALL, "Select All", 'chart_line_add', self.OnSelAll),
-                  (self.ID_SEL_IVRT, "Select Inverse", 'chart_line', self.OnSelIvrt),
-                  (self.ID_SEL_NONE, "Select None", 'chart_line_delete', self.OnSelNone),
-                  (self.ID_SHOW_FILES, "Show Files", 'page', self.OnShowFiles),
-                  (self.ID_SHOW_DIRS, "Hide Files", 'folder', self.OnShowDirs) ]
+        tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
+                  (self.ID_RESCAN, "Rescan Directory Tree", 'arrow_refresh', self.OnToolRescan),
+                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
+                  (self.ID_SEARCH, "Search", 'magnifier', self.OnToolSearch),
+                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnToolSearchCustom),
+                  (self.ID_SEL_ALL, "Select All", 'chart_line_add', self.OnToolSelAll),
+                  (self.ID_SEL_IVRT, "Select Inverse", 'chart_line', self.OnToolSelIvrt),
+                  (self.ID_SEL_NONE, "Select None", 'chart_line_delete', self.OnToolSelNone),
+                  (self.ID_SHOW_FILES, "Show Files", 'page', self.OnToolShowFiles),
+                  (self.ID_SHOW_DIRS, "Hide Files", 'folder', self.OnToolShowDirs) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
@@ -59,32 +61,35 @@ class glsDataPanel(wx.Window):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
-    def OnRescan(self, event):
+    def OnToolRescan(self, event):
         print('rescan')
         return
-    def OnOpenDir(self, event):
+    def OnToolOpenDir(self, event):
         print('open dir')
         return
-    def OnSearch(self, event):
+    def OnToolSearch(self, event):
         print('search')
         return
-    def OnSearchCustom(self, event):
+    def OnToolSearchCustom(self, event):
         print('search custom')
         return
-    def OnSelAll(self, event):
+    def OnToolSelAll(self, event):
         print('selall')
         return
-    def OnSelNone(self, event):
+    def OnToolSelNone(self, event):
         print('selnone')
         return
-    def OnSelIvrt(self, event):
+    def OnToolSelIvrt(self, event):
         print('selivrt')
         return
-    def OnShowFiles(self, event):
+    def OnToolShowFiles(self, event):
         print('showfiles')
         return
-    def OnShowDirs(self, event):
+    def OnToolShowDirs(self, event):
         print('showdirs')
+        return
+    def OnToolCloseTab(self, event):
+        print('close tab')
         return
     def AddDirTree(self, dirtree):
         self.RemovePlaceHolder()

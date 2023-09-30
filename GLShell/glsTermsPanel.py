@@ -772,6 +772,7 @@ class glsTermsPanel(wx.Window):
     ID_PASTE      = 1006
     ID_VERTICAL   = 1007
     ID_HORIZONTAL = 1008
+    ID_EXIT       = 1009
     def __init__(self, parent, settings, min_term_size, callback_layout,
                  callback_searchfiles, callback_searchcontents):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -785,16 +786,17 @@ class glsTermsPanel(wx.Window):
         self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        tools = [ (self.ID_TERM_NEW, "New Terminal", 'monitor_add', self.OnTermNew),
-                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnOpenDir),
-                  (self.ID_SEARCH, "Search", 'magnifier', self.OnSearch),
-                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnSearchCustom),
-                  (self.ID_COPY, "Copy", 'page_copy', self.OnCopy),
-                  (self.ID_PASTE, "Paste", 'page_paste', self.OnPaste),
+        tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
+                  (self.ID_TERM_NEW, "New Terminal", 'monitor_add', self.OnToolTermNew),
+                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
+                  (self.ID_SEARCH, "Search", 'magnifier', self.OnToolSearch),
+                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnToolSearchCustom),
+                  (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
+                  (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
                   (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_vertical',
-                   self.OnHorizontal),
+                   self.OnToolHorizontal),
                   (self.ID_VERTICAL, "Split Vertical", 'application_tile_horizontal',
-                   self.OnVertical) ]
+                   self.OnToolVertical) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
@@ -821,26 +823,26 @@ class glsTermsPanel(wx.Window):
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
-        wx.CallAfter(self.OnHorizontal)
+        wx.CallAfter(self.OnToolHorizontal)
         return
     def VetoEvent(self, event):
         return
-    def OnOpenDir(self, event):
+    def OnToolOpenDir(self, event):
         print('open dir')
         return
-    def OnTermNew(self, event):
+    def OnToolTermNew(self, event):
         print('new terminal')
         return
-    def OnSearch(self, event):
+    def OnToolSearch(self, event):
         print('search')
         return
-    def OnSearchCustom(self, event):
+    def OnToolSearchCustom(self, event):
         print('search custom')
         return
-    def OnPaste(self, event):
+    def OnToolPaste(self, event):
         print('paste')
         return
-    def OnCopy(self, event):
+    def OnToolCopy(self, event):
         print('copy')
         return
     def Resize(self, split_mode):
@@ -871,19 +873,22 @@ class glsTermsPanel(wx.Window):
         self.callback_layout((splitter_size[0],
                               splitter_size[1] + self.toolbar.Size[1] + pad))
         return
-    def OnHorizontal(self, event=None):
+    def OnToolHorizontal(self, event=None):
         self.split_mode = wx.SPLIT_HORIZONTAL
         self.Resize(self.split_mode)
         for nb in self.notebooks:
             if nb.GetCurrentTerm() is None:
                 nb.OnNewTerm()
         return
-    def OnVertical(self, event=None):
+    def OnToolVertical(self, event=None):
         self.split_mode = wx.SPLIT_VERTICAL
         self.Resize(self.split_mode)
         for nb in self.notebooks:
             if nb.GetCurrentTerm() is None:
                 nb.OnNewTerm()
+        return
+    def OnToolCloseTab(self, event):
+        print('close tab')
         return
     def OnPlaceHolder(self, placeholder):
         orig_active = self.notebooks_active
