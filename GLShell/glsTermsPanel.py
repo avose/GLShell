@@ -12,6 +12,8 @@ from time import sleep
 from array import *
 
 import TermEmulator
+
+from glsPlaceHolder import glsPlaceHolder
 from glsKeyPress import glsKeyPress
 from glsIcons import glsIcons
 
@@ -324,6 +326,7 @@ class glsTerminalPanel(wx.Window):
         self.Paste()
         return
     def OnLeftDown(self, event):
+        self.callback_setcurrent(True)
         self.SetFocus()
         self.left_down = True
         self.sel_start = self.PointToCursor(event.GetPosition())
@@ -346,6 +349,7 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnLeftDouble(self, event):
+        self.callback_setcurrent(True)
         row, col = self.PointToCursor(event.GetPosition())
         screen = self.terminal.GetRawScreen()
         if screen[row][col] not in self.word_chars:
@@ -387,10 +391,12 @@ class glsTerminalPanel(wx.Window):
             wx.YieldIfNeeded()
         return
     def OnRightDown(self, event):
+        self.callback_setcurrent(True)
         self.SetFocus()
         self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
         return
     def OnWheel(self, event):
+        self.callback_setcurrent(True)
         self.SetFocus()
         if event.GetWheelRotation() < 0:
             for i in range(5):
@@ -542,6 +548,7 @@ class glsTerminalPanel(wx.Window):
                                     10, refresh=True)
         return
     def OnScroll(self, event):
+        self.callback_setcurrent(True)
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -650,14 +657,17 @@ class glsTerminalPanel(wx.Window):
 ################################################################
 
 class glsTermNotebook(wx.Window):
+    ICON_TERM      = 0
+    ICON_PLACEHLDR = 1
     def __init__(self, parent, settings, min_term_size,
                  callback_searchfiles, callback_searchcontents,
-                 callback_current):
+                 callback_current, callback_placeholder):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
         self.callback_current = callback_current
+        self.callback_placeholder = callback_placeholder
         self.settings = settings
         self.current = False
         self.min_term_size = min_term_size
@@ -665,37 +675,40 @@ class glsTermNotebook(wx.Window):
         self.icons = glsIcons()
         self.image_list = wx.ImageList(16, 16)
         self.image_list.Add(self.icons.Get('monitor'))
-        self.term_notebook = wx.Notebook(self)
-        self.term_notebook.SetImageList(self.image_list)
-        self.term_tabs = []
+        self.image_list.Add(self.icons.Get('error'))
+        self.notebook = wx.Notebook(self)
+        self.notebook.SetImageList(self.image_list)
+        self.tabs = []
         self.term_close_pending = []
         self.OnNewTerm()
-        box_main.Add(self.term_notebook, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
+        box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
     def OnNewTerm(self):
         # Create a new terminal and add the tab to the notebook.
-        terminal = glsTerminalPanel(self.term_notebook, self.settings,
+        self.RemovePlaceHolder()
+        terminal = glsTerminalPanel(self.notebook, self.settings,
                                     self.OnTermClose, self.OnTermTitle,
                                     self.callback_searchfiles,
                                     self.callback_searchcontents,
                                     self.SetCurrent,
                                     self.min_term_size)
-        self.term_tabs.append(terminal)
-        self.term_notebook.AddPage(terminal, " Terminal " + str(len(self.term_tabs)))
-        self.term_notebook.ChangeSelection(len(self.term_tabs)-1)
-        self.term_notebook.SetPageImage(len(self.term_tabs)-1, 0)
+        self.tabs.append(terminal)
+        self.notebook.AddPage(terminal, " Terminal " + str(len(self.tabs)))
+        self.notebook.ChangeSelection(len(self.tabs)-1)
+        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_TERM)
         return terminal
     def CloseTerminals(self):
         # Check for closed terminals and clean up their tabs.
         for terminal in self.term_close_pending:
-            for i,t in enumerate(self.term_tabs):
+            for i,t in enumerate(self.tabs):
                 if terminal == t:
-                    self.term_notebook.DeletePage(i)
-                    self.term_notebook.SendSizeEvent()
-                    self.term_tabs.remove(self.term_tabs[i])
+                    self.notebook.DeletePage(i)
+                    self.notebook.SendSizeEvent()
+                    self.tabs.remove(self.tabs[i])
             self.term_close_pending.remove(terminal)
+        self.AddPlaceHolder()
         return
     def OnTermClose(self, terminal):
         # Add tab to closed terminal list.
@@ -705,9 +718,27 @@ class glsTermNotebook(wx.Window):
         return
     def OnTermTitle(self, terminal, title):
         if len(title) > 0:
-            for i,t in enumerate(self.term_tabs):
+            for i,t in enumerate(self.tabs):
                     if terminal == t:
-                        self.term_notebook.SetPageText(i, title)
+                        self.notebook.SetPageText(i, title)
+        return
+    def RemovePlaceHolder(self):
+        if len(self.tabs) != 1 or not isinstance(self.tabs[0], glsPlaceHolder):
+            return
+        self.notebook.DeletePage(0)
+        self.notebook.SendSizeEvent()
+        self.tabs.remove(self.tabs[0])
+        self.callback_placeholder(False)
+        return
+    def AddPlaceHolder(self):
+        if len(self.tabs):
+            return
+        placeholder = glsPlaceHolder(self.notebook, "All Terminal Tabs Are Closed")
+        self.tabs.append(placeholder)
+        self.notebook.AddPage(placeholder, " No Terminals")
+        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)
+        self.notebook.SetSelection(len(self.tabs)-1)
+        self.callback_placeholder(True)
         return
     def IsCurrent(self):
         return self.current
@@ -717,9 +748,10 @@ class glsTermNotebook(wx.Window):
             self.callback_current(self)
         return
     def GetCurrentTerm(self):
-        current = self.term_notebook.GetSelection()
-        if current >= 0 and current < len(self.term_tabs):
-            return self.term_tabs[current]
+        current = self.notebook.GetSelection()
+        if (current >= 0 and current < len(self.tabs) and
+            not isinstance(self.tabs[current],glsPlaceHolder)):
+            return self.tabs[current]
         return None
     def SendText(self, text):
         if text is None or text == "":
@@ -776,11 +808,15 @@ class glsTermsPanel(wx.Window):
         self.notebooks = [ glsTermNotebook(self.splitter, self.settings, self.min_term_size,
                                            self.callback_searchfiles,
                                            self.callback_searchcontents,
-                                           self.CallbackCurrentNotebook),
+                                           self.OnCurrentNotebook,
+                                           self.OnPlaceHolder),
                            glsTermNotebook(self.splitter, self.settings, self.min_term_size,
                                            self.callback_searchfiles,
                                            self.callback_searchcontents,
-                                           self.CallbackCurrentNotebook), ]
+                                           self.OnCurrentNotebook,
+                                           self.OnPlaceHolder), ]
+        self.notebooks_active = len(self.notebooks)
+        self.split_mode = wx.SPLIT_HORIZONTAL
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
@@ -807,35 +843,77 @@ class glsTermsPanel(wx.Window):
     def OnCopy(self, event):
         print('copy')
         return
-    def OnHorizontal(self, event=None):
+    def Resize(self, split_mode):
         pad = 50
-        splitter_size = (self.min_term_size[0] + pad,
-                         self.min_term_size[1]*2 +
-                         self.splitter.GetSashSize() + pad)
-        self.splitter.SetSplitMode(wx.SPLIT_HORIZONTAL)
-        self.splitter.SetMinimumPaneSize(self.min_term_size[1])
-        self.splitter.SetMinSize(splitter_size)
-        self.splitter.Layout()
+        if split_mode == wx.SPLIT_HORIZONTAL:
+            splitter_size = (self.min_term_size[0] + pad,
+                             self.min_term_size[1]*2 +
+                             self.splitter.GetSashSize() + pad)
+            min_pane_size = self.min_term_size[1]
+        elif split_mode == wx.SPLIT_VERTICAL:
+            splitter_size = (self.min_term_size[0]*2 +
+                             self.splitter.GetSashSize() + pad,
+                             self.min_term_size[1] + pad)
+            min_pane_size = self.min_term_size[0]
+        else:
+            splitter_size = (self.min_term_size[0] + pad,
+                             self.min_term_size[1] + pad)
+            min_pane_size = 0
+        if split_mode is None:
+            self.splitter.Unsplit()
+        else:
+            self.splitter.SetSplitMode(split_mode)
+            self.splitter.SetMinimumPaneSize(min_pane_size)
+            self.splitter.SetMinSize(splitter_size)
+            self.splitter.Layout()
         self.Layout()
         self.Refresh()
         self.callback_layout((splitter_size[0],
                               splitter_size[1] + self.toolbar.Size[1] + pad))
+        return
+    def OnHorizontal(self, event=None):
+        self.split_mode = wx.SPLIT_HORIZONTAL
+        self.Resize(self.split_mode)
+        for nb in self.notebooks:
+            if nb.GetCurrentTerm() is None:
+                nb.OnNewTerm()
         return
     def OnVertical(self, event=None):
-        pad = 50
-        splitter_size = (self.min_term_size[0]*2 +
-                         self.splitter.GetSashSize() + pad,
-                         self.min_term_size[1] + pad)
-        self.splitter.SetSplitMode(wx.SPLIT_VERTICAL)
-        self.splitter.SetMinimumPaneSize(self.min_term_size[0])
-        self.splitter.SetMinSize(splitter_size)
-        self.splitter.Layout()
-        self.Layout()
-        self.Refresh()
-        self.callback_layout((splitter_size[0],
-                              splitter_size[1] + self.toolbar.Size[1] + pad))
+        self.split_mode = wx.SPLIT_VERTICAL
+        self.Resize(self.split_mode)
+        for nb in self.notebooks:
+            if nb.GetCurrentTerm() is None:
+                nb.OnNewTerm()
         return
-    def CallbackCurrentNotebook(self, notebook):
+    def OnPlaceHolder(self, placeholder):
+        orig_active = self.notebooks_active
+        if placeholder:
+            self.notebooks_active -= 1
+        else:
+            self.notebooks_active += 1
+        if self.notebooks_active == 2:
+            if self.split_mode == wx.SPLIT_HORIZONTAL:
+                self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])
+            elif self.split_mode == wx.SPLIT_VERTICAL:
+                self.splitter.SplitVertically(self.notebooks[0], self.notebooks[1])
+        elif orig_active == 2 and self.notebooks_active == 1:
+            if self.notebooks[0].GetCurrentTerm() is not None:
+                active = 0
+                inactive = 1
+            else:
+                active = 1
+                inactive = 0
+            self.notebooks = [self.notebooks[active], self.notebooks[inactive]]
+            self.Resize(None)
+            self.notebooks[0].Show()
+            self.notebooks[1].Hide()
+            self.notebooks[0].SetCurrent(True)
+            window = self.splitter.GetWindow1()
+            self.splitter.ReplaceWindow(window, self.notebooks[0])
+        elif self.notebooks_active == 0:
+            self.Resize(None)
+        return
+    def OnCurrentNotebook(self, notebook):
         for nb in self.notebooks:
             if nb != notebook:
                 nb.SetCurrent(False)

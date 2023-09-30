@@ -46,7 +46,7 @@ from glsIcons import glsIcons
 import glsSettings
 import glsHelp
 
-VERSION = "0.0.7"
+VERSION = "0.0.8"
 
 ################################################################
 
@@ -65,7 +65,6 @@ class glShell(wx.Frame):
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.OnSplitChanging)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.OnSplitChanged)
         self.icons = glsIcons()
@@ -211,10 +210,6 @@ class glShell(wx.Frame):
         return
     def OnSplitChanged(self, event):
         self.OnSplitChanging(event)
-        return
-    def OnSize(self, event):
-        self.Layout()
-        event.Skip()
         return
     def AddDirTree(self, dirtree):
         self.data_panel.AddDirTree(dirtree)
