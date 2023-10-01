@@ -7,6 +7,10 @@ It supports a number of visualization techniques including filesystem graph layo
 
 Run with: "cd GLShell && python3 glShell.py"
 
+.. image:: screenshot.png
+  :width: 512
+  :alt: Screenshot of GLShell.
+
 Development
 ===========
 
