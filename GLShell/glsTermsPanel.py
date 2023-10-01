@@ -22,16 +22,20 @@ from glsIcons import glsIcons
 
 class glsTermPanelPopupMenu(wx.Menu):
     ID_NEW_TERM        = 1000
-    ID_COPY            = 1001
-    ID_PASTE           = 1002
-    ID_SEARCH_CONTENTS = 1003
-    ID_SEARCH_FILES    = 1004
-    ID_EXIT            = 1005
+    ID_NEW_DIR         = 1001
+    ID_COPY            = 1002
+    ID_PASTE           = 1003
+    ID_SEARCH_CONTENTS = 1004
+    ID_SEARCH_FILES    = 1005
+    ID_EXIT            = 1006
     def __init__(self, parent):
         super(glsTermPanelPopupMenu, self).__init__()
         self.icons = glsIcons()
         item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
         item.SetBitmap(self.icons.Get('monitor_add'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_NEW_DIR, 'Open Directory')
+        item.SetBitmap(self.icons.Get('chart_organisation_add'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_COPY, 'Copy')
         item.SetBitmap(self.icons.Get('page_copy'))
@@ -40,7 +44,7 @@ class glsTermPanelPopupMenu(wx.Menu):
         item.SetBitmap(self.icons.Get('page_paste'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents')
-        item.SetBitmap(self.icons.Get('magnifier'))
+        item.SetBitmap(self.icons.Get('magnifier_zoom_in'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SEARCH_FILES, 'Search Files')
         item.SetBitmap(self.icons.Get('magnifier'))
@@ -78,7 +82,7 @@ class glsTerminalPanel(wx.Window):
 
     def __init__(self, parent, settings, callback_close, callback_title,
                  callback_searchfiles, callback_searchcontents,
-                 callback_setcurrent, min_size):
+                 callback_setcurrent, callback_opendir, min_size):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
         # This also appears to influence some aspects of minimum size.
@@ -92,6 +96,7 @@ class glsTerminalPanel(wx.Window):
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
         self.callback_setcurrent = callback_setcurrent
+        self.callback_opendir = callback_opendir
         # Bind events.
         self.keys_down = {}
         self.key_press = glsKeyPress(self.keys_down)
@@ -257,6 +262,21 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
+    def SearchSelectionFiles(self):
+        text = self.GetSelectedText()
+        if text is not None:
+            self.callback_searchfiles(text)
+        return
+    def SearchSelectionContents(self):
+        text = self.GetSelectedText()
+        if text is not None:
+            self.callback_searchcontents(text)
+        return
+    def OpenSelectionDir(self):
+        text = self.GetSelectedText()
+        if text is not None:
+            self.callback_opendir(text)
+        return
     def OnMenuItem(self, event):
         id = event.GetId() 
         if id == glsTermPanelPopupMenu.ID_COPY:
@@ -265,16 +285,14 @@ class glsTerminalPanel(wx.Window):
             self.Paste()
         elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
             self.Parent.Parent.OnNewTerm()
+        elif id == glsTermPanelPopupMenu.ID_NEW_DIR:
+            self.OpenSelectionDir()
         elif id == glsTermPanelPopupMenu.ID_EXIT:
             self.OnClose(event)
         elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
-            text = self.GetSelectedText()
-            if text is not None:
-                self.callback_searchfiles(text)
+            self.SearchSelectionFiles()
         elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
-            text = self.GetSelectedText()
-            if text is not None:
-                self.callback_searchcontents(text)
+            self.SearchSelectionContents()
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -301,8 +319,6 @@ class glsTerminalPanel(wx.Window):
                 row = int(i/self.cols)
                 col = i%self.cols
                 text += screen[row][col]
-                if col == self.cols-1:
-                    text += '\n'
             return text
         return None
     def Copy(self):
@@ -663,13 +679,14 @@ class glsTermNotebook(wx.Window):
     ICON_PLACEHLDR = 1
     def __init__(self, parent, settings, min_term_size,
                  callback_searchfiles, callback_searchcontents,
-                 callback_current, callback_placeholder):
+                 callback_current, callback_placeholder, callback_opendir):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
         self.callback_current = callback_current
         self.callback_placeholder = callback_placeholder
+        self.callback_opendir = callback_opendir
         self.settings = settings
         self.current = False
         self.min_term_size = min_term_size
@@ -695,6 +712,7 @@ class glsTermNotebook(wx.Window):
                                     self.callback_searchfiles,
                                     self.callback_searchcontents,
                                     self.SetCurrent,
+                                    self.callback_opendir,
                                     self.min_term_size)
         self.tabs.append(terminal)
         self.notebook.AddPage(terminal, " Terminal " + str(len(self.tabs)))
@@ -765,24 +783,26 @@ class glsTermNotebook(wx.Window):
 ################################################################
 
 class glsTermsPanel(wx.Window):
-    ID_OPEN_DIR   = 1000
-    ID_OPEN_FILE  = 1001
-    ID_SEARCH     = 1002
-    ID_SEARCH_OPT = 1003
-    ID_TERM_NEW   = 1004
-    ID_COPY       = 1005
-    ID_PASTE      = 1006
-    ID_VERTICAL   = 1007
-    ID_HORIZONTAL = 1008
-    ID_EXIT       = 1009
+    ID_OPEN_DIR    = 1000
+    ID_OPEN_FILE   = 1001
+    ID_SEARCH_FILE = 1002
+    ID_SEARCH_CNTS = 1003
+    ID_TERM_NEW    = 1004
+    ID_COPY        = 1005
+    ID_PASTE       = 1006
+    ID_VERTICAL    = 1007
+    ID_HORIZONTAL  = 1008
+    ID_EXIT        = 1009
     def __init__(self, parent, settings, min_term_size, callback_layout,
-                 callback_searchfiles, callback_searchcontents):
+                 callback_searchfiles, callback_searchcontents,
+                 callback_opendir):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.settings = settings
         self.callback_layout = callback_layout
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
+        self.callback_opendir = callback_opendir
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.VetoEvent)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.VetoEvent)
         self.icons = glsIcons()
@@ -791,8 +811,9 @@ class glsTermsPanel(wx.Window):
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
                   (self.ID_TERM_NEW, "New Terminal", 'monitor_add', self.OnToolTermNew),
                   (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
-                  (self.ID_SEARCH, "Search", 'magnifier', self.OnToolSearch),
-                  (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnToolSearchCustom),
+                  (self.ID_SEARCH_FILE, "Search Files", 'magnifier', self.OnToolSearchFiles),
+                  (self.ID_SEARCH_CNTS, "Search Contents", 'magnifier_zoom_in',
+                   self.OnToolSearchContents),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
                   (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
                   (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_vertical',
@@ -815,7 +836,8 @@ class glsTermsPanel(wx.Window):
                                        self.callback_searchfiles,
                                        self.callback_searchcontents,
                                        self.OnCurrentNotebook,
-                                       self.OnPlaceHolder)
+                                       self.OnPlaceHolder,
+                                       self.callback_opendir)
             self.notebooks.append(notebook)
         self.notebooks_active = len(self.notebooks)
         self.split_mode = wx.SPLIT_HORIZONTAL
@@ -828,22 +850,32 @@ class glsTermsPanel(wx.Window):
     def VetoEvent(self, event):
         return
     def OnToolOpenDir(self, event):
-        print('open dir')
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.OpenSelectionDir()
         return
     def OnToolTermNew(self, event):
         self.TerminalStart()
         return
-    def OnToolSearch(self, event):
-        print('search')
+    def OnToolSearchFiles(self, event):
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.SearchSelectionFiles()
         return
-    def OnToolSearchCustom(self, event):
-        print('search custom')
+    def OnToolSearchContents(self, event):
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.SearchSelectionContents()
         return
     def OnToolPaste(self, event):
-        print('paste')
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.Paste()
         return
     def OnToolCopy(self, event):
-        print('copy')
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.Copy()
         return
     def Resize(self, split_mode):
         pad = 50

@@ -548,7 +548,7 @@ class glsGraphPanel(wx.Window):
         self.SetMinSize( (320,320) )
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.SetBackgroundColour( (255,0,0) )
+        self.SetBackgroundColour( (0,0,0) )
         self.graph_canvas = None
         self.Show(True)
         return
@@ -558,6 +558,7 @@ class glsGraphPanel(wx.Window):
         self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=(320,320),
                                            settings=self.settings,
                                            callback_close=self.CloseGraph)
+        self.OnSize()
         return
     def OnSize(self, event=None):
         if self.graph_canvas is None:

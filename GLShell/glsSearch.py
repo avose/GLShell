@@ -203,7 +203,7 @@ class glsSearchResultList(wx.VListBox):
         return rows * self.char_h
     def DrawHeader(self, dc, rect):
         text, rows = self.HeaderToString()
-        dc.SetTextForeground((255,255,0))
+        dc.SetTextForeground((0,255,255))
         dc.DrawText(text, rect[0], rect[1])
         return
     def OnMeasureItem(self, index):

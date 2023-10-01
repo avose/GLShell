@@ -180,7 +180,7 @@ class glShell(wx.Frame):
         # Terminals.
         self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size,
                                          self.OnChildLayout, self.OnSearchFiles,
-                                         self.OnSearchContents)
+                                         self.OnSearchContents, self.OnOpenDir)
         # Data panel.
         self.data_panel = glsDataPanel(self.splitter, self.settings, self.terms_panel)
         # Finalize UI layout.
@@ -221,7 +221,8 @@ class glShell(wx.Frame):
         self.data_panel.AddDirTree(dirtree)
         return
     def OnOpenDir(self, path):
-        if path == "":
+        path = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isfile(path) and not os.path.isdir(path):
             return
         self.AddDirTree(glsDirTree(path, self.settings))
         return

@@ -49,7 +49,7 @@ class glsDirTree(wx.EvtHandler):
     KINDS       = 5
     def __init__(self, path, settings):
         wx.EvtHandler.__init__(self)
-        path = os.path.abspath(path)
+        path = os.path.abspath(os.path.expanduser(path))
         self.path = path
         self.name = os.path.basename(self.path)
         self.abspath = os.path.abspath(self.path)
