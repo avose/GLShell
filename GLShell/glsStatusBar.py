@@ -6,9 +6,12 @@ from glsLog import glsLog
 ################################################################
 
 class glsLogList(wx.VListBox):
+    DATE_W       = 20
+    LINE_NUM_W   = 9
+    LINE_MAX_PAD = 2
     def __init__(self, parent, log, size):
         self.log = log
-        style = wx.LB_NEEDED_SB | wx.SIMPLE_BORDER
+        style = wx.LB_MULTIPLE | wx.LB_EXTENDED | wx.SIMPLE_BORDER
         self.char_w,self.char_h = 10,10
         super(glsLogList, self).__init__(parent, style=style, size=size)
         self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
@@ -24,7 +27,8 @@ class glsLogList(wx.VListBox):
     def LineWrapText(self, initial_text):
         if initial_text is None or len(initial_text) == 0:
             return ("", 0)
-        max_len = max(1, int(self.Size[0]/self.char_w)-29)
+        max_offset = self.LINE_NUM_W + self.DATE_W + self.LINE_MAX_PAD
+        max_len = max(1, int(self.Size[0]/self.char_w)-max_offset)
         nlines = 0
         text = ""
         initial_text = initial_text.replace("\t","    ")
@@ -55,18 +59,22 @@ class glsLogList(wx.VListBox):
         dc.SetPen(wx.Pen((0,0,100)))
         dc.DrawRectangle(rect[0], rect[1], rect[2], rect[3])
         dc.SetPen(wx.Pen((0,75,150)))
-        dc.DrawLine(rect[0] + int(6.5*self.char_w), rect[1],
-                    rect[0] + int(6.5*self.char_w), rect[1]+rect[3])
-        dc.DrawLine(rect[0] + int(26.5*self.char_w), rect[1],
-                    rect[0] + int(26.5*self.char_w), rect[1]+rect[3])
+        offset = self.LINE_NUM_W - 0.5
+        dc.DrawLine(rect[0] + int(offset*self.char_w), rect[1],
+                    rect[0] + int(offset*self.char_w), rect[1]+rect[3])
+        offset = self.LINE_NUM_W + self.DATE_W - 0.5
+        dc.DrawLine(rect[0] + int(offset*self.char_w), rect[1],
+                    rect[0] + int(offset*self.char_w), rect[1]+rect[3])
         # Draw log line number and date.
         dc.SetTextForeground((255,255,0))
         dc.DrawText("%d"%index, rect[0], rect[1])
         dc.SetTextForeground((255,0,255))
-        dc.DrawText(timestamp, rect[0] + 7*self.char_w, rect[1])
+        offset = self.LINE_NUM_W
+        dc.DrawText(timestamp, rect[0] + offset*self.char_w, rect[1])
         # Draw log entry text.
         dc.SetTextForeground((128,192,128))
-        dc.DrawText(text, rect[0] + 27*self.char_w, rect[1])
+        offset = self.LINE_NUM_W + self.DATE_W
+        dc.DrawText(text, rect[0] + offset*self.char_w, rect[1])
         # Update to catch new log entries.
         self.SetItemCount(self.log.count())
         return
@@ -86,12 +94,14 @@ class glsLogList(wx.VListBox):
 ################################################################
 
 class glsStatusBarPopup(wx.PopupTransientWindow):
+    WIN_HEIGHT = 200
     def __init__(self, parent, log):
         style = wx.SIMPLE_BORDER
         wx.PopupTransientWindow.__init__(self, parent, style)
         self.log = log
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.log_list = glsLogList(self, self.log, (parent.Size[0], 200))
+        self.log_list = glsLogList(self, self.log,
+                                   (parent.Size[0], self.WIN_HEIGHT))
         box_main.Add(self.log_list, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
@@ -122,7 +132,8 @@ class glsStatusBar(wx.StatusBar):
             return
         self.popup = glsStatusBarPopup(self, glsLog)
         pos = self.ClientToScreen( (0,0) )
-        self.popup.Position((pos[0],pos[1]-200), (0, 0))
+        self.popup.Position((pos[0],pos[1]-glsStatusBarPopup.WIN_HEIGHT),
+                            (0, 0))
         self.popup.Popup()
         return
 

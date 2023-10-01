@@ -17,7 +17,7 @@ class glsLogManager():
         return
     def debug(self, text, level):
         if glsSettings.Get('log_level') >= level:
-            self.add(text)
+            self.add("(debug-#%d) %s"%(level, text))
         return
     def get(self, index=None):
         if index is not None:
