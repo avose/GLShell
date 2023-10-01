@@ -1,25 +1,33 @@
 from datetime import datetime
 
+from glsSettings import glsSettings
+
 ################################################################
 
-class glsLogger():
+class glsLogManager():
+    __log = None
     def __init__(self):
-        now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-        self.log = [ (now, "Begin GLShell Log") ]
+        if glsLogManager.__log is None:
+            now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+            glsLogManager.__log = [ (now, "Begin GLShell Log") ]
         return
     def add(self, text):
         now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-        self.log.append( (now, text) )
+        glsLogManager.__log.append( (now, text) )
+        return
+    def debug(self, text, level):
+        if glsSettings.Get('log_level') >= level:
+            self.add(text)
         return
     def get(self, index=None):
         if index is not None:
-            return self.log[index]
-        return self.log
+            return glsLogManager.__log[index]
+        return glsLogManager.__log.copy()
     def count(self):
-        return len(self.log)
+        return len(glsLogManager.__log)
 
 ################################################################
 
-glsLog = glsLogger()
+glsLog = glsLogManager()
 
 ################################################################

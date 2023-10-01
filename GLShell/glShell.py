@@ -39,15 +39,18 @@ if "Ubuntu" in platform.version():
 import sys
 import wx
 
+from glsSettingsDialog import glsSettingsDialog
 from glsTermsPanel import glsTermsPanel
 from glsStatusBar import glsStatusBar
 from glsDataPanel import glsDataPanel
+from glsSettings import glsSettings
 from glsDirTree import glsDirTree
+from glsVersion import glsVersion
 from glsIcons import glsIcons
-import glsSettings
-import glsHelp
+from glsHelp import glsLicenseFrame
+from glsHelp import glsAboutFrame
+from glsApp import glsApp
 
-VERSION = "0.0.8"
 
 ################################################################
 
@@ -58,19 +61,17 @@ class glShell(wx.Frame):
     ID_ABOUT     = 1003
     ID_SETTINGS  = 1004
     ID_EXIT      = 1005
-    def __init__(self, app, settings):
-        self.settings = settings
-        self.settings.AddWatcher(self.OnChangeSettings)
+    def __init__(self, app):
+        glsSettings.AddWatcher(self.OnChangeSettings)
         self.app = app
-        wx.Frame.__init__(self, None, wx.ID_ANY, "GLShell - "+VERSION,
+        wx.Frame.__init__(self, None, wx.ID_ANY, "GLShell - "+glsVersion,
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.OnSplitChanging)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.OnSplitChanged)
-        self.icons = glsIcons()
         self.icon = wx.Icon()
-        self.icon.CopyFromBitmap(self.icons.Get('chart_organisation'))
+        self.icon.CopyFromBitmap(glsIcons.Get('chart_organisation'))
         self.SetIcon(self.icon)
         self.InitUI()
         self.Bind(wx.EVT_TIMER, self.OnStart)
@@ -80,9 +81,9 @@ class glShell(wx.Frame):
     def OnStart(self, event):
         del self.start
         path = sys.argv[1] if len(sys.argv) == 2 else "."
-        self.data_panel.AddDirTree(glsDirTree(path, settings))
+        self.data_panel.AddDirTree(glsDirTree(path))
         return
-    def OnChangeSettings(self, settings):
+    def OnChangeSettings(self):
         return
     def OnCharHook(self, event):
         event.DoAllowNextEvent()
@@ -93,28 +94,28 @@ class glShell(wx.Frame):
         # File menu.
         menu_file = wx.Menu()
         item = wx.MenuItem(menu_file, self.ID_OPEN_FILE, text="Open File")
-        item.SetBitmap(self.icons.Get('monitor_add'))
+        item.SetBitmap(glsIcons.Get('monitor_add'))
         menu_file.Append(item)
         item = wx.MenuItem(menu_file, self.ID_OPEN_DIR, text="Open Directory")
-        item.SetBitmap(self.icons.Get('chart_organisation_add'))
+        item.SetBitmap(glsIcons.Get('chart_organisation_add'))
         menu_file.Append(item)
         item = wx.MenuItem(menu_file, self.ID_EXIT, text="Quit")
-        item.SetBitmap(self.icons.Get('cross'))
+        item.SetBitmap(glsIcons.Get('cross'))
         menu_file.Append(item)
         menubar.Append(menu_file, 'File')
         # Edit menu.
         menu_edit = wx.Menu()
         item = wx.MenuItem(menu_edit, self.ID_SETTINGS, text="Settings")
-        item.SetBitmap(self.icons.Get('cog'))
+        item.SetBitmap(glsIcons.Get('cog'))
         menu_edit.Append(item)
         menubar.Append(menu_edit, 'Edit')
         # Help menu.
         menu_help = wx.Menu()
         item = wx.MenuItem(menu_help, self.ID_ABOUT, text="About")
-        item.SetBitmap(self.icons.Get('information'))
+        item.SetBitmap(glsIcons.Get('information'))
         menu_help.Append(item)
         item = wx.MenuItem(menu_help, self.ID_LICENSE, text="License")
-        item.SetBitmap(self.icons.Get('script_key'))
+        item.SetBitmap(glsIcons.Get('script_key'))
         menu_help.Append(item)
         menubar.Append(menu_help, '&Help')
         # Connect menus to menu bar.
@@ -142,23 +143,23 @@ class glShell(wx.Frame):
                               style=wx.DD_DIR_MUST_EXIST) as dir_dialog:
                 if dir_dialog.ShowModal() != wx.ID_OK:
                     return
-                self.AddDirTree(glsDirTree(dir_dialog.GetPath(), self.settings))
+                self.AddDirTree(glsDirTree(dir_dialog.GetPath()))
             return
         if menu_id == self.ID_SETTINGS:
             if self.settings_frame is None:
-                self.settings_frame = glsSettings.SettingsFrame(self, self.settings)
+                self.settings_frame = glsSettingsDialog(self)
                 self.settings_frame.Show()
                 self.settings_frame.Raise()
             else:
                 self.settings_frame.Raise()
         elif menu_id == self.ID_ABOUT:
             if self.about_frame is None:
-                self.about_frame = glsHelp.glsAboutFrame(self)
+                self.about_frame = glsAboutFrame(self)
             else:
                 self.about_frame.Raise()
         elif menu_id == self.ID_LICENSE:
             if self.license_frame is None:
-                self.license_frame = glsHelp.glsLicenseFrame(self)
+                self.license_frame = glsLicenseFrame(self)
             else:
                 self.license_frame.Raise()
         return
@@ -178,11 +179,11 @@ class glShell(wx.Frame):
         self.splitter.SetMinimumPaneSize(self.min_term_size[0])
         self.splitter.SetMinSize( (self.min_term_size[0]*2+100, self.min_term_size[1]*2+150) )
         # Terminals.
-        self.terms_panel = glsTermsPanel(self.splitter, self.settings, self.min_term_size,
+        self.terms_panel = glsTermsPanel(self.splitter, self.min_term_size,
                                          self.OnChildLayout, self.OnSearchFiles,
                                          self.OnSearchContents, self.OnOpenDir)
         # Data panel.
-        self.data_panel = glsDataPanel(self.splitter, self.settings, self.terms_panel)
+        self.data_panel = glsDataPanel(self.splitter, self.terms_panel)
         # Finalize UI layout.
         box_main.Add(self.splitter, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.splitter.SplitVertically(self.data_panel, self.terms_panel)
@@ -224,7 +225,7 @@ class glShell(wx.Frame):
         path = os.path.abspath(os.path.expanduser(path))
         if not os.path.isfile(path) and not os.path.isdir(path):
             return
-        self.AddDirTree(glsDirTree(path, self.settings))
+        self.AddDirTree(glsDirTree(path))
         return
     def OnSearchFiles(self, text):
         self.data_panel.SearchFiles(text)
@@ -240,22 +241,21 @@ class glShell(wx.Frame):
         if self.license_frame is not None:
             self.license_frame.OnClose()
         self.data_panel.OnClose()
-        self.settings.RemoveWatcher(self.OnChangeSettings)
+        glsSettings.RemoveWatcher(self.OnChangeSettings)
         if event is not None:
             event.Skip()
         return
     def OnDestroy(self, event):
-        self.settings.RemoveWatcher(self.OnChangeSettings)
+        glsSettings.RemoveWatcher(self.OnChangeSettings)
         return
 
 ################################################################
 
 if __name__ == '__main__':
-    settings = glsSettings.glsSettings()
-    settings.Load()
-    app = wx.App(0);
-    gl_shell = glShell(app, settings)
-    app.SetTopWindow(gl_shell)
+    glsSettings.Load()
+    app = glsApp.get()
+    glshell = glShell(app)
+    app.SetTopWindow(glshell)
     app.MainLoop()
 
 ################################################################

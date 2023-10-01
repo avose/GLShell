@@ -23,13 +23,11 @@ class glsDataPanel(wx.Window):
     ICON_GRAPH     = 0
     ICON_SEARCH    = 1
     ICON_PLACEHLDR = 2
-    def __init__(self, parent, settings, terms_panel):
+    def __init__(self, parent, terms_panel):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsDataPanel, self).__init__(parent, style=style)
-        self.settings = settings
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
@@ -44,15 +42,15 @@ class glsDataPanel(wx.Window):
                   (self.ID_SHOW_DIRS, "Hide Files", 'folder', self.OnToolShowDirs) ]
         for tool in tools:
             tid, text, icon, callback = tool
-            self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
+            self.toolbar.AddTool(tid, text, glsIcons.Get(icon), wx.NullBitmap,
                                  wx.ITEM_NORMAL, text, text, None)
             self.Bind(wx.EVT_TOOL, callback, id=tid)
         self.toolbar.Realize()
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         self.image_list = wx.ImageList(16, 16)
-        self.image_list.Add(self.icons.Get('chart_organisation'))
-        self.image_list.Add(self.icons.Get('magnifier'))
-        self.image_list.Add(self.icons.Get('error'))
+        self.image_list.Add(glsIcons.Get('chart_organisation'))
+        self.image_list.Add(glsIcons.Get('magnifier'))
+        self.image_list.Add(glsIcons.Get('error'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
@@ -93,8 +91,7 @@ class glsDataPanel(wx.Window):
         return
     def AddDirTree(self, dirtree):
         self.RemovePlaceHolder()
-        graph_panel = glsGraphPanel(self.notebook, dirtree, self.settings,
-                                    self.OnCloseTab)
+        graph_panel = glsGraphPanel(self.notebook, dirtree, self.OnCloseTab)
         self.tabs.append(graph_panel)
         self.notebook.AddPage(graph_panel, " Graph '%s'"%(dirtree.name))
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_GRAPH)

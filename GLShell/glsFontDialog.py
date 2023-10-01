@@ -9,7 +9,6 @@ class glsFontPanel(wx.Panel):
     def __init__(self, parent, callback_font):
         wx.Panel.__init__(self, parent, -1)
         self.callback_font = callback_font
-        icons = glsIcons()
         self.font_enum = wx.FontEnumerator()
         self.font_enum.EnumerateFacenames(wx.FONTENCODING_SYSTEM, fixedWidthOnly=True)
         self.all_fonts = self.font_enum.GetFacenames(wx.FONTENCODING_SYSTEM)
@@ -22,10 +21,10 @@ class glsFontPanel(wx.Panel):
         self.st_sample = wx.StaticText(p_sample, -1, "Sample Text", size=(-1, 64))
         btn_cancel = wx.Button(self, wx.ID_ANY, "Cancel")
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
-        btn_cancel.SetBitmap(icons.Get('cross'))
+        btn_cancel.SetBitmap(glsIcons.Get('cross'))
         btn_ok = wx.Button(self, wx.ID_ANY, "Ok")
         btn_ok.Bind(wx.EVT_BUTTON, self.OnOk)
-        btn_ok.SetBitmap(icons.Get('tick'))
+        btn_ok.SetBitmap(glsIcons.Get('tick'))
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_prop = wx.BoxSizer(wx.HORIZONTAL)
         box_list = wx.BoxSizer(wx.VERTICAL)
@@ -110,9 +109,8 @@ class glsFontDialog(wx.Frame):
     def __init__(self, parent, callback_font):
         wx.Frame.__init__(self, parent, title="Select Font", size=(800,600),
                           style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
-        icons = glsIcons()
         icon = wx.Icon()
-        icon.CopyFromBitmap(icons.Get('font'))
+        icon.CopyFromBitmap(glsIcons.Get('font'))
         self.SetIcon(icon)
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.font_panel = glsFontPanel(self, callback_font)

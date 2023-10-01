@@ -15,6 +15,7 @@ import TermEmulator
 
 from glsPlaceHolder import glsPlaceHolder
 from glsStatusBar import glsLog
+from glsSettings import glsSettings
 from glsKeyPress import glsKeyPress
 from glsIcons import glsIcons
 
@@ -28,29 +29,38 @@ class glsTermPanelPopupMenu(wx.Menu):
     ID_SEARCH_CONTENTS = 1004
     ID_SEARCH_FILES    = 1005
     ID_EXIT            = 1006
-    def __init__(self, parent):
+    def __init__(self, parent, selection_available, paste_available):
         super(glsTermPanelPopupMenu, self).__init__()
-        self.icons = glsIcons()
         item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
-        item.SetBitmap(self.icons.Get('monitor_add'))
+        item.SetBitmap(glsIcons.Get('monitor_add'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_NEW_DIR, 'Open Directory')
-        item.SetBitmap(self.icons.Get('chart_organisation_add'))
+        item.SetBitmap(glsIcons.Get('chart_organisation_add'))
         self.Append(item)
+        if not selection_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_COPY, 'Copy')
-        item.SetBitmap(self.icons.Get('page_copy'))
+        item.SetBitmap(glsIcons.Get('page_copy'))
         self.Append(item)
+        if not selection_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_PASTE, 'Paste')
-        item.SetBitmap(self.icons.Get('page_paste'))
+        item.SetBitmap(glsIcons.Get('page_paste'))
         self.Append(item)
+        if not paste_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents')
-        item.SetBitmap(self.icons.Get('magnifier_zoom_in'))
+        item.SetBitmap(glsIcons.Get('magnifier_zoom_in'))
         self.Append(item)
+        if not selection_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_SEARCH_FILES, 'Search Files')
-        item.SetBitmap(self.icons.Get('magnifier'))
+        item.SetBitmap(glsIcons.Get('magnifier'))
         self.Append(item)
+        if not selection_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Terminal')
-        item.SetBitmap(self.icons.Get('cross'))
+        item.SetBitmap(glsIcons.Get('cross'))
         self.Append(item)
         return
 
@@ -80,7 +90,7 @@ class glsTerminalPanel(wx.Window):
 
     word_chars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
 
-    def __init__(self, parent, settings, callback_close, callback_title,
+    def __init__(self, parent, callback_close, callback_title,
                  callback_searchfiles, callback_searchcontents,
                  callback_setcurrent, callback_opendir, min_size):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -89,8 +99,7 @@ class glsTerminalPanel(wx.Window):
         super(glsTerminalPanel, self).__init__(parent, size=(200,100), style=style)
         self.SetMinSize(min_size)
         self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
-        self.settings = settings
-        self.settings.AddWatcher(self.OnChangeSettings)
+        glsSettings.AddWatcher(self.OnChangeSettings)
         self.callback_close = callback_close
         self.callback_title = callback_title
         self.callback_searchfiles = callback_searchfiles
@@ -151,15 +160,15 @@ class glsTerminalPanel(wx.Window):
         self.cursor_style = self.terminal.CURSOR_STYLE_DEFAULT
         self.modes = dict(self.terminal.modes)
         # Start child process.
-        self.path = self.settings.Get('shell_path')
+        self.path = glsSettings.Get('shell_path')
         basename = os.path.basename(self.path)
         arglist = [ basename ]
-        arguments = self.settings.Get('shell_args')
+        arguments = glsSettings.Get('shell_args')
         if arguments != "":
             for arg in arguments.split(' '):
                 arglist.append(arg)
         self.pid, self.io = pty.fork()
-        os.environ["TERM"] = self.settings.Get('term_type')
+        os.environ["TERM"] = glsSettings.Get('term_type')
         if self.pid == 0:
             # Child process.
             os.execl(self.path, *arglist)
@@ -232,8 +241,8 @@ class glsTerminalPanel(wx.Window):
         self.output_wait = True
         return
     def SetFont(self):
-        self.font_name = self.settings.Get('term_font')
-        self.font_size = self.settings.Get('term_font_size')
+        self.font_name = glsSettings.Get('term_font')
+        self.font_size = glsSettings.Get('term_font_size')
         self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
         self.font = wx.Font(self.fontinfo)
         dc = wx.MemoryDC()
@@ -247,7 +256,7 @@ class glsTerminalPanel(wx.Window):
         self.char_w = w
         self.char_h = h
         return resize
-    def OnChangeSettings(self, settings):
+    def OnChangeSettings(self):
         if self.SetFont():
             self.OnSize()
         self.Refresh()
@@ -411,7 +420,10 @@ class glsTerminalPanel(wx.Window):
     def OnRightDown(self, event):
         self.callback_setcurrent(True)
         self.SetFocus()
-        self.PopupMenu(glsTermPanelPopupMenu(self), event.GetPosition())
+        avail_selection = self.GetSelectedText() != None
+        avail_paste = self.ReadClipboard() != None
+        self.PopupMenu(glsTermPanelPopupMenu(self, avail_selection, avail_paste),
+                       event.GetPosition())
         return
     def OnWheel(self, event):
         self.callback_setcurrent(True)
@@ -424,19 +436,19 @@ class glsTerminalPanel(wx.Window):
                 self.SendText(self.key_press.special_key_map[wx.WXK_UP])
         return
     def GetFgColor(self, color):
-        if self.settings.Get('term_color'):
+        if glsSettings.Get('term_color'):
             if color == 0:
-                return self.settings.Get('term_fgcolor')
+                return glsSettings.Get('term_fgcolor')
             if color < len(self.color_map_fg):
                 return self.color_map_fg[color]
-        return self.settings.Get('term_fgcolor')
+        return glsSettings.Get('term_fgcolor')
     def GetBgColor(self, color):
-        if self.settings.Get('term_color'):
+        if glsSettings.Get('term_color'):
             if color == 0:
-                return self.settings.Get('term_bgcolor')
+                return glsSettings.Get('term_bgcolor')
             if color < len(self.color_map_bg):
                 return self.color_map_bg[color]
-        return self.settings.Get('term_bgcolor')
+        return glsSettings.Get('term_bgcolor')
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
             self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
@@ -663,11 +675,11 @@ class glsTerminalPanel(wx.Window):
         return
     def OnClose(self, event=None):
         self.stop_output_notifier = True
-        self.settings.RemoveWatcher(self.OnChangeSettings)
+        glsSettings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnDestroy(self, event):
         self.stop_output_notifier = True
-        self.settings.RemoveWatcher(self.OnChangeSettings)
+        glsSettings.RemoveWatcher(self.OnChangeSettings)
         if self.child_output_notifier_thread is not None:
             self.child_output_notifier_thread.join()
         return
@@ -677,7 +689,7 @@ class glsTerminalPanel(wx.Window):
 class glsTermNotebook(wx.Window):
     ICON_TERM      = 0
     ICON_PLACEHLDR = 1
-    def __init__(self, parent, settings, min_term_size,
+    def __init__(self, parent, min_term_size,
                  callback_searchfiles, callback_searchcontents,
                  callback_current, callback_placeholder, callback_opendir):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -687,14 +699,12 @@ class glsTermNotebook(wx.Window):
         self.callback_current = callback_current
         self.callback_placeholder = callback_placeholder
         self.callback_opendir = callback_opendir
-        self.settings = settings
         self.current = False
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.icons = glsIcons()
         self.image_list = wx.ImageList(16, 16)
-        self.image_list.Add(self.icons.Get('monitor'))
-        self.image_list.Add(self.icons.Get('error'))
+        self.image_list.Add(glsIcons.Get('monitor'))
+        self.image_list.Add(glsIcons.Get('error'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
@@ -707,7 +717,7 @@ class glsTermNotebook(wx.Window):
     def OnNewTerm(self):
         # Create a new terminal and add the tab to the notebook.
         self.RemovePlaceHolder()
-        terminal = glsTerminalPanel(self.notebook, self.settings,
+        terminal = glsTerminalPanel(self.notebook,
                                     self.OnTermClose, self.OnTermTitle,
                                     self.callback_searchfiles,
                                     self.callback_searchcontents,
@@ -793,19 +803,17 @@ class glsTermsPanel(wx.Window):
     ID_VERTICAL    = 1007
     ID_HORIZONTAL  = 1008
     ID_EXIT        = 1009
-    def __init__(self, parent, settings, min_term_size, callback_layout,
+    def __init__(self, parent, min_term_size, callback_layout,
                  callback_searchfiles, callback_searchcontents,
                  callback_opendir):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
-        self.settings = settings
         self.callback_layout = callback_layout
         self.callback_searchfiles = callback_searchfiles
         self.callback_searchcontents = callback_searchcontents
         self.callback_opendir = callback_opendir
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.VetoEvent)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.VetoEvent)
-        self.icons = glsIcons()
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
@@ -822,7 +830,7 @@ class glsTermsPanel(wx.Window):
                    self.OnToolVertical) ]
         for tool in tools:
             tid, text, icon, callback = tool
-            self.toolbar.AddTool(tid, text, self.icons.Get(icon), wx.NullBitmap,
+            self.toolbar.AddTool(tid, text, glsIcons.Get(icon), wx.NullBitmap,
                                  wx.ITEM_NORMAL, text, text, None)
             self.Bind(wx.EVT_TOOL, callback, id=tid)
         self.toolbar.Realize()
@@ -832,7 +840,7 @@ class glsTermsPanel(wx.Window):
         self.splitter.SetMinimumPaneSize(self.min_term_size[1])
         self.notebooks = []
         for n in range(2):
-            notebook = glsTermNotebook(self.splitter, self.settings, self.min_term_size,
+            notebook = glsTermNotebook(self.splitter, self.min_term_size,
                                        self.callback_searchfiles,
                                        self.callback_searchcontents,
                                        self.OnCurrentNotebook,
@@ -972,7 +980,7 @@ class glsTermsPanel(wx.Window):
         term = self.GetCurrentTerm()
         if term is None:
             return
-        command = self.settings.Get('edit_line')
+        command = glsSettings.Get('edit_line')
         command = command.replace("{LINE}",str(line))
         glsLog.add("EditorLineSet(): "+str(line))
         term.SendText(command)
@@ -981,7 +989,7 @@ class glsTermsPanel(wx.Window):
         term = self.GetCurrentTerm()
         if term is None:
             return
-        command = self.settings.Get('edit_open')
+        command = glsSettings.Get('edit_open')
         command = command.replace("{FILE}",str(path))
         glsLog.add("EditorFileOpen(): "+str(path))
         term.SendText(command)
@@ -991,7 +999,7 @@ class glsTermsPanel(wx.Window):
         if notebook is None:
             return
         term = notebook.OnNewTerm()
-        command = self.settings.Get('edit_path') + " '%s'\x0a"%(path)
+        command = glsSettings.Get('edit_path') + " '%s'\x0a"%(path)
         glsLog.add("EditorStart(): "+command)
         term.SendText(command)
         return

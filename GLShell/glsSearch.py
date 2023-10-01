@@ -122,15 +122,14 @@ class glsSearchResultListPopupMenu(wx.Menu):
     ID_EXIT     = 1002
     def __init__(self, parent):
         super(glsSearchResultListPopupMenu, self).__init__()
-        self.icons = glsIcons()
         item = wx.MenuItem(self, self.ID_OPEN_NEW, 'Open (New Tab)')
-        item.SetBitmap(self.icons.Get('monitor_add'))
+        item.SetBitmap(glsIcons.Get('monitor_add'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_OPEN, 'Open (Current Tab)')
-        item.SetBitmap(self.icons.Get('monitor'))
+        item.SetBitmap(glsIcons.Get('monitor'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close')
-        item.SetBitmap(self.icons.Get('magnifier_zoom_out'))
+        item.SetBitmap(glsIcons.Get('magnifier_zoom_out'))
         self.Append(item)
         return
 

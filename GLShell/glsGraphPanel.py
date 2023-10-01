@@ -8,13 +8,14 @@ import sys
 import wx
 
 from glsGLBuffer import glsGLBuffer
-from glsGLFont import glsGLFont
-from glsFDP import fdpNode
-from glsFDP import fdpGraph
+from glsSettings import glsSettings
 from glsDirTree import glsFile
 from glsDirTree import glsDir
 from glsDirTree import glsDirTree
+from glsGLFont import glsGLFont
 from glsIcons import glsIcons
+from glsFDP import fdpNode
+from glsFDP import fdpGraph
 
 ################################################################
 
@@ -27,15 +28,14 @@ class glsGraphPopupMenu(wx.Menu):
     ID_SHOW_DIRS  = 1005
     def __init__(self, parent):
         super(glsGraphPopupMenu, self).__init__()
-        self.icons = glsIcons()
         item = wx.MenuItem(self, self.ID_SEL_ALL, 'Select All')
-        item.SetBitmap(self.icons.Get('chart_line_add'))
+        item.SetBitmap(glsIcons.Get('chart_line_add'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SEL_IVRT, 'Select Inverse')
-        item.SetBitmap(self.icons.Get('chart_line'))
+        item.SetBitmap(glsIcons.Get('chart_line'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SEL_NONE, 'Select None')
-        item.SetBitmap(self.icons.Get('chart_line_delete'))
+        item.SetBitmap(glsIcons.Get('chart_line_delete'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_SHOW_FILES, 'Files && Directories', kind=wx.ITEM_RADIO)
         self.ri_files = item
@@ -46,7 +46,7 @@ class glsGraphPopupMenu(wx.Menu):
         self.Append(self.ri_dirs)
         self.ri_dirs.Check(not parent.show_files)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Graph')
-        item.SetBitmap(self.icons.Get('chart_organisation_delete'))
+        item.SetBitmap(glsIcons.Get('chart_organisation_delete'))
         self.Append(item)
         return
 
@@ -61,17 +61,16 @@ class glsGraphCanvas(GLCanvas):
     orn = [1.0, 0.6, 0.0, 1.0]
     prp = [1.0, 0.3, 1.0, 1.0]
     wht = [1.0, 1.0, 1.0, 1.0]
-    def __init__(self, parent, dirtree, size, settings, callback_close):
+    def __init__(self, parent, dirtree, size, callback_close):
         # Initialize glsGraphCanvas.
         attrs = [ WX_GL_DEPTH_SIZE, 24, 0 ];
         GLCanvas.__init__(self, parent, -1, size=size, attribList=attrs)
         self.dirtree = dirtree
         self.gthread = self.dirtree.thread
         self.lock = self.gthread.lock
-        self.settings = settings
         self.callback_close = callback_close
-        self.graph_3D = settings.Get('graph_3D')
-        self.settings.AddWatcher(self.OnSettingsChange)
+        self.graph_3D = glsSettings.Get('graph_3D')
+        glsSettings.AddWatcher(self.OnSettingsChange)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
@@ -105,8 +104,8 @@ class glsGraphCanvas(GLCanvas):
         self.selection = False
         self.selection_box = [ [None, None], [None, None]]
         self.InitGL()
-        font_name = self.settings.Get('graph_font')
-        font_size = self.settings.Get('graph_font_size')
+        font_name = glsSettings.Get('graph_font')
+        font_size = glsSettings.Get('graph_font_size')
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         # node_style = (color, size, label, yoff, lcolor, bkgrnd)
         self.node_styles = { glsDirTree.KIND_DIR: (self.orn, 10.0, True, 10.0, self.ylw, False),
@@ -136,10 +135,10 @@ class glsGraphCanvas(GLCanvas):
         glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
         self.SetMatrices()
         return
-    def OnSettingsChange(self, settings):
+    def OnSettingsChange(self):
         # Handle settings change.
-        font_name = self.settings.Get('graph_font')
-        font_size = self.settings.Get('graph_font_size')
+        font_name = glsSettings.Get('graph_font')
+        font_size = glsSettings.Get('graph_font_size')
         self.glfont = glsGLFont(wx.FontInfo(font_size).FaceName(font_name))
         return
     def Project3DTo2D(self, pos):
@@ -519,7 +518,7 @@ class glsGraphCanvas(GLCanvas):
         # Handle close event.
         if not self.closing:
             self.closing = True
-            self.settings.RemoveWatcher(self.OnSettingsChange)
+            glsSettings.RemoveWatcher(self.OnSettingsChange)
             self.dirtree.thread.stop()
             self.dirtree.thread.join()
         if not self.done:
@@ -531,7 +530,7 @@ class glsGraphCanvas(GLCanvas):
         # Handle destroy event.
         if not self.closing:
             self.closing = True
-            self.settings.RemoveWatcher(self.OnSettingsChange)
+            glsSettings.RemoveWatcher(self.OnSettingsChange)
             self.dirtree.thread.stop()
             self.dirtree.thread.join()
         return
@@ -539,13 +538,13 @@ class glsGraphCanvas(GLCanvas):
 ################################################################
 
 class glsGraphPanel(wx.Window):
-    def __init__(self, parent, dirtree, settings, callback_close):
+    def __init__(self, parent, dirtree, callback_close):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsGraphPanel, self).__init__(parent, style=style)
         self.dirtree = dirtree
-        self.settings = settings
         self.callback_close = callback_close
-        self.SetMinSize( (320,320) )
+        self.min_size = (320,320)
+        self.SetMinSize(self.min_size)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.SetBackgroundColour( (0,0,0) )
@@ -555,10 +554,10 @@ class glsGraphPanel(wx.Window):
     def StartGraph(self):
         if self.graph_canvas is not None:
             return
-        self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=(320,320),
-                                           settings=self.settings,
+        size = (max(self.min_size[0],self.Size[0]),
+                max(self.min_size[1],self.Size[1]))
+        self.graph_canvas = glsGraphCanvas(self, self.dirtree, size=size,
                                            callback_close=self.CloseGraph)
-        self.OnSize()
         return
     def OnSize(self, event=None):
         if self.graph_canvas is None:

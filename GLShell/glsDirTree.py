@@ -3,6 +3,7 @@ import sys
 import wx
 import numpy as np
 
+from glsSettings import glsSettings
 from glsLog import glsLog
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
@@ -47,16 +48,15 @@ class glsDirTree(wx.EvtHandler):
     KIND_SELECT = 3
     KIND_RESULT = 4
     KINDS       = 5
-    def __init__(self, path, settings):
+    def __init__(self, path):
         wx.EvtHandler.__init__(self)
         path = os.path.abspath(os.path.expanduser(path))
         self.path = path
         self.name = os.path.basename(self.path)
         self.abspath = os.path.abspath(self.path)
         glsLog.add("Directory Tree: "+self.abspath)
-        self.settings = settings
-        self.graph = fdpGraph(self.settings, self.KINDS)
-        self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
+        self.graph = fdpGraph(glsSettings, self.KINDS)
+        self.thread = glsFDPThread(glsSettings, self.graph, speed=0.01)
         self.rescan = False
         self.Bind(wx.EVT_FSWATCHER, self.OnFSChange)
         self.watcher_events = ( wx.FSW_EVENT_CREATE, wx.FSW_EVENT_DELETE,
@@ -92,7 +92,7 @@ class glsDirTree(wx.EvtHandler):
                 node = glsDir(os.path.join(root, name))
                 nodes.append(node)
                 edges.append((root, node))
-        new_graph = fdpGraph(self.settings, self.KINDS)
+        new_graph = fdpGraph(glsSettings, self.KINDS)
         for node in nodes:
             new_graph.add_node(node)
         for edge in edges:

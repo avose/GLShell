@@ -1,14 +1,16 @@
 import wx
 import os
 
+from glsApp import glsApp
+
 ################################################################
 
-class glsIcons():
+class glsIconManager():
     __icons = None
     def __init__(self):
-        if glsIcons.__icons is not None:
+        if glsIconManager.__icons is not None:
             return
-        glsIcons.__icons = {}
+        glsIconManager.__icons = {}
         img_dir = os.path.dirname(os.path.abspath(__file__))
         img_dir = os.path.join(img_dir,"icons")
         for fname in os.listdir(img_dir):
@@ -17,11 +19,15 @@ class glsIcons():
                 continue
             img_path = os.path.join(img_dir, fname)
             bmp = wx.Bitmap(wx.Image(img_path, wx.BITMAP_TYPE_ANY))
-            glsIcons.__icons[img_name] = bmp
+            glsIconManager.__icons[img_name] = bmp
         return
     def Get(self, name):
-        if name in glsIcons.__icons:
-            return glsIcons.__icons[name]
+        if name in glsIconManager.__icons:
+            return glsIconManager.__icons[name]
         return None
+
+################################################################
+
+glsIcons = glsIconManager()
 
 ################################################################

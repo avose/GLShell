@@ -1,6 +1,6 @@
 import wx
 
-from glShell import VERSION
+from glsVersion import glsVersion
 from glsIcons import glsIcons
 
 ################################################################
@@ -8,9 +8,8 @@ from glsIcons import glsIcons
 class glsAboutFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="About GLShell", style=style)
-        self.icons = glsIcons()
         self.icon = wx.Icon()
-        self.icon.CopyFromBitmap(self.icons.Get('information'))
+        self.icon.CopyFromBitmap(glsIcons.Get('information'))
         self.SetIcon(self.icon)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
@@ -18,7 +17,7 @@ class glsAboutFrame(wx.Frame):
         # Panel to hold text at the top of the about frame.
         self.panel_top = wx.Panel(self )
         box_text = wx.BoxSizer(wx.VERTICAL)
-        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY, "About GLShell (v%s):"%VERSION)
+        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY, "About GLShell (v%s):"%glsVersion)
         self.st_title.SetFont(wx.Font(wx.FontInfo(11).FaceName("Monospace").Bold()))
         box_text.Add(self.st_title, 0, wx.ALL, 20)
         self.description = 'GL-Shell was first created in the summer of 2023 by Aaron Vose to\n'\
@@ -817,9 +816,8 @@ class glsLicenseCC(wx.Window):
 class glsLicenseFrame(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="GLShell License", style=style)
-        self.icons = glsIcons()
         self.icon = wx.Icon()
-        self.icon.CopyFromBitmap(self.icons.Get('script_key'))
+        self.icon.CopyFromBitmap(glsIcons.Get('script_key'))
         self.SetIcon(self.icon)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         box_main = wx.BoxSizer(wx.VERTICAL)
@@ -828,9 +826,8 @@ class glsLicenseFrame(wx.Frame):
         self.st_title = wx.StaticText(self, wx.ID_ANY, "GLShell Licenses:")
         self.st_title.SetFont(wx.Font(wx.FontInfo(11).FaceName("Monospace").Bold()))
         box_top.Add(self.st_title, 0, wx.ALL, 20)
-        self.icons = glsIcons()
         self.image_list = wx.ImageList(16, 16)
-        self.image_list.Add(self.icons.Get('script_key'))
+        self.image_list.Add(glsIcons.Get('script_key'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.lgpl = glsLicenseLGPL(self.notebook)
