@@ -100,6 +100,7 @@ class glsTerminalPanel(wx.Window):
         self.SetMinSize(min_size)
         self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
         glsSettings.AddWatcher(self.OnChangeSettings)
+        self.word_chars = glsSettings.Get('term_wchars')
         self.callback_close = callback_close
         self.callback_title = callback_title
         self.callback_searchfiles = callback_searchfiles
@@ -143,8 +144,6 @@ class glsTerminalPanel(wx.Window):
         self.cursor_pos = (0,0)
         self.terminal = TermEmulator.V102Terminal(self.rows,
                                                   self.cols)
-        self.terminal.SetCallback(self.terminal.CALLBACK_UNHANDLED_ESC_SEQ,
-                                  self.OnTermUnhandledEscSeq)
         self.terminal.SetCallback(self.terminal.CALLBACK_SCROLL_UP_SCREEN,
                                   self.OnTermScrollUpScreen)
         self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_LINES,
@@ -259,6 +258,7 @@ class glsTerminalPanel(wx.Window):
     def OnChangeSettings(self):
         if self.SetFont():
             self.OnSize()
+        self.word_chars = glsSettings.Get('term_wchars')
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -657,9 +657,6 @@ class glsTerminalPanel(wx.Window):
         return
     def OnTermCursorChange(self, style):
         self.cursor_style = style
-        return
-    def OnTermUnhandledEscSeq(self, escSeq):
-        print("Unhandled escape sequence: [{}".format(escSeq))
         return
     def MonitorTerminal(self):
         # Monitor the state of the child process and tell parent when closed.

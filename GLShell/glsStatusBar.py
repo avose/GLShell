@@ -24,7 +24,7 @@ class glsLogList(wx.VListBox):
     def LineWrapText(self, initial_text):
         if initial_text is None or len(initial_text) == 0:
             return ("", 0)
-        max_len = max(1, int(self.Size[0]/self.char_w)-28)
+        max_len = max(1, int(self.Size[0]/self.char_w)-29)
         nlines = 0
         text = ""
         initial_text = initial_text.replace("\t","    ")
@@ -55,18 +55,18 @@ class glsLogList(wx.VListBox):
         dc.SetPen(wx.Pen((0,0,100)))
         dc.DrawRectangle(rect[0], rect[1], rect[2], rect[3])
         dc.SetPen(wx.Pen((0,75,150)))
-        dc.DrawLine(rect[0] + int(5.5*self.char_w), rect[1],
-                    rect[0] + int(5.5*self.char_w), rect[1]+rect[3])
-        dc.DrawLine(rect[0] + int(25.5*self.char_w), rect[1],
-                    rect[0] + int(25.5*self.char_w), rect[1]+rect[3])
+        dc.DrawLine(rect[0] + int(6.5*self.char_w), rect[1],
+                    rect[0] + int(6.5*self.char_w), rect[1]+rect[3])
+        dc.DrawLine(rect[0] + int(26.5*self.char_w), rect[1],
+                    rect[0] + int(26.5*self.char_w), rect[1]+rect[3])
         # Draw log line number and date.
         dc.SetTextForeground((255,255,0))
         dc.DrawText("%d"%index, rect[0], rect[1])
         dc.SetTextForeground((255,0,255))
-        dc.DrawText(timestamp, rect[0] + 6*self.char_w, rect[1])
+        dc.DrawText(timestamp, rect[0] + 7*self.char_w, rect[1])
         # Draw log entry text.
         dc.SetTextForeground((128,192,128))
-        dc.DrawText(text, rect[0] + 26*self.char_w, rect[1])
+        dc.DrawText(text, rect[0] + 27*self.char_w, rect[1])
         # Update to catch new log entries.
         self.SetItemCount(self.log.count())
         return
@@ -91,7 +91,7 @@ class glsStatusBarPopup(wx.PopupTransientWindow):
         wx.PopupTransientWindow.__init__(self, parent, style)
         self.log = log
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.log_list = glsLogList(self, self.log, (parent.Size[0], 150))
+        self.log_list = glsLogList(self, self.log, (parent.Size[0], 200))
         box_main.Add(self.log_list, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
@@ -122,7 +122,7 @@ class glsStatusBar(wx.StatusBar):
             return
         self.popup = glsStatusBarPopup(self, glsLog)
         pos = self.ClientToScreen( (0,0) )
-        self.popup.Position((pos[0],pos[1]-150), (0, 0))
+        self.popup.Position((pos[0],pos[1]-200), (0, 0))
         self.popup.Popup()
         return
 

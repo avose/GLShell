@@ -7,6 +7,7 @@ class glsSettingsManager():
     __watchers = None
     __settings = None
     __defaults = { "path": "~/.glshell",
+                   "log_level": 2,
                    "shell_path": "/bin/bash",
                    "shell_args": "",
                    "term_type": "linux",

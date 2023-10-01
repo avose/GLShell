@@ -40,6 +40,8 @@ import pty
 import select
 from array import *
 
+from glsLog import glsLog
+
 class V102Terminal:
     __ASCII_NUL = 0         # Null
     __ASCII_BEL = 7         # Bell
@@ -49,6 +51,8 @@ class V102Terminal:
     __ASCII_VT = 11         # Vertical Tab
     __ASCII_FF = 12         # Form Feed
     __ASCII_CR = 13         # Carriage Return
+    __ASCII_S0 = 14         # Activates G1 character set
+    __ASCII_SI = 15         # Activates G0 character set
     __ASCII_XON = 17        # Resume Transmission
     __ASCII_XOFF = 19       # Stop Transmission or Ignore Characters
     __ASCII_ESC = 27        # Escape
@@ -150,13 +154,12 @@ class V102Terminal:
     RENDITION_STYLE_INVERSE = 64
     RENDITION_STYLE_HIDDEN = 128
 
-    CALLBACK_UNHANDLED_ESC_SEQ = 0
-    CALLBACK_SCROLL_UP_SCREEN = 1
-    CALLBACK_UPDATE_LINES = 2
-    CALLBACK_UPDATE_CURSOR_POS = 3
-    CALLBACK_UPDATE_WINDOW_TITLE = 4
-    CALLBACK_MODE_CHANGE = 5
-    CALLBACK_CURSOR_CHANGE = 6
+    CALLBACK_SCROLL_UP_SCREEN = 0
+    CALLBACK_UPDATE_LINES = 1
+    CALLBACK_UPDATE_CURSOR_POS = 2
+    CALLBACK_UPDATE_WINDOW_TITLE = 3
+    CALLBACK_MODE_CHANGE = 4
+    CALLBACK_CURSOR_CHANGE = 5
 
     def __init__(self, rows, cols):
         """
@@ -184,7 +187,9 @@ class V102Terminal:
                               self.__ASCII_XON :self.__OnCharXON,
                               self.__ASCII_XOFF:self.__OnCharXOFF,
                               self.__ASCII_ESC :self.__OnCharESC,
-                              self.__ASCII_CSI :self.__OnCharCSI, }
+                              self.__ASCII_CSI :self.__OnCharCSI,
+                              self.__ASCII_S0 :self.__OnCharS0,
+                              self.__ASCII_SI :self.__OnCharSI, }
 
         # escape sequence handlers
         self.escSeqHandlers = { self.__ESCSEQ_ICH_SL:self.__OnEscSeqICH_SL,
@@ -254,7 +259,6 @@ class V102Terminal:
         self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
                            self.CALLBACK_UPDATE_LINES: None,
                            self.CALLBACK_UPDATE_CURSOR_POS: None,
-                           self.CALLBACK_UNHANDLED_ESC_SEQ: None,
                            self.CALLBACK_UPDATE_WINDOW_TITLE: None,
                            self.CALLBACK_MODE_CHANGE: None,
                            self.CALLBACK_CURSOR_CHANGE: None, }
@@ -456,11 +460,6 @@ class V102Terminal:
         any one of the following. None can be passed as callback function to
         reset the callback.
 
-        CALLBACK_UNHANDLED_ESC_SEQ
-            Called when ever a unsupported escape sequence encountered. The
-            unhandled escape sequence(escape sequence character and it
-            parameters) will be passed as a string.
-
         CALLBACK_SCROLL_UP_SCREEN
             Called before scrolling up the terminal screen.
 
@@ -514,7 +513,7 @@ class V102Terminal:
                 if ch in self.printableChars:
                     self.__PushChar(ch)
                 else:
-                    #print("WARNING: Unsupported character %s:%d" % (ch, ascii))
+                    glsLog.debug("TE WARNING: Unsupported character '%s' = %d"%(ch, ascii), 2)
                     pass
                 index += 1
         # update the dirty lines
@@ -599,11 +598,25 @@ class V102Terminal:
                 # final char
                 return (index + 1, chr(ascii), interChars)
             else:
-                print("Unexpected characters in escape sequence %s" % ch)
+                glsLog.debug("TE WARNING: Unexpected characters in escape sequence %s"%ch, 2)
             index += 1
         # the escape sequence is not complete, inform this to caller by giving
         # '?' as final char
         return (index, '?', interChars)
+    def __UnhandledEscSeq(self, seq):
+        printable_seq = ""
+        for c in seq:
+            if c in self.printableChars:
+                printable_seq += c
+                if c == "\\":
+                    printable_seq += c
+            else:
+                esc = hex(ord(c)).replace('0x','')
+                if len(esc) < 2:
+                    esc = '0' + esc
+                printable_seq += '\\x' + esc
+        glsLog.debug("TE WARNING: Unhandled ESC seq '%s'"%printable_seq, 2)
+        return
     def __HandleEscSeq(self, text, index):
         """
         Tries to parse escape sequence from input and if its not complete then
@@ -620,12 +633,11 @@ class V102Terminal:
             elif finalChar in self.escSeqHandlers.keys():
                 self.escSeqHandlers[finalChar](interChars, finalChar)
             else:
-                escSeq = ""
+                escSeq = "["
                 if interChars != None:
                     escSeq += interChars
                 escSeq += finalChar
-                if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-                    self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](escSeq)
+                __UnhandledEscSeq(escSeq)
         elif text[index] == ']':
             textlen = len(text)
             if index + 2 < textlen:
@@ -638,6 +650,9 @@ class V102Terminal:
                             break
                         index += 1
                     self.__OnEscSeqTitle(text[start:index])
+        else:
+            __UnhandledEscSeq(text[index])
+            index += 1
         return index
     def __OnCharBS(self, text, index):
         """
@@ -691,8 +706,23 @@ class V102Terminal:
         """
         Handler for control sequence intruducer(CSI) character
         """
+        glsLog.debug("TE WARNING: CSI character.", 2)
         index += 1
         index = self.__HandleEscSeq(text, index)
+        return index
+    def __OnCharS0(self, text, index):
+        """
+        Handler for control sequence S0 character
+        """
+        __UnhandledEscSeq(text[index])
+        index += 1
+        return index
+    def __OnCharSI(self, text, index):
+        """
+        Handler for control sequence S0 character
+        """
+        __UnhandledEscSeq(text[index])
+        index += 1
         return index
     def __OnCharIgnore(self, text, index):
         """
@@ -714,8 +744,7 @@ class V102Terminal:
             # Escape sequence SL
             plist = params.split(' ')
             if len(plist) != 2:
-                if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-                    self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+                __UnhandledEscSeq(params+end)
                 return
             count = int(plist[0]) if plist[0] != '' else 1
             newX = self.curX + count
@@ -774,7 +803,7 @@ class V102Terminal:
         Handler for escape sequence CHA
         """
         if params == None:
-            print("WARNING: CHA without parameter")
+            glsLog.debug("TE WARNING: CHA without parameter", 2)
             return
         col = int(params)
         # convert it to zero based index
@@ -782,7 +811,7 @@ class V102Terminal:
         if col >= 0 and col < self.cols:
             self.curX = col
         else:
-            print("WARNING: CHA column out of boundary")
+            glsLog.debug("TE WARNING: CHA column out of boundary", 2)
         return
     def __OnEscSeqCUP(self, params, end):
         """
@@ -796,7 +825,7 @@ class V102Terminal:
                 y = int(values[0]) - 1
                 x = int(values[1]) - 1
             else:
-                print("WARNING: escape sequence CUP has invalid parameters")
+                glsLog.debug("TE WARNING: escape sequence CUP has invalid parameters", 2)
                 return
         if x < 0:
             x = 0
@@ -823,7 +852,7 @@ class V102Terminal:
         elif n == 2:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
         else:
-            print("WARNING: escape sequence ED has invalid parameter")
+            glsLog.debug("TE WARNING: escape sequence ED has invalid parameter", 2)
         return
     def __OnEscSeqEL(self, params, end):
         """
@@ -839,7 +868,7 @@ class V102Terminal:
         elif n == 2:
             self.ClearRect(self.curY, 0, self.curY, self.cols - 1)
         else:
-            print("WARNING: escape sequence EL has invalid parameter")
+            glsLog.debug("TE WARNING: escape sequence EL has invalid parameter", 2)
         return
     def __OnEscSeqIL(self, params, end):
         """
@@ -896,7 +925,7 @@ class V102Terminal:
         Handler for escape sequence VPA
         """
         if params == None:
-            print("WARNING: VPA without parameter")
+            glsLog.debug("TE WARNING: VPA without parameter", 2)
             return
         row = int(params)
         # convert it to zero based index
@@ -904,7 +933,7 @@ class V102Terminal:
         if row >= 0 and row < self.rows:
             self.curY = row
         else:
-            print("WARNING: VPA line no. out of boundary")
+            glsLog.debug("TE WARNING: VPA line no. out of boundary", 2)
         return
     def __OnEscSeqSGR(self, params, end):
         """
@@ -936,7 +965,7 @@ class V102Terminal:
                     # set default background color
                     self.curRendition &= 0xffff0fff
                 else:
-                    #print("WARNING: Unsupported rendition %s" % irendition)
+                    glsLog.debug("TE WARNING: Unsupported rendition %s"%irendition, 2)
                     pass
         else:
             # reset rendition
@@ -948,12 +977,10 @@ class V102Terminal:
         Calls the mode change callback with the dictionary of modes.
         """
         if params == None:
-            print("WARNING: SETM / CLRM without parameter")
+            glsLog.debug("TE WARNING: SETM / CLRM without parameter", 2)
             return
         if params not in self.modes:
-            print(params)
-            if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-                self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            glsLog.debug("TE WARNING: Unknown mode: '%s%s'"%(params,end), 2)
             return
         if end == 'h':
             self.modes[params] = True
@@ -967,12 +994,11 @@ class V102Terminal:
         Handler for escape sequence CSR.
         """
         if params == None:
-            print("WARNING: CSR without parameter")
+            glsLog.debug("TE WARNING: CSR without parameter", 2)
             return
         args = params.split(';')
         if len(args) != 2:
-            if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-                self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            __UnhandledEscSeq(params+end)
             return
         row_start, row_end = args
         row_start = int(row_start) - 1
@@ -988,11 +1014,10 @@ class V102Terminal:
         Handler for escape sequence CSZ.
         """
         if params == None:
-            print("WARNING: CSZ without parameter")
+            glsLog.debug("TE WARNING: CSZ without parameter", 2)
             return
         if len(params) != 2 or params[0] != '?':
-            if self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ] != None:
-                self.callbacks[self.CALLBACK_UNHANDLED_ESC_SEQ](params+end)
+            __UnhandledEscSeq(params+end)
             return
         style = int(params[1])
         if style not in (0, 1, 2, 8):

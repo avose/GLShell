@@ -10,7 +10,8 @@ class glsKeyPress():
 
     special_key_map = { wx.WXK_UP:"\x1b[A",   wx.WXK_DOWN:"\x1b[B", wx.WXK_RIGHT:"\x1b[C",
                         wx.WXK_LEFT:"\x1b[D", wx.WXK_ESCAPE:"\x1b", wx.WXK_INSERT:"\x1b[2~",
-                        wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~", wx.WXK_RETURN:"\x0a" }
+                        wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~", wx.WXK_RETURN:"\x0a",
+                        wx.WXK_PAGEUP:"\x1b[5~", wx.WXK_PAGEDOWN:"\x1b[6~"}
 
     special_alt_key_map = { wx.WXK_UP:"\x1b[1;3A",    wx.WXK_DOWN:"\x1b[1;3B",
                             wx.WXK_RIGHT:"\x1b[1;3C", wx.WXK_LEFT:"\x1b[1;3D" }
