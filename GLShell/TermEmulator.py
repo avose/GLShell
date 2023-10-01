@@ -346,6 +346,8 @@ class V102Terminal:
                     self.screen[i].append(u' ')
                     self.scrRendition[i].append(0)
         self.cols = cols
+        self.curX = min(max(self.curX, 0), self.cols-1)
+        self.curY = min(max(self.curY, 0), self.rows-1)
         #!!avose: maintain state somehow?
         self.scrollRegion = (0, self.rows-1)
         return
@@ -842,14 +844,8 @@ class V102Terminal:
                 glsLog.debug("TE: (CUP) Cursor Position: Invalid Parameters '%s%s'!"%
                              (params, end), 3)
                 return
-        if x < 0:
-            x = 0
-        elif x >= self.cols:
-            x = self.cols - 1
-        if y < 0:
-            y = 0
-        elif y >= self.rows:
-            y = self.rows - 1
+        x = min(max(x, 0), self.cols-1)
+        y = min(max(y, 0), self.rows-1)
         self.curX = x
         self.curY = y
         return
@@ -862,7 +858,7 @@ class V102Terminal:
             self.ClearRect(self.curY, self.curX, self.rows - 1, self.cols - 1)
         elif n == 1:
             self.ClearRect(0, 0, self.curY, self.curX)
-        elif n == 2:
+        elif n == 2 or n == 3:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
         else:
             glsLog.debug("TE: (ED) Erase Display: Invalid Parameter %d!"%(n), 3)

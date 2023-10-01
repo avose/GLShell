@@ -79,7 +79,8 @@ class glsFontPanel(wx.Panel):
         for font_name, fndx in self.GetFonts():
             if font_name is not None:
                 font_list.append(font_name)
-            progress.Update(fndx+1)
+            progress.Update(fndx+1, "Checking Font %d of %d."%
+                            (fndx+1, len(self.all_fonts)))
         self.lb_font.InsertItems(font_list, 0)
         self.Refresh()
         return
