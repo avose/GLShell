@@ -11,7 +11,7 @@ class glsLogList(wx.VListBox):
         style = wx.LB_NEEDED_SB | wx.SIMPLE_BORDER
         self.char_w,self.char_h = 10,10
         super(glsLogList, self).__init__(parent, style=style, size=size)
-        self.fontinfo = wx.FontInfo(11).FaceName("Monospace")
+        self.fontinfo = wx.FontInfo(10).FaceName("Monospace")
         self.font = wx.Font(self.fontinfo)
         dc = wx.MemoryDC()
         dc.SetFont(self.font)
@@ -109,6 +109,7 @@ class glsStatusBar(wx.StatusBar):
         super(glsStatusBar, self).__init__(parent)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         glsLog.add("Create StatusBar")
+        self.popup = None
         return
     def OnLeftDown(self, event):
         sbsize = self.GetSize()
