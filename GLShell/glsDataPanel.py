@@ -108,19 +108,19 @@ class glsDataPanel(wx.Window):
         result_panel = glsSearchResultPanel(self.notebook, search, self.OnResultOpen,
                                             self.OnCloseTab)
         self.tabs.append(result_panel)
-        if search.search_type == search.TYPE_FILES:
-            type_text = "Files"
-        elif search.search_type == search.TYPE_CONTENTS:
-            type_text = "Contents"
-        self.notebook.AddPage(result_panel, " Search %s '%s'"%(type_text, search.text))
+        if search.kind == search.KIND_FILES:
+            kind_text = "Files"
+        elif search.kind == search.KIND_CONTENTS:
+            kind_text = "Contents"
+        self.notebook.AddPage(result_panel, " Search %s '%s'"%(kind_text, search.text))
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_SEARCH)
         self.notebook.SetSelection(len(self.tabs)-1)
         return
     def SearchFiles(self, text):
-        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.TYPE_FILES))
+        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.KIND_FILES))
         return
     def SearchContents(self, text):
-        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.TYPE_CONTENTS))
+        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.KIND_CONTENTS))
         return
     def OnResultOpen(self, action_id, path, line=None):
         if action_id == glsSearchResultListPopupMenu.ID_OPEN_NEW:

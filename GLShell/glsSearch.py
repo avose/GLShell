@@ -7,6 +7,7 @@ from multiprocessing import Process, Queue, Event
 
 from glsDirTree import glsFile
 from glsIcons import glsIcons
+from glsLog import glsLog
 
 ################################################################
 
@@ -28,11 +29,11 @@ class glsSearchProcess(Process):
         self.event.set()
         return
     def GetResults(self):
-        if self.search.search_type == self.search.TYPE_FILES:
+        if self.search.kind == self.search.KIND_FILES:
             for pndx,dirtree in enumerate(self.search.dirtrees):
                 for result in self.SearchFiles(dirtree):
                     yield (pndx, result)
-        elif self.search.search_type == self.search.TYPE_CONTENTS:
+        elif self.search.kind == self.search.KIND_CONTENTS:
             for pndx,dirtree in enumerate(self.search.dirtrees):
                 for result in self.SearchContents(dirtree):
                     yield (pndx, result)
@@ -86,12 +87,12 @@ class glsSearchProcess(Process):
 ################################################################
 
 class glsSearch():
-    TYPE_FILES = 1
-    TYPE_CONTENTS = 2
-    def __init__(self, dirtrees, text, search_type):
+    KIND_FILES = 1
+    KIND_CONTENTS = 2
+    def __init__(self, dirtrees, text, kind):
         self.dirtrees = dirtrees
         self.text = text
-        self.search_type = search_type
+        self.kind = kind
         self.results = []
         self.result_files = {}
         return
@@ -156,6 +157,10 @@ class glsSearchResultList(wx.VListBox):
         self.SetItemCount(1)
         self.in_q = Queue()
         self.proc = glsSearchProcess(self.search, self.in_q)
+        if self.search.kind == glsSearch.KIND_FILES:
+            glsLog.add("Search Files Start: '%s'"%self.search.text)
+        elif self.search.kind == glsSearch.KIND_CONTENTS:
+            glsLog.add("Search Contents Start: '%s'"%self.search.text)
         self.proc.start()
         self.closing = False
         self.result_poll_done = False
@@ -183,11 +188,11 @@ class glsSearchResultList(wx.VListBox):
         line, rows_line = self.LineWrapText("        " + line)
         return "", 0, line, rows_line, ("%d: "%(lndx)).ljust(8)
     def HeaderToString(self):
-        if self.search.search_type == self.search.TYPE_FILES:
-            type_text = "files"
-        elif self.search.search_type == self.search.TYPE_CONTENTS:
-            type_text = "file contents"
-        text = 'Searching %s for: "%s"'%(type_text, self.search.text)
+        if self.search.kind == self.search.KIND_FILES:
+            kind_text = "files"
+        elif self.search.kind == self.search.KIND_CONTENTS:
+            kind_text = "file contents"
+        text = 'Searching %s for: "%s"'%(kind_text, self.search.text)
         if self.proc is not None:
             text = "(active) " + text
         else:
@@ -296,6 +301,13 @@ class glsSearchResultList(wx.VListBox):
         if self.proc is None:
             self.result_poll_done = True
             self.Refresh()
+            if self.search.kind == glsSearch.KIND_FILES:
+                log = "Search Files Finished: '%s' "%self.search.text
+            elif self.search.kind == glsSearch.KIND_CONTENTS:
+                log = "Search Contents Finished: '%s' "%self.search.text
+            log += str(len(self.search.GetResults())) + " results\n"
+            log += "\n".join([dt.dirtree.abspath for dt in self.search.dirtrees])
+            glsLog.add(log)
             wx.YieldIfNeeded()
             return
         wx.CallLater(150, self.PollResults)

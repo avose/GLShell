@@ -3,6 +3,7 @@ import sys
 import wx
 import numpy as np
 
+from glsLog import glsLog
 from glsFDP import fdpNode
 from glsFDP import fdpGraph
 from glsFDP import glsFDPThread
@@ -52,6 +53,7 @@ class glsDirTree(wx.EvtHandler):
         self.path = path
         self.name = os.path.basename(self.path)
         self.abspath = os.path.abspath(self.path)
+        glsLog.add("Directory Tree: "+self.abspath)
         self.settings = settings
         self.graph = fdpGraph(self.settings, self.KINDS)
         self.thread = glsFDPThread(self.settings, self.graph, speed=0.01)
@@ -62,6 +64,10 @@ class glsDirTree(wx.EvtHandler):
         self.watcher = wx.FileSystemWatcher()
         self.watcher.SetOwner(self)
         self.ScanDir(self.path)
+        glsLog.add("Directory Tree: %d directories"%
+                   len(self.graph.np_nkinds[self.KIND_DIR]))
+        glsLog.add("Directory Tree: %d files"%
+                   len(self.graph.np_nkinds[self.KIND_FILE]))
         self.thread.start()
         return
     def ScanDir(self, path):

@@ -14,6 +14,7 @@ from array import *
 import TermEmulator
 
 from glsPlaceHolder import glsPlaceHolder
+from glsStatusBar import glsLog
 from glsKeyPress import glsKeyPress
 from glsIcons import glsIcons
 
@@ -157,6 +158,7 @@ class glsTerminalPanel(wx.Window):
         if self.pid == 0:
             # Child process.
             os.execl(self.path, *arglist)
+        glsLog.add("Terminal Child PID: "+str(self.pid))
         fcntl.ioctl(self.io, termios.TIOCSWINSZ,
                     struct.pack("hhhh", self.rows, self.cols, 0, 0))
         tcattrib = termios.tcgetattr(self.io)
@@ -807,16 +809,14 @@ class glsTermsPanel(wx.Window):
         self.min_term_size = min_term_size
         self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_LIVE_UPDATE)
         self.splitter.SetMinimumPaneSize(self.min_term_size[1])
-        self.notebooks = [ glsTermNotebook(self.splitter, self.settings, self.min_term_size,
-                                           self.callback_searchfiles,
-                                           self.callback_searchcontents,
-                                           self.OnCurrentNotebook,
-                                           self.OnPlaceHolder),
-                           glsTermNotebook(self.splitter, self.settings, self.min_term_size,
-                                           self.callback_searchfiles,
-                                           self.callback_searchcontents,
-                                           self.OnCurrentNotebook,
-                                           self.OnPlaceHolder), ]
+        self.notebooks = []
+        for n in range(2):
+            notebook = glsTermNotebook(self.splitter, self.settings, self.min_term_size,
+                                       self.callback_searchfiles,
+                                       self.callback_searchcontents,
+                                       self.OnCurrentNotebook,
+                                       self.OnPlaceHolder)
+            self.notebooks.append(notebook)
         self.notebooks_active = len(self.notebooks)
         self.split_mode = wx.SPLIT_HORIZONTAL
         self.splitter.SplitHorizontally(self.notebooks[0], self.notebooks[1])        
@@ -831,7 +831,7 @@ class glsTermsPanel(wx.Window):
         print('open dir')
         return
     def OnToolTermNew(self, event):
-        print('new terminal')
+        self.TerminalStart()
         return
     def OnToolSearch(self, event):
         print('search')
@@ -888,7 +888,7 @@ class glsTermsPanel(wx.Window):
                 nb.OnNewTerm()
         return
     def OnToolCloseTab(self, event):
-        print('close tab')
+        self.TerminalClose()
         return
     def OnPlaceHolder(self, placeholder):
         orig_active = self.notebooks_active
@@ -942,6 +942,7 @@ class glsTermsPanel(wx.Window):
             return
         command = self.settings.Get('edit_line')
         command = command.replace("{LINE}",str(line))
+        glsLog.add("EditorLineSet(): "+str(line))
         term.SendText(command)
         return
     def EditorFileOpen(self, path):
@@ -950,6 +951,7 @@ class glsTermsPanel(wx.Window):
             return
         command = self.settings.Get('edit_open')
         command = command.replace("{FILE}",str(path))
+        glsLog.add("EditorFileOpen(): "+str(path))
         term.SendText(command)
         return
     def EditorStart(self, path):
@@ -958,7 +960,22 @@ class glsTermsPanel(wx.Window):
             return
         term = notebook.OnNewTerm()
         command = self.settings.Get('edit_path') + " '%s'\x0a"%(path)
+        glsLog.add("EditorStart(): "+command)
         term.SendText(command)
+        return
+    def TerminalStart(self):
+        notebook = self.GetCurrentNotebook()
+        if notebook is None:
+            return
+        notebook.OnNewTerm()
+        return
+    def TerminalClose(self):
+        notebook = self.GetCurrentNotebook()
+        if notebook is None:
+            return
+        term = notebook.GetCurrentTerm()
+        if term is not None:
+            notebook.OnTermClose(term)
         return
 
 ################################################################

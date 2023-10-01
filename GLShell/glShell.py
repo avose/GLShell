@@ -40,6 +40,7 @@ import sys
 import wx
 
 from glsTermsPanel import glsTermsPanel
+from glsStatusBar import glsStatusBar
 from glsDataPanel import glsDataPanel
 from glsDirTree import glsDirTree
 from glsIcons import glsIcons
@@ -161,9 +162,14 @@ class glShell(wx.Frame):
             else:
                 self.license_frame.Raise()
         return
+    def InitStatusBar(self):
+        self.statusbar = glsStatusBar(self)
+        self.SetStatusBar(self.statusbar)
+        return
     def InitUI(self):
-        # Setup menu bar.
+        # Setup menu bar / status bar.
         self.InitMenuBar()
+        self.InitStatusBar()
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # DataPanel and TermsPanel side-by-side.
