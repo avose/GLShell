@@ -19,7 +19,8 @@
 # Siva Chandran P
 # siva.chandran.p@gmail.com
 #
-# Source code modified beginning in August 2023 by Aaron Vose.
+# Source code modified beginning in August 2023:
+# Aaron D. Vose.
 # avose@aaronvose.net
 
 """
@@ -113,13 +114,15 @@ class V102Terminal:
                             # modes commonly used with other terminal types may be
                             # supported.
 
-    __ESCSEQ_CSR = 'r'      # Multiple escape sequences end in 'r'. One of the more
+    __ESCSEQ_DECSTBM = 'r'  # Multiple escape sequences end in 'r'. One of the more
                             # important ones is the scrolling region: "n ; m r" which
                             # limits effect of scrolling to specified range of lines.
 
     __ESCSEQ_CSZ = 'c'      # Multiple escape sequences end in 'c'. One of the more
                             # important ones is setting the cursor size / style:
                             # "? n c", where n is the style.
+
+    __ESC_RI = 'M'          # Non-CSI: reverse linefeed.
 
     # vt102 modes.
     MODE_KAM     = '2'    # Keyboard action
@@ -176,40 +179,43 @@ class V102Terminal:
         self.scrollRegion = (0, self.rows-1)
 
         # special character handlers
-        self.charHandlers = { self.__ASCII_NUL :self.__OnCharIgnore,
-                              self.__ASCII_BEL :self.__OnCharIgnore,
-                              self.__ASCII_BS  :self.__OnCharBS,
-                              self.__ASCII_HT  :self.__OnCharHT,
-                              self.__ASCII_LF  :self.__OnCharLF,
-                              self.__ASCII_VT  :self.__OnCharLF,
-                              self.__ASCII_FF  :self.__OnCharLF,
-                              self.__ASCII_CR  :self.__OnCharCR,
-                              self.__ASCII_XON :self.__OnCharXON,
+        self.charHandlers = { self.__ASCII_NUL: self.__OnCharIgnore,
+                              self.__ASCII_BEL: self.__OnCharIgnore,
+                              self.__ASCII_BS:  self.__OnCharBS,
+                              self.__ASCII_HT:  self.__OnCharHT,
+                              self.__ASCII_LF:  self.__OnCharLF,
+                              self.__ASCII_VT:  self.__OnCharLF,
+                              self.__ASCII_FF:  self.__OnCharLF,
+                              self.__ASCII_CR:  self.__OnCharCR,
+                              self.__ASCII_XON: self.__OnCharXON,
                               self.__ASCII_XOFF:self.__OnCharXOFF,
-                              self.__ASCII_ESC :self.__OnCharESC,
-                              self.__ASCII_CSI :self.__OnCharCSI,
-                              self.__ASCII_S0 :self.__OnCharS0,
-                              self.__ASCII_SI :self.__OnCharSI, }
+                              self.__ASCII_ESC: self.__OnCharESC,
+                              self.__ASCII_CSI: self.__OnCharCSI,
+                              self.__ASCII_S0:  self.__OnCharS0,
+                              self.__ASCII_SI:  self.__OnCharSI, }
 
         # escape sequence handlers
-        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL:self.__OnEscSeqICH_SL,
-                                self.__ESCSEQ_CUU   :self.__OnEscSeqCUU,
-                                self.__ESCSEQ_CUD   :self.__OnEscSeqCUD,
-                                self.__ESCSEQ_CUF   :self.__OnEscSeqCUF,
-                                self.__ESCSEQ_CUB   :self.__OnEscSeqCUB,
-                                self.__ESCSEQ_CHA   :self.__OnEscSeqCHA,
-                                self.__ESCSEQ_CUP   :self.__OnEscSeqCUP,
-                                self.__ESCSEQ_ED    :self.__OnEscSeqED,
-                                self.__ESCSEQ_EL    :self.__OnEscSeqEL,
-                                self.__ESCSEQ_IL    :self.__OnEscSeqIL,
-                                self.__ESCSEQ_DL    :self.__OnEscSeqDL,
-                                self.__ESCSEQ_DCH   :self.__OnEscSeqDCH,
-                                self.__ESCSEQ_VPA   :self.__OnEscSeqVPA,
-                                self.__ESCSEQ_SGR   :self.__OnEscSeqSGR,
-                                self.__ESCSEQ_SETM  :self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_CLRM  :self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_CSR   :self.__OnEscSeqCSR,
-                                self.__ESCSEQ_CSZ   :self.__OnEscSeqCSZ, }
+        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL: self.__OnEscSeqICH_SL,
+                                self.__ESCSEQ_CUU:    self.__OnEscSeqCUU,
+                                self.__ESCSEQ_CUD:    self.__OnEscSeqCUD,
+                                self.__ESCSEQ_CUF:    self.__OnEscSeqCUF,
+                                self.__ESCSEQ_CUB:    self.__OnEscSeqCUB,
+                                self.__ESCSEQ_CHA:    self.__OnEscSeqCHA,
+                                self.__ESCSEQ_CUP:    self.__OnEscSeqCUP,
+                                self.__ESCSEQ_ED:     self.__OnEscSeqED,
+                                self.__ESCSEQ_EL:     self.__OnEscSeqEL,
+                                self.__ESCSEQ_IL:     self.__OnEscSeqIL,
+                                self.__ESCSEQ_DL:     self.__OnEscSeqDL,
+                                self.__ESCSEQ_DCH:    self.__OnEscSeqDCH,
+                                self.__ESCSEQ_VPA:    self.__OnEscSeqVPA,
+                                self.__ESCSEQ_SGR:    self.__OnEscSeqSGR,
+                                self.__ESCSEQ_SETM:   self.__OnEscSeqSETCLRM,
+                                self.__ESCSEQ_CLRM:   self.__OnEscSeqSETCLRM,
+                                self.__ESCSEQ_DECSTBM:self.__OnEscSeqDECSTBM,
+                                self.__ESCSEQ_CSZ:    self.__OnEscSeqCSZ, }
+
+        # ESC- but not CSI-sequences
+        self.escHandlers = { self.__ESC_RI: self.__OnEscRI, }
 
         # cursor styles.
         self.cursorStyle = self.CURSOR_STYLE_DEFAULT
@@ -340,6 +346,8 @@ class V102Terminal:
                     self.screen[i].append(u' ')
                     self.scrRendition[i].append(0)
         self.cols = cols
+        #!!avose: maintain state somehow?
+        self.scrollRegion = (0, self.rows-1)
         return
     def GetCursorPos(self):
         """
@@ -513,7 +521,8 @@ class V102Terminal:
                 if ch in self.printableChars:
                     self.__PushChar(ch)
                 else:
-                    glsLog.debug("TE WARNING: Unsupported character '%s' = %d"%(ch, ascii), 3)
+                    glsLog.debug("TE: Unsupported Character: '%s' (%d)"%
+                                 (ch, ascii), 3)
                     pass
                 index += 1
         # update the dirty lines
@@ -536,6 +545,8 @@ class V102Terminal:
             # scrolls up the screen
             if self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN] != None:
                 self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN]()
+        glsLog.debug("TE: Scroll Up: rg = (%d,%d) term.rows = %d"%
+                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
         line = self.screen.pop(self.scrollRegion[0])
         for i in range(self.cols):
             line[i] = u' '
@@ -558,7 +569,7 @@ class V102Terminal:
         Moves the cursor to the next line, if the cursor is already at the
         bottom row then scroll up.
         """
-        #glsLog.debug("TE Newline @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: Newline: @ (%d,%d)"%(self.curX, self.curY), 4)
         self.curX = 0
         if self.curY + 1 < self.rows:
             self.curY += 1
@@ -570,7 +581,7 @@ class V102Terminal:
         Writes the character(ch) into current cursor position and advances
         cursor position.
         """
-        #glsLog.debug("TE Push char '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
+        #glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
         if self.curX >= self.cols:
             self.__NewLine()
         self.screen[self.curY][self.curX] = ch
@@ -600,7 +611,7 @@ class V102Terminal:
                 # final char
                 return (index + 1, chr(ascii), interChars)
             else:
-                glsLog.debug("TE WARNING: Unexpected characters in escape sequence %s"%ch, 3)
+                glsLog.debug("TE: Unexpected character in escape sequence: %s"%ch, 3)
             index += 1
         # the escape sequence is not complete, inform this to caller by giving
         # '?' as final char
@@ -617,7 +628,7 @@ class V102Terminal:
                 if len(esc) < 2:
                     esc = '0' + esc
                 printable_seq += '\\x' + esc
-        glsLog.debug("TE WARNING: Unhandled ESC seq '%s'"%printable_seq, 3)
+        glsLog.debug("TE: Unhandled ESC Seq: '%s'"%printable_seq, 3)
         return
     def __HandleEscSeq(self, text, index):
         """
@@ -633,10 +644,6 @@ class V102Terminal:
                 if interChars != None:
                     self.unparsedInput += interChars
             elif finalChar in self.escSeqHandlers.keys():
-                #if interChars != None:
-                #    glsLog.debug("TE Escape Sequence: '[%s%s'"%(interChars, finalChar), 4)
-                #else:
-                #    glsLog.debug("TE Escape Sequence: '[%s'"%(finalChar), 4)
                 self.escSeqHandlers[finalChar](interChars, finalChar)
             else:
                 escSeq = "["
@@ -657,9 +664,15 @@ class V102Terminal:
                         index += 1
                     self.__OnEscSeqTitle(text[start:index])
         else:
-            self.__UnhandledEscSeq(text[index])
+            if text[index] in self.escHandlers:
+                self.escHandlers[text[index]]()
+            else:
+                self.__UnhandledEscSeq(text[index])
             index += 1
         return index
+    ################################################################
+    # Character Handlers
+    ################################################################
     def __OnCharBS(self, text, index):
         """
         Handler for backspace character
@@ -712,7 +725,7 @@ class V102Terminal:
         """
         Handler for control sequence intruducer(CSI) character
         """
-        glsLog.debug("TE WARNING: CSI character.", 3)
+        glsLog.debug("TE: CSI Character!", 3)
         index += 1
         index = self.__HandleEscSeq(text, index)
         return index
@@ -732,20 +745,19 @@ class V102Terminal:
         return index
     def __OnCharIgnore(self, text, index):
         """
-        Dummy handler for unhandler characters
+        Dummy handler for unhandled characters
         """
         return index + 1
+    ################################################################
+    # Escape Sequence Handlers
+    ################################################################
     def __OnEscSeqTitle(self, params):
-        """
-        Handler for window title escape sequence
-        """
+        # Handler: Window Title Escape Sequence
         if self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE] != None:
             self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE](params)
         return
     def __OnEscSeqICH_SL(self, params, end):
-        """
-        Handler for escape sequence ICH and SL
-        """
+        # Handler ICH / SL: Insert (Blank) Characters / Shift Left
         if ' ' in params:
             # Escape sequence SL
             plist = params.split(' ')
@@ -769,9 +781,7 @@ class V102Terminal:
                 self.scrRendition[row][col] = self.curRendition
         return
     def __OnEscSeqCUU(self, params, end):
-        """
-        Handler for escape sequence CUU
-        """
+        # Handler CUU: Cursor Update Up
         n = 1
         if params != None:
             n = int(params)
@@ -780,9 +790,7 @@ class V102Terminal:
             self.curY = 0
         return
     def __OnEscSeqCUD(self, params, end):
-        """
-        Handler for escape sequence CUD
-        """
+        # Handler CUD: Cursor Update Down
         n = 1
         if params != None:
             n = int(params)
@@ -791,9 +799,7 @@ class V102Terminal:
             self.curY = self.rows - 1
         return
     def __OnEscSeqCUF(self, params, end):
-        """
-        Handler for escape sequence CUF
-        """
+        # Handler CUF: Cursor Update Forward
         n = 1
         if params != None:
             n = int(params)
@@ -802,9 +808,7 @@ class V102Terminal:
             self.curX = self.cols - 1
         return
     def __OnEscSeqCUB(self, params, end):
-        """
-        Handler for escape sequence CUB
-        """
+        # Handler CUB: Cursor Update Back
         n = 1
         if params != None:
             n = int(params)
@@ -813,24 +817,20 @@ class V102Terminal:
             self.curX = 0
         return
     def __OnEscSeqCHA(self, params, end):
-        """
-        Handler for escape sequence CHA
-        """
+        # Handler CHA: Cursor Horizontal Absolute Position
         if params == None:
-            glsLog.debug("TE WARNING: CHA without parameter", 3)
+            glsLog.debug("TE: (CHA) Cursor Horizontal Position: No Parameter!", 3)
             return
-        col = int(params)
-        # convert it to zero based index
-        col -= 1
+        col = int(params) - 1
         if col >= 0 and col < self.cols:
             self.curX = col
         else:
-            glsLog.debug("TE WARNING: CHA column out of boundary", 3)
+            glsLog.debug("TE: (CHA) Cursor Horizontal Position: %d out of bounds (%d)!"%
+                         (col, self.cols), 3)
+        glsLog.debug("TE: (CHA) Cursor Horizontal Position: %d"%(col), 5)
         return
     def __OnEscSeqCUP(self, params, end):
-        """
-        Handler for escape sequence CUP
-        """
+        # Handler CUP: Cursor Update Position
         y = 0
         x = 0
         if params != None:
@@ -839,7 +839,8 @@ class V102Terminal:
                 y = int(values[0]) - 1
                 x = int(values[1]) - 1
             else:
-                glsLog.debug("TE WARNING: escape sequence CUP has invalid parameters", 3)
+                glsLog.debug("TE: (CUP) Cursor Position: Invalid Parameters '%s%s'!"%
+                             (params, end), 3)
                 return
         if x < 0:
             x = 0
@@ -853,9 +854,7 @@ class V102Terminal:
         self.curY = y
         return
     def __OnEscSeqED(self, params, end):
-        """
-        Handler for escape sequence ED
-        """
+        # Handler ED: Erase Display
         n = 0
         if params != None:
             n = int(params)
@@ -866,12 +865,10 @@ class V102Terminal:
         elif n == 2:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
         else:
-            glsLog.debug("TE WARNING: escape sequence ED has invalid parameter", 3)
+            glsLog.debug("TE: (ED) Erase Display: Invalid Parameter %d!"%(n), 3)
         return
     def __OnEscSeqEL(self, params, end):
-        """
-        Handler for escape sequence EL
-        """
+        # Handler EL: Erase Line
         n = 0
         if params != None:
             n = int(params)
@@ -882,12 +879,10 @@ class V102Terminal:
         elif n == 2:
             self.ClearRect(self.curY, 0, self.curY, self.cols - 1)
         else:
-            glsLog.debug("TE WARNING: escape sequence EL has invalid parameter", 3)
+            glsLog.debug("TE: (EL) Erase Line: Invalid Parameter %d!"%(n), 3)
         return
     def __OnEscSeqIL(self, params, end):
-        """
-        Handler for escape sequence IL
-        """
+        # Handler IL: Insert Lines
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
@@ -901,11 +896,11 @@ class V102Terminal:
             for i in range(self.cols):
                 rendition[i] = 0
             self.scrRendition.insert(self.curY+l, rendition)
+        glsLog.debug("TE: (IL) Insert Lines: %d @ (%d,%d) term.rows=%d"%
+                     (n, self.curY, self.scrollRegion[1], self.rows), 4)
         return
     def __OnEscSeqDL(self, params, end):
-        """
-        Handler for escape sequence DL
-        """
+        # Handler DL: Delete Lines
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
@@ -919,11 +914,11 @@ class V102Terminal:
             for i in range(self.cols):
                 rendition[i] = 0
             self.scrRendition.insert(self.scrollRegion[1], rendition)
+        glsLog.debug("TE: (DL) Delete Lines: %d @ (%d,%d) term.rows=%d"%
+                     (n, self.curY, self.scrollRegion[1], self.rows), 5)
         return
     def __OnEscSeqDCH(self, params, end):
-        """
-        Handler for escape sequence DCH
-        """
+        # Handler DCH: Delete Characters
         n = int(params) if params != None else 1
         self.isLineDirty[self.curY] = True
         for c in range(self.curX,self.cols):
@@ -933,26 +928,24 @@ class V102Terminal:
             else:
                 self.screen[self.curY][c] = ' '
                 self.scrRendition[self.curY][c] = 0
+        glsLog.debug("TE: (DCH) Delete Characters: %d @ (%d,%d)"%
+                     (n, self.curY, self.curX), 5)
         return
     def __OnEscSeqVPA(self, params, end):
-        """
-        Handler for escape sequence VPA
-        """
+        # Handler VPA: Cursor Vertical Position Absolute
         if params == None:
-            glsLog.debug("TE WARNING: VPA without parameter", 3)
+            glsLog.debug("TE: (VPA) Cursor Vertical Position: No Parameter!", 3)
             return
-        row = int(params)
-        # convert it to zero based index
-        row -= 1
+        row = int(params) - 1
         if row >= 0 and row < self.rows:
             self.curY = row
         else:
-            glsLog.debug("TE WARNING: VPA line no. out of boundary", 3)
+            glsLog.debug("TE: (VPA) Cursor Vertical Position: %d out of bounds!"%
+                         (row), 3)
+        glsLog.debug("TE: (VPA) Cursor Vertical Position: %d"%(row), 5)
         return
     def __OnEscSeqSGR(self, params, end):
-        """
-        Handler for escape sequence SGR
-        """
+        # Handler SGR: Select Graphic Rendition
         if params != None:
             renditions = params.split(';')
             for rendition in renditions:
@@ -979,22 +972,22 @@ class V102Terminal:
                     # set default background color
                     self.curRendition &= 0xffff0fff
                 else:
-                    glsLog.debug("TE WARNING: Unsupported rendition %s"%irendition, 3)
+                    glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported rendition %s"
+                                 %irendition, 3)
                     pass
         else:
-            # reset rendition
             self.curRendition = 0
+        params = "" if params is None else params
+        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
     def __OnEscSeqSETCLRM(self, params, end):
-        """
-        Handler for escape sequence SETM / CLRM.
-        Calls the mode change callback with the dictionary of modes.
-        """
+        # Handler SETM / CLRM: Sets / Clear Mode
         if params == None:
-            glsLog.debug("TE WARNING: SETM / CLRM without parameter", 3)
+            glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: No Parameter!", 3)
             return
         if params not in self.modes:
-            glsLog.debug("TE WARNING: Unknown mode: '%s%s'"%(params,end), 3)
+            glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: Unknown mode: '%s%s'"%
+                         (params,end), 3)
             return
         if end == 'h':
             self.modes[params] = True
@@ -1002,13 +995,13 @@ class V102Terminal:
             self.modes[params] = False
         if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
             self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
+        glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: '%s%s'"%
+                     (params,end), 5)
         return
-    def __OnEscSeqCSR(self, params, end):
-        """
-        Handler for escape sequence CSR.
-        """
+    def __OnEscSeqDECSTBM(self, params, end):
+        # Handler DECSTBM: Set Top / Bottom Margins (Scroll Region)
         if params == None:
-            glsLog.debug("TE WARNING: CSR without parameter", 3)
+            glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: No Parameter!", 3)
             return
         args = params.split(';')
         if len(args) != 2:
@@ -1017,18 +1010,18 @@ class V102Terminal:
         row_start, row_end = args
         row_start = int(row_start) - 1
         row_end   = int(row_end)   - 1
-        row_start = row_start if row_start > 0         else 0
-        row_end   = row_end   if row_end   < self.cols else self.cols-1
+        row_start = max(row_start, 0)
+        row_end   = min(row_end, self.cols-1)
         self.scrollRegion = (row_start, row_end)
         self.curX = 0
         self.curY = 0
+        glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s'"%
+                     (row_start, row_end, params+end), 5)
         return
     def __OnEscSeqCSZ(self, params, end):
-        """
-        Handler for escape sequence CSZ.
-        """
+        # Handler CSZ: Cursor Style / Size
         if params == None:
-            glsLog.debug("TE WARNING: CSZ without parameter", 3)
+            glsLog.debug("TE: (CSZ) Cursor Style: No Parameter!", 3)
             return
         if len(params) != 2 or params[0] != '?':
             self.__UnhandledEscSeq(params+end)
@@ -1040,4 +1033,20 @@ class V102Terminal:
             self.cursorStyle = style
             if self.callbacks[self.CALLBACK_CURSOR_CHANGE] != None:
                 self.callbacks[self.CALLBACK_CURSOR_CHANGE](self.cursorStyle)
+        glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 6)
         return
+    def __OnEscRI(self):
+        # Handler RI: Reverse LineFeed
+        line = self.screen.pop(self.scrollRegion[1])
+        for i in range(self.cols):
+            line[i] = u' '
+        self.screen.insert(self.scrollRegion[0], line)
+        rendition = self.scrRendition.pop(self.scrollRegion[1])
+        for i in range(self.cols):
+            rendition[i] = 0
+        self.scrRendition.insert(self.scrollRegion[0], rendition)
+        glsLog.debug("TE: (RI) Reverse Linefeed: rg = (%d,%d) rows = %d"%
+                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 5)
+        return
+
+################################################################
