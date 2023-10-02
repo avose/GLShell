@@ -117,12 +117,11 @@ class glsDataPanel(wx.Window):
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_SEARCH)
         self.notebook.SetSelection(len(self.tabs)-1)
         return
-    def SearchFiles(self, text):
-        search = glsSearch(self.GetDirTrees(), text)
-        self.AddSearch(search)
-        return
-    def SearchContents(self, text):
-        search = glsSearch(self.GetDirTrees(), None, False, text)
+    def Search(self, opts):
+        search = glsSearch(self.GetDirTrees(),
+                           opts['name'], opts['name_regex'],
+                           opts['contents'], opts['contents_regex'],
+                           opts['files'], opts['dirs'])
         self.AddSearch(search)
         return
     def OnResultOpen(self, action_id, path, line=None):

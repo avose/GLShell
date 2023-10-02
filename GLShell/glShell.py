@@ -165,7 +165,7 @@ class glShell(wx.Frame):
             search = glsSearchDialog(self)
             result_id = search.ShowModal()
             if result_id == glsSearchDialog.ID_SEARCH:
-                print(search.SearchSettings())
+                self.SearchWithOpts(search.SearchSettings())
             return
         if menu_id == self.ID_ABOUT:
             if self.about_frame is None:
@@ -244,11 +244,28 @@ class glShell(wx.Frame):
             return
         self.AddDirTree(glsDirTree(path))
         return
+    def SearchWithOpts(self, opts):
+        self.data_panel.Search(opts)
+        return
     def OnSearchFiles(self, text):
-        self.data_panel.SearchFiles(text)
+        opts = { 'name': text,
+                 'name_regex': False,
+                 'files': True,
+                 'dirs': True,
+                 'match_contents': False,
+                 'contents': None,
+                 'contents_regex': False }
+        self.SearchWithOpts(opts)
         return
     def OnSearchContents(self, text):
-        self.data_panel.SearchContents(text)
+        opts = { 'name': None,
+                 'name_regex': False,
+                 'files': True,
+                 'dirs': False,
+                 'match_contents': True,
+                 'contents': text,
+                 'contents_regex': False }
+        self.SearchWithOpts(opts)
         return
     def OnClose(self, event=None):
         if self.settings_frame is not None:

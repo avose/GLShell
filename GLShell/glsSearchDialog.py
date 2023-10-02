@@ -74,7 +74,9 @@ class glsSearchDialog(wx.Dialog):
         self.Show(True)
         return
     def SearchValid(self):
-        if self.tc_name.GetValue() == "":
+        if (self.tc_name.GetValue() == ""
+            and (self.cb_contents.IsChecked() and
+                 self.tc_contents.GetValue() == "")):
             return False
         if self.cb_contents.IsChecked() and self.tc_contents.GetValue() == "":
             return False
@@ -114,12 +116,14 @@ class glsSearchDialog(wx.Dialog):
             self.Close()
         return
     def SearchSettings(self):
+        contents = self.tc_contents.GetValue()
+        contents = contents if self.cb_contents.IsChecked() else ""
         return { 'name': self.tc_name.GetValue(),
                  'name_regex': self.rb_name_regex.GetValue(),
                  'files': self.cb_files.IsChecked(),
                  'dirs': self.cb_dirs.IsChecked(),
                  'match_contents': self.cb_contents.IsChecked(),
-                 'contents': self.tc_contents.GetValue(),
+                 'contents': contents,
                  'contents_regex': self.rb_contents_regex.GetValue() }
 
 ################################################################

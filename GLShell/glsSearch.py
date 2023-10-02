@@ -1,6 +1,7 @@
+import os
 import re
-import mmap
 import wx
+import mmap
 import mimetypes
 from threading import Thread, Lock
 from multiprocessing import Process, Queue, Event
@@ -70,11 +71,13 @@ class glsSearchProcess(Process):
         nodes = dirtree.GetNodes()
         if not self.search.has_cont:
             for nndx,node in enumerate(nodes):
-                if self.search.MatchName(node.name):
+                if (self.search.MatchName(node.name) and
+                    self.search.MatchType(node.abspath)):
                     yield (nndx, node.abspath, None)
             return
         for nndx,node in enumerate(nodes):
-            if self.search.MatchName(node.name):
+            if (self.search.MatchName(node.name) and
+                self.search.MatchType(node.abspath)):
                 for match, line_info in self.SearchContents(node):
                     if match:
                         yield (nndx, node.abspath, line_info)
@@ -96,12 +99,15 @@ class glsMatch():
 
 class glsSearch():
     def __init__(self, dirtrees, name_text, name_regx=False,
-                 cont_text=None, cont_regx=False):
+                 cont_text=None, cont_regx=False,
+                 files=False, dirs=False):
         self.dirtrees = dirtrees
         self.name_text = name_text
         self.name_regx = name_regx
         self.cont_text = cont_text
         self.cont_regx = cont_regx
+        self.incl_dirs = dirs
+        self.incl_files = files
         if self.name_text is None or self.name_text == "":
             self.has_name = False
             if self.name_regx:
@@ -116,6 +122,12 @@ class glsSearch():
         self.results = []
         self.result_files = {}
         return
+    def MatchType(self, path):
+        if not self.incl_dirs and os.path.isdir(path):
+            return False
+        if not self.incl_files and os.path.isfile(path):
+            return False
+        return True
     def MatchName(self, name):
         if not self.has_name:
             return True
@@ -173,14 +185,18 @@ class glsSearchResultListPopupMenu(wx.Menu):
     ID_OPEN_NEW = 1000
     ID_OPEN     = 1001
     ID_EXIT     = 1002
-    def __init__(self, parent):
+    def __init__(self, parent, open_available):
         super(glsSearchResultListPopupMenu, self).__init__()
         item = wx.MenuItem(self, self.ID_OPEN_NEW, 'Open (New Tab)')
         item.SetBitmap(glsIcons.Get('monitor_add'))
         self.Append(item)
+        if not open_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_OPEN, 'Open (Current Tab)')
         item.SetBitmap(glsIcons.Get('monitor'))
         self.Append(item)
+        if not open_available:
+            item.Enable(False)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close')
         item.SetBitmap(glsIcons.Get('magnifier_zoom_out'))
         self.Append(item)
@@ -219,7 +235,7 @@ class glsSearchResultList(wx.VListBox):
         self.result_poll_done = False
         wx.CallLater(10, self.PollResults)
         return
-    def LineWrapText(self, initial_text):
+    def LineWrapText(self, initial_text, isline=False):
         if initial_text is None or len(initial_text) == 0:
             return ("", 0)
         max_len = max(1, int(self.Size[0]/self.char_w)-2)
@@ -228,7 +244,10 @@ class glsSearchResultList(wx.VListBox):
         initial_text = initial_text.replace("\t","    ")
         while len(initial_text) > max_len:
             text += initial_text[0:max_len] + '\n'
-            initial_text = initial_text[max_len:]
+            if isline:
+                initial_text = "        " + initial_text[max_len:]
+            else:
+                initial_text = initial_text[max_len:]
             nlines += 1
         text += initial_text
         return (text, nlines)
@@ -238,7 +257,7 @@ class glsSearchResultList(wx.VListBox):
             path, rows_path = self.LineWrapText(result[0])
             return path, rows_path, "", 0, ""
         path, lndx, line = result
-        line, rows_line = self.LineWrapText("        " + line)
+        line, rows_line = self.LineWrapText("        " + line, True)
         return "", 0, line, rows_line, ("%d: "%(lndx)).ljust(8)
     def HeaderToString(self):
         if self.proc is not None:
@@ -247,11 +266,11 @@ class glsSearchResultList(wx.VListBox):
             text = "(done)"
         text += " Searching:"
         if self.search.name_text:
-            text += " name='%s' %s"%(self.search.name_text,
-                                    '(regex)' if self.search.name_regx else '')
+            text += " name='%s'%s"%(self.search.name_text,
+                                    ' (regex)' if self.search.name_regx else '')
         if self.search.cont_text:
-            text += " contents='%s' %s"%(self.search.cont_text,
-                                         '(regex)' if self.search.cont_regx else '')
+            text += " contents='%s'%s"%(self.search.cont_text,
+                                        ' (regex)' if self.search.cont_regx else '')
         return self.LineWrapText(text)
     def MeasureHeader(self):
         text, rows = self.HeaderToString()
@@ -266,6 +285,27 @@ class glsSearchResultList(wx.VListBox):
             return self.MeasureHeader()
         path, rows_path, line, rows_line, lndx = self.ResultToStrings(index-1)
         return (rows_path + rows_line) * self.char_h
+    def ExtractMatchingText(self, line, match_func):
+        line = line.replace("\n","")
+        line_len = len(line)
+        new_line = ""
+        matches = ""
+        match = match_func(line)
+        while match:
+            for i in range(0, match.start()):
+                matches += " "
+            matches += line[match.start():match.end()]
+            new_line += line[:match.start()]
+            for i in range(match.start(), match.end()):
+                new_line += " "
+            line = line[match.end():]
+            match = match_func(line)
+        for i in range(0, len(line)):
+            matches += " "
+        new_line += line
+        matches, rows_matches = self.LineWrapText(matches)
+        new_line, rows_line = self.LineWrapText(new_line)
+        return new_line, matches
     def OnDrawItem(self, dc, rect, index):
         dc.Clear()
         dc.SetFont(self.font)
@@ -284,36 +324,26 @@ class glsSearchResultList(wx.VListBox):
         dc.DrawRectangle(rect[0], rect[1], rect[2], rect[3])
         if path:
             # Draw path.
-            dc.SetTextForeground((255,255,255))
-            dc.DrawText(path, rect[0], rect[1])
+            if not self.search.has_name:
+                dc.SetTextForeground((255,255,255))
+                dc.DrawText(path, rect[0], rect[1])
+            else:
+                line, matches = self.ExtractMatchingText(path, self.search.IndexName)
+                dc.SetTextForeground((255,255,255))
+                dc.DrawText(line, rect[0], rect[1])
+                dc.SetTextForeground((255,175,125))
+                dc.DrawText(matches, rect[0], rect[1])
             return
         # Draw line number.
         dc.SetTextForeground((255,255,0))
         dc.DrawText(lndx, rect[0], rect[1])
-        # Extract matching text and remaining text.
-        line = line.replace("\n","")
-        line_len = len(line)
-        new_line = ""
-        matches = ""
-        match = self.search.IndexContent(line)
-        while match:
-            for i in range(0, match.start()):
-                matches += " "
-            matches += line[match.start():match.end()]
-            new_line += line[:match.start()]
-            for i in range(match.start(), match.end()):
-                new_line += " "
-            line = line[match.end():]
-            match = self.search.IndexContent(line)
-        for i in range(0, len(line)):
-            matches += " "
-        new_line += line
-        matches, rows_matches = self.LineWrapText("        "+matches)
-        new_line, rows_line = self.LineWrapText("        "+new_line)
-        # Draw remaining text.
+        dc.SetPen(wx.Pen((150,150,0)))
+        dc.DrawLine(rect[0] + int(7.5*self.char_w), rect[1],
+                    rect[0] + int(7.5*self.char_w), rect[1]+rect[3])
+        # Draw matching line with highlight.
+        line, matches = self.ExtractMatchingText(line, self.search.IndexContent)
         dc.SetTextForeground((128,192,128))
-        dc.DrawText(new_line, rect[0], rect[1])
-        # Draw matching text.
+        dc.DrawText(line, rect[0], rect[1])
         dc.SetTextForeground((0,255,0))
         dc.DrawText(matches, rect[0], rect[1])
         return
@@ -369,7 +399,9 @@ class glsSearchResultList(wx.VListBox):
         wx.CallLater(150, self.PollResults)
         return
     def OnRightDown(self, event):
-        self.PopupMenu(glsSearchResultListPopupMenu(self), event.GetPosition())
+        popup = glsSearchResultListPopupMenu(self, (self.GetSelection() != wx.NOT_FOUND and
+                                                    self.GetSelection() != 0))
+        self.PopupMenu(popup, event.GetPosition())
         return
     def OnMenuItem(self, event):
         item_id = event.GetId() 
