@@ -64,7 +64,8 @@ class glsSearchDialog(wx.Dialog):
         self.rb_contents_regex.Enable(False)
         self.btn_search.Enable(False)
         # Bind events.
-        self.tc_name.Bind(wx.EVT_TEXT, self.OnName)
+        self.tc_name.Bind(wx.EVT_TEXT, self.OnValidate)
+        self.tc_contents.Bind(wx.EVT_TEXT, self.OnValidate)
         self.cb_files.Bind(wx.EVT_CHECKBOX, self.OnFiles)
         self.cb_dirs.Bind(wx.EVT_CHECKBOX, self.OnDirs)
         self.cb_contents.Bind(wx.EVT_CHECKBOX, self.OnContents)
@@ -72,11 +73,14 @@ class glsSearchDialog(wx.Dialog):
         self.btn_search.Bind(wx.EVT_BUTTON, self.OnSearch)
         self.Show(True)
         return
-    def OnName(self, event):
+    def SearchValid(self):
         if self.tc_name.GetValue() == "":
-            self.btn_search.Enable(False)
-        else:
-            self.btn_search.Enable(True)
+            return False
+        if self.cb_contents.IsChecked() and self.tc_contents.GetValue() == "":
+            return False
+        return True
+    def OnValidate(self, event=None):
+        self.btn_search.Enable(self.SearchValid())
         return
     def OnFiles(self, event):
         if not self.cb_files.IsChecked() and not self.cb_dirs.IsChecked():
@@ -95,6 +99,7 @@ class glsSearchDialog(wx.Dialog):
             self.tc_contents.Enable(False)
             self.rb_contents_text.Enable(False)
             self.rb_contents_regex.Enable(False)
+        self.OnValidate()
         return
     def OnCancel(self, event):
         if self.IsModal():
