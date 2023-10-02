@@ -15,7 +15,9 @@ class glsFontPanel(wx.Panel):
         st_names = wx.StaticText(self, -1, "Font Names:")
         self.lb_font = wx.ListBox(self, -1, size=(240, 240))
         st_size = wx.StaticText(self, -1, "Font Size:")
-        self.sc_font_size = wx.SpinCtrl(self, wx.ID_ANY, min=8, max=48, initial=10)
+        style = wx.SL_VERTICAL | wx.SL_RIGHT | wx.SL_LABELS
+        self.sl_font_size = wx.Slider(self, wx.ID_ANY, style=style, size=(-1, 210),
+                                      value=10, minValue=6, maxValue=32)
         p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
         p_sample.SetBackgroundColour((255,255,255))
         self.st_sample = wx.StaticText(p_sample, -1, "Sample Text", size=(-1, 64))
@@ -33,8 +35,8 @@ class glsFontPanel(wx.Panel):
         box_prop.Add(box_list)
         box_size = wx.BoxSizer(wx.VERTICAL)
         box_size.Add(st_size, 0, wx.ALL, 5)
-        box_size.Add(self.sc_font_size, 0, wx.ALL, 5)
-        box_prop.Add(box_size)
+        box_size.Add(self.sl_font_size, 0, wx.EXPAND | wx.ALL, 20)
+        box_prop.Add(box_size, wx.EXPAND)
         box_main.Add(box_prop)
         box_samp = wx.BoxSizer(wx.VERTICAL)
         box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
@@ -47,9 +49,9 @@ class glsFontPanel(wx.Panel):
         self.SetSizerAndFit(box_main)
         self.Layout()
         self.lb_font.Bind(wx.EVT_LISTBOX, self.OnFont)
-        self.sc_font_size.Bind(wx.EVT_SPINCTRL, self.OnFont)
+        self.sl_font_size.Bind(wx.EVT_SLIDER, self.OnFont)
         self.lb_font.SetSelection(wx.NOT_FOUND)
-        self.sc_font_size.SetToolTip('Select font size')
+        self.sl_font_size.SetToolTip('Select font size')
         self.Show(True)
         wx.CallAfter(self.LoadFonts)
         return
@@ -82,11 +84,12 @@ class glsFontPanel(wx.Panel):
             progress.Update(fndx+1, "Checking Font %d of %d."%
                             (fndx+1, len(self.all_fonts)))
         self.lb_font.InsertItems(font_list, 0)
+        self.lb_font.SetSelection(0)
         self.Refresh()
         return
     def OnFont(self, evt):
         facename = self.lb_font.GetStringSelection()
-        size = self.sc_font_size.GetValue()
+        size = self.sl_font_size.GetValue()
         font = wx.Font(size, family=wx.DEFAULT, style=wx.NORMAL, weight=wx.NORMAL,
                        underline=False, faceName=facename)
         self.st_sample.SetLabel(facename+" Sample Text")
@@ -97,7 +100,7 @@ class glsFontPanel(wx.Panel):
         return
     def OnOk(self, event):
         self.callback_font(self.lb_font.GetStringSelection(),
-                           self.sc_font_size.GetValue())
+                           self.sl_font_size.GetValue())
         self.Parent.Destroy()
         return
     def OnCancel(self, event):
