@@ -3,6 +3,8 @@ import re
 import wx
 import mmap
 import mimetypes
+from time import sleep
+from queue import Empty, Full
 from threading import Thread, Lock
 from multiprocessing import Process, Queue, Event
 
@@ -21,9 +23,15 @@ class glsSearchProcess(Process):
         return
     def run(self):
         for result in self.GetResults():
-            if self.event.is_set():
-                return
-            self.out_q.put(result)
+            while True:
+                if self.event.is_set():
+                    self.out_q.put(None)
+                    return
+                try:
+                    self.out_q.put_nowait(result)
+                    break
+                except Full:
+                    sleep(0.01)
         self.out_q.put(None)
         return
     def stop(self):
@@ -357,54 +365,13 @@ class glsSearchResultList(wx.VListBox):
         return
     def OnDrawSeparator(self, dc, rect, index):
         return
-    def ProcessResults(self, results):
-        if results is None or len(results) == 0:
-            return
-        for result in results:
-            self.search.AddResult(result)
-        self.SetItemCount(len(self.search.GetResults()) + 1)
-        self.Refresh()
-        wx.YieldIfNeeded()
-        return
-    def PollResults(self):
-        if self.closing:
-            self.result_poll_done = True
-            return
-        results = []
-        try:
-            while True:
-                result = self.in_q.get()
-                if result is None:
-                    if self.proc is not None:
-                        self.proc.join()
-                        self.proc = None
-                    break
-                results.append(result)
-        except Empty:
-            pass
-        self.ProcessResults(results)
-        if self.proc is None:
-            self.result_poll_done = True
-            self.Refresh()
-            log = "Search Done:"
-            log += " name=('%s',%s)"%(self.search.name_text,
-                                      "regex" if self.search.name_regx else "str")
-            log += " text=('%s',%s)"%(self.search.cont_text,
-                                      "regex" if self.search.cont_regx else "str")
-            log += " " + str(len(self.search.GetResults())) + " results\n"
-            log += "\n".join([dt.abspath for dt in self.search.dirtrees])
-            glsLog.add(log)
-            wx.YieldIfNeeded()
-            return
-        wx.CallLater(150, self.PollResults)
-        return
     def OnRightDown(self, event):
         popup = glsSearchResultListPopupMenu(self, (self.GetSelection() != wx.NOT_FOUND and
                                                     self.GetSelection() != 0))
         self.PopupMenu(popup, event.GetPosition())
         return
     def OnMenuItem(self, event):
-        item_id = event.GetId() 
+        item_id = event.GetId()
         if item_id == glsSearchResultListPopupMenu.ID_EXIT:
             self.OnClose()
         elif (item_id == glsSearchResultListPopupMenu.ID_OPEN or
@@ -423,17 +390,75 @@ class glsSearchResultList(wx.VListBox):
                 lndx = None
             self.callback_resultopen(item_id, path, lndx)
         return
+    def ProcessResults(self, results):
+        if results is None or len(results) == 0:
+            return
+        for result in results:
+            self.search.AddResult(result)
+        self.SetItemCount(len(self.search.GetResults()) + 1)
+        self.Refresh()
+        wx.YieldIfNeeded()
+        return
+    def PollResults(self):
+        if self.closing:
+            self.result_poll_done = True
+            return
+        results = []
+        try:
+            while True:
+                result = self.in_q.get_nowait()
+                if result is None:
+                    if self.proc is not None:
+                        self.proc.join()
+                        self.proc = None
+                    break
+                results.append(result)
+                if len(results) >= 10000:
+                    break
+                if not len(results)%1000:
+                    wx.YieldIfNeeded()
+                if self.closing:
+                    self.result_poll_done = True
+                    return
+        except Empty:
+            pass
+        self.ProcessResults(results)
+        if self.proc is None:
+            self.result_poll_done = True
+            self.Refresh()
+            log = "Search Done:"
+            log += " name=('%s',%s)"%(self.search.name_text,
+                                      "regex" if self.search.name_regx else "str")
+            log += " text=('%s',%s)"%(self.search.cont_text,
+                                      "regex" if self.search.cont_regx else "str")
+            log += " " + str(len(self.search.GetResults())) + " results\n"
+            log += "\n".join([dt.abspath for dt in self.search.dirtrees])
+            glsLog.add(log)
+            wx.YieldIfNeeded()
+            return
+        wx.CallLater(150, self.PollResults)
+        return
     def OnClose(self, event=None):
         self.closing = True
         if self.proc:
             self.proc.stop()
+            self.proc.join(timeout=0.1)
+            if self.proc.is_alive():
+                self.proc.terminate()
+            self.proc.join(timeout=0.1)
+            if self.proc.is_alive():
+                self.proc.kill()
             self.proc.join()
             self.proc = None
         if not self.result_poll_done:
             wx.CallLater(10, self.OnClose)
             if event is not None:
                 event.Veto()
+            return
         self.callback_close()
+        return
+    def OnDestroy(self, event):
+        self.OnClose()
         return
 
 ################################################################
