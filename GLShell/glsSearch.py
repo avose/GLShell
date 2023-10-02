@@ -29,22 +29,9 @@ class glsSearchProcess(Process):
         self.event.set()
         return
     def GetResults(self):
-        if self.search.kind == self.search.KIND_FILES:
-            for pndx,dirtree in enumerate(self.search.dirtrees):
-                for result in self.SearchFiles(dirtree):
-                    yield (pndx, result)
-        elif self.search.kind == self.search.KIND_CONTENTS:
-            for pndx,dirtree in enumerate(self.search.dirtrees):
-                for result in self.SearchContents(dirtree):
-                    yield (pndx, result)
-        return
-    def SearchFiles(self, dirtree):
-        if self.search.text is None or self.search.text == "":
-            return
-        stext = self.search.text
-        for nndx,node in enumerate(dirtree.dirtree.graph.nlist):
-            if re.search(stext, node.name):
-                yield (nndx, node.abspath, None)
+        for dtndx,dirtree in enumerate(self.search.dirtrees):
+            for result in self.SearchDirTree(dirtree):
+                yield (dtndx, result)
         return
     def LinesOf(self, contents):
         newline = bytes('\n', "utf-8")
@@ -61,49 +48,115 @@ class glsSearchProcess(Process):
             line = contents[start:]
             yield line_num, line.decode("utf-8")
         return
-    def SearchContents(self, dirtree):
-        if self.search.text is None or self.search.text == "":
+    def SearchContents(self, node):
+        if not isinstance(node, glsFile):
+            return (False, None)
+        mimetype = mimetypes.guess_type(node.abspath)[0]
+        try:
+            with open(node.abspath, 'rb', 0) as f:
+                contents = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                if (node.name.endswith("~") or
+                    mimetype is not None and mimetype.startswith("text/")):
+                    for index, line in self.LinesOf(contents):
+                        if self.search.MatchContent(line):
+                            yield (True, (index, line))
+                else:
+                    if self.search.MatchContent(contents, True):
+                        yield (True, None)
+        except:
+            return (False, None)
+        return
+    def SearchDirTree(self, dirtree):
+        nodes = dirtree.GetNodes()
+        if not self.search.has_cont:
+            for nndx,node in enumerate(nodes):
+                if self.search.MatchName(node.name):
+                    yield (nndx, node.abspath, None)
             return
-        stext = self.search.text
-        for nndx,node in enumerate(dirtree.dirtree.graph.nlist):
-            if not isinstance(node, glsFile):
-                continue
-            mimetype = mimetypes.guess_type(node.abspath)[0]
-            try:
-                with open(node.abspath, 'rb', 0) as f:
-                    contents = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                    if (node.name.endswith("~") or
-                        mimetype is not None and mimetype.startswith("text/")):
-                        for index, line in self.LinesOf(contents):
-                            if re.search(stext, line):
-                                yield (nndx, node.abspath, (index,line))
-                    else:
-                        if re.search(bytes(stext,"utf-8"), contents):
-                            yield (nndx, node.abspath, None)
-            except:
-                continue
+        for nndx,node in enumerate(nodes):
+            if self.search.MatchName(node.name):
+                for match, line_info in self.SearchContents(node):
+                    if match:
+                        yield (nndx, node.abspath, line_info)
         return
 
 ################################################################
 
+class glsMatch():
+    def __init__(self, start, end):
+        self.ndx_start = int(start)
+        self.ndx_end = int(end)
+        return
+    def start(self):
+        return self.ndx_start
+    def end(self):
+        return self.ndx_end
+
+################################################################
+
 class glsSearch():
-    KIND_FILES = 1
-    KIND_CONTENTS = 2
-    def __init__(self, dirtrees, text, kind):
+    def __init__(self, dirtrees, name_text, name_regx=False,
+                 cont_text=None, cont_regx=False):
         self.dirtrees = dirtrees
-        self.text = text
-        self.kind = kind
+        self.name_text = name_text
+        self.name_regx = name_regx
+        self.cont_text = cont_text
+        self.cont_regx = cont_regx
+        if self.name_text is None or self.name_text == "":
+            self.has_name = False
+            if self.name_regx:
+                self.name_text = '.*'
+        else:
+            self.has_name = True
+        if self.cont_text is None or self.cont_text == "":
+            self.has_cont = False
+        else:
+            self.has_cont = True
+            self.cont_text_bytes = bytes(self.cont_text,"utf-8")
         self.results = []
         self.result_files = {}
         return
+    def MatchName(self, name):
+        if not self.has_name:
+            return True
+        if self.name_regx:
+            return re.search(self.name_text, name)
+        return name.find(self.name_text) != -1
+    def MatchContent(self, content, isbytes=False):
+        if not self.has_cont:
+            return True
+        stext = self.cont_text_bytes if isbytes else self.cont_text
+        if self.cont_regx:
+            return re.search(stext, content)
+        return content.find(stext) != -1
+    def IndexName(self, name):
+        if not self.has_name:
+            return None
+        if self.name_regx:
+            return re.search(self.name_text, name)
+        start = name.find(self.name_text)
+        if start == -1:
+            return None
+        end = start + len(self.name_text)
+        return glsMatch(start, end)
+    def IndexContent(self, content):
+        if not self.has_cont:
+            return None
+        if self.cont_regx:
+            return re.search(self.cont_text, content)
+        start = content.find(self.cont_text)
+        if start == -1:
+            return None
+        end = start + len(self.cont_text)
+        return glsMatch(start, end)
     def AddResult(self, result):
-        pndx, result = result
+        dtndx, result = result
         nndx, path, line = result
         if line:
             lndx, line = line
         else:
             lndx = 0
-        key = (pndx,nndx)
+        key = (dtndx,nndx)
         if key not in self.result_files:
             self.result_files[key] = True
             self.results.append( (path,) )
@@ -156,10 +209,11 @@ class glsSearchResultList(wx.VListBox):
         self.SetItemCount(1)
         self.in_q = Queue()
         self.proc = glsSearchProcess(self.search, self.in_q)
-        if self.search.kind == glsSearch.KIND_FILES:
-            glsLog.add("Search Files Start: '%s'"%self.search.text)
-        elif self.search.kind == glsSearch.KIND_CONTENTS:
-            glsLog.add("Search Contents Start: '%s'"%self.search.text)
+        glsLog.add("Search Start: name=('%s',%s) text=('%s',%s)"%
+                   (self.search.name_text,
+                    "regex" if self.search.name_regx else "str",
+                    self.search.cont_text,
+                    "regex" if self.search.cont_regx else "str"))
         self.proc.start()
         self.closing = False
         self.result_poll_done = False
@@ -187,15 +241,17 @@ class glsSearchResultList(wx.VListBox):
         line, rows_line = self.LineWrapText("        " + line)
         return "", 0, line, rows_line, ("%d: "%(lndx)).ljust(8)
     def HeaderToString(self):
-        if self.search.kind == self.search.KIND_FILES:
-            kind_text = "files"
-        elif self.search.kind == self.search.KIND_CONTENTS:
-            kind_text = "file contents"
-        text = 'Searching %s for: "%s"'%(kind_text, self.search.text)
         if self.proc is not None:
-            text = "(active) " + text
+            text = "(active)"
         else:
-            text = "(finished) " + text
+            text = "(done)"
+        text += " Searching:"
+        if self.search.name_text:
+            text += " name='%s' %s"%(self.search.name_text,
+                                    '(regex)' if self.search.name_regx else '')
+        if self.search.cont_text:
+            text += " contents='%s' %s"%(self.search.cont_text,
+                                         '(regex)' if self.search.cont_regx else '')
         return self.LineWrapText(text)
     def MeasureHeader(self):
         text, rows = self.HeaderToString()
@@ -239,7 +295,7 @@ class glsSearchResultList(wx.VListBox):
         line_len = len(line)
         new_line = ""
         matches = ""
-        match = re.search(self.search.text, line)
+        match = self.search.IndexContent(line)
         while match:
             for i in range(0, match.start()):
                 matches += " "
@@ -248,7 +304,7 @@ class glsSearchResultList(wx.VListBox):
             for i in range(match.start(), match.end()):
                 new_line += " "
             line = line[match.end():]
-            match = re.search(self.search.text, line)
+            match = self.search.IndexContent(line)
         for i in range(0, len(line)):
             matches += " "
         new_line += line
@@ -300,12 +356,13 @@ class glsSearchResultList(wx.VListBox):
         if self.proc is None:
             self.result_poll_done = True
             self.Refresh()
-            if self.search.kind == glsSearch.KIND_FILES:
-                log = "Search Files Finished: '%s' "%self.search.text
-            elif self.search.kind == glsSearch.KIND_CONTENTS:
-                log = "Search Contents Finished: '%s' "%self.search.text
-            log += str(len(self.search.GetResults())) + " results\n"
-            log += "\n".join([dt.dirtree.abspath for dt in self.search.dirtrees])
+            log = "Search Done:"
+            log += " name=('%s',%s)"%(self.search.name_text,
+                                      "regex" if self.search.name_regx else "str")
+            log += " text=('%s',%s)"%(self.search.cont_text,
+                                      "regex" if self.search.cont_regx else "str")
+            log += " " + str(len(self.search.GetResults())) + " results\n"
+            log += "\n".join([dt.abspath for dt in self.search.dirtrees])
             glsLog.add(log)
             wx.YieldIfNeeded()
             return

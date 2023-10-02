@@ -70,6 +70,9 @@ class glsDirTree(wx.EvtHandler):
                    len(self.graph.np_nkinds[self.KIND_FILE]))
         self.thread.start()
         return
+    def GetNodes(self):
+        with self.thread.lock:
+            return self.thread.graph.nlist
     def ScanDir(self, path):
         path = os.path.abspath(path)
         if os.path.exists(path):

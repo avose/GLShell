@@ -99,25 +99,31 @@ class glsDataPanel(wx.Window):
         graph_panel.StartGraph()
         return
     def GetDirTrees(self):
-        return [ tab for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
+        return [ tab.dirtree for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
     def AddSearch(self, search):
         self.RemovePlaceHolder()
         result_panel = glsSearchResultPanel(self.notebook, search, self.OnResultOpen,
                                             self.OnCloseTab)
         self.tabs.append(result_panel)
-        if search.kind == search.KIND_FILES:
-            kind_text = "Files"
-        elif search.kind == search.KIND_CONTENTS:
-            kind_text = "Contents"
-        self.notebook.AddPage(result_panel, " Search %s '%s'"%(kind_text, search.text))
+        label = " Search"
+        if search.has_cont and search.has_name:
+            label += " '%s' in"%search.cont_text
+            label += " '%s'"%search.name_text
+        elif search.has_name:
+            label += " '%s'"%search.name_text
+        else:
+            label += " '%s'"%search.cont_text
+        self.notebook.AddPage(result_panel, label)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_SEARCH)
         self.notebook.SetSelection(len(self.tabs)-1)
         return
     def SearchFiles(self, text):
-        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.KIND_FILES))
+        search = glsSearch(self.GetDirTrees(), text)
+        self.AddSearch(search)
         return
     def SearchContents(self, text):
-        self.AddSearch(glsSearch(self.GetDirTrees(), text, glsSearch.KIND_CONTENTS))
+        search = glsSearch(self.GetDirTrees(), None, False, text)
+        self.AddSearch(search)
         return
     def OnResultOpen(self, action_id, path, line=None):
         if action_id == glsSearchResultListPopupMenu.ID_OPEN_NEW:
