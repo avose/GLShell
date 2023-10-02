@@ -40,6 +40,7 @@ import sys
 import wx
 
 from glsSettingsDialog import glsSettingsDialog
+from glsSearchDialog import glsSearchDialog
 from glsTermsPanel import glsTermsPanel
 from glsStatusBar import glsStatusBar
 from glsDataPanel import glsDataPanel
@@ -60,7 +61,8 @@ class glShell(wx.Frame):
     ID_LICENSE   = 1002
     ID_ABOUT     = 1003
     ID_SETTINGS  = 1004
-    ID_EXIT      = 1005
+    ID_SEARCH    = 1005
+    ID_EXIT      = 1006
     def __init__(self, app):
         glsSettings.AddWatcher(self.OnChangeSettings)
         self.app = app
@@ -109,6 +111,12 @@ class glShell(wx.Frame):
         item.SetBitmap(glsIcons.Get('cog'))
         menu_edit.Append(item)
         menubar.Append(menu_edit, 'Edit')
+        # Search menu.
+        menu_search = wx.Menu()
+        item = wx.MenuItem(menu_search, self.ID_SEARCH, text="Advanced Search")
+        item.SetBitmap(glsIcons.Get('magnifier'))
+        menu_search.Append(item)
+        menubar.Append(menu_search, 'Search')
         # Help menu.
         menu_help = wx.Menu()
         item = wx.MenuItem(menu_help, self.ID_ABOUT, text="About")
@@ -152,16 +160,25 @@ class glShell(wx.Frame):
                 self.settings_frame.Raise()
             else:
                 self.settings_frame.Raise()
-        elif menu_id == self.ID_ABOUT:
+            return
+        if menu_id == self.ID_SEARCH:
+            search = glsSearchDialog(self)
+            result_id = search.ShowModal()
+            if result_id == glsSearchDialog.ID_SEARCH:
+                print(search.SearchSettings())
+            return
+        if menu_id == self.ID_ABOUT:
             if self.about_frame is None:
                 self.about_frame = glsAboutFrame(self)
             else:
                 self.about_frame.Raise()
-        elif menu_id == self.ID_LICENSE:
+            return
+        if menu_id == self.ID_LICENSE:
             if self.license_frame is None:
                 self.license_frame = glsLicenseFrame(self)
             else:
                 self.license_frame.Raise()
+            return
         return
     def InitStatusBar(self):
         self.statusbar = glsStatusBar(self)

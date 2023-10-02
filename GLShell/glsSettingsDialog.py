@@ -216,8 +216,8 @@ class TabGraph(wx.Panel):
         wx.Panel.__init__(self, parent)
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Row one.
-        lblList = ['3D', '2D']
-        self.rbox = wx.RadioBox(self, label='Graph Rendering', choices=lblList,
+        dims = ['3D', '2D']
+        self.rbox = wx.RadioBox(self, label='Graph Rendering', choices=dims,
                                 majorDimension=1, style=wx.RA_SPECIFY_ROWS)
         if glsSettings.Get('graph_3D'):
             self.rbox.SetSelection(0)
