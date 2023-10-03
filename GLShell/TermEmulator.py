@@ -572,7 +572,6 @@ class V102Terminal:
         bottom row then scroll up.
         """
         glsLog.debug("TE: Newline: @ (%d,%d)"%(self.curX, self.curY), 4)
-        self.curX = 0
         if self.curY + 1 < self.rows:
             self.curY += 1
         else:
@@ -583,9 +582,10 @@ class V102Terminal:
         Writes the character(ch) into current cursor position and advances
         cursor position.
         """
-        #glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
+        glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
         if self.curX >= self.cols:
             self.__NewLine()
+            self.curX = 0
         self.screen[self.curY][self.curX] = ch
         self.scrRendition[self.curY][self.curX] = self.curRendition
         self.curX += 1
@@ -679,6 +679,7 @@ class V102Terminal:
         """
         Handler for backspace character
         """
+        glsLog.debug("TE: BS: @ (%d,%d)"%(self.curX, self.curY), 4)
         if self.curX > 0:
             self.curX -= 1
         return index + 1
@@ -686,6 +687,7 @@ class V102Terminal:
         """
         Handler for horizontal tab character
         """
+        glsLog.debug("TE: TAB: @ (%d,%d)"%(self.curX, self.curY), 4)
         while self.curX + 1 < self.cols:
             self.curX += 1
             if self.curX % 8 == 0:
@@ -695,30 +697,35 @@ class V102Terminal:
         """
         Handler for line feed character
         """
+        glsLog.debug("TE: LF: @ (%d,%d)"%(self.curX, self.curY), 4)
         self.__NewLine()
         return index + 1
     def __OnCharCR(self, text, index):
         """
         Handler for carriage return character
         """
+        glsLog.debug("TE: CR: @ (%d,%d)"%(self.curX, self.curY), 4)
         self.curX = 0
         return index + 1
     def __OnCharXON(self, text, index):
         """
         Handler for XON character
         """
+        glsLog.debug("TE: XON: @ (%d,%d)"%(self.curX, self.curY), 4)
         self.ignoreChars = False
         return index + 1
     def __OnCharXOFF(self, text, index):
         """
         Handler for XOFF character
         """
+        glsLog.debug("TE: XOFF: @ (%d,%d)"%(self.curX, self.curY), 4)
         self.ignoreChars = True
         return index + 1
     def __OnCharESC(self, text, index):
         """
         Handler for escape character
         """
+        glsLog.debug("TE: ESC: @ (%d,%d)"%(self.curX, self.curY), 4)
         index += 1
         if index < len(text):
             index = self.__HandleEscSeq(text, index)
@@ -755,6 +762,7 @@ class V102Terminal:
     ################################################################
     def __OnEscSeqTitle(self, params):
         # Handler: Window Title Escape Sequence
+        glsLog.debug("TE: Set Window Title: '%s'"%(params), 4)
         if self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE] != None:
             self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE](params)
         return
@@ -762,6 +770,7 @@ class V102Terminal:
         # Handler ICH / SL: Insert (Blank) Characters / Shift Left
         if ' ' in params:
             # Escape sequence SL
+            glsLog.debug("TE: (SL) Shift Left: '%s%s'"%(params, end), 4)
             plist = params.split(' ')
             if len(plist) != 2:
                 self.__UnhandledEscSeq(params+end)
@@ -771,6 +780,7 @@ class V102Terminal:
             self.curX = newX if newX < self.cols else self.cols
         else:
             # Escape sequence ICH
+            glsLog.debug("TE: (ICH) Insert (Blank) Chars: '%s%s'"%(params, end), 4)
             row = self.curY
             col = self.curX
             count = int(params) if params != '' else 1
@@ -784,6 +794,7 @@ class V102Terminal:
         return
     def __OnEscSeqCUU(self, params, end):
         # Handler CUU: Cursor Update Up
+        glsLog.debug("TE: (CUU) Cursor Update Up: '%s%s'"%(params, end), 4)
         n = 1
         if params != None:
             n = int(params)
@@ -793,6 +804,7 @@ class V102Terminal:
         return
     def __OnEscSeqCUD(self, params, end):
         # Handler CUD: Cursor Update Down
+        glsLog.debug("TE: (CUD) Cursor Update Down: '%s%s'"%(params, end), 4)
         n = 1
         if params != None:
             n = int(params)
@@ -802,6 +814,7 @@ class V102Terminal:
         return
     def __OnEscSeqCUF(self, params, end):
         # Handler CUF: Cursor Update Forward
+        glsLog.debug("TE: (CUF) Cursor Update Forward: '%s%s'"%(params, end), 4)
         n = 1
         if params != None:
             n = int(params)
@@ -811,6 +824,7 @@ class V102Terminal:
         return
     def __OnEscSeqCUB(self, params, end):
         # Handler CUB: Cursor Update Back
+        glsLog.debug("TE: (CUB) Cursor Update Back: '%s%s'"%(params, end), 4)
         n = 1
         if params != None:
             n = int(params)
@@ -829,10 +843,11 @@ class V102Terminal:
         else:
             glsLog.debug("TE: (CHA) Cursor Horizontal Position: %d out of bounds (%d)!"%
                          (col, self.cols), 3)
-        glsLog.debug("TE: (CHA) Cursor Horizontal Position: %d"%(col), 5)
+        glsLog.debug("TE: (CHA) Cursor Horizontal Absolute: %d"%(col), 5)
         return
     def __OnEscSeqCUP(self, params, end):
         # Handler CUP: Cursor Update Position
+        glsLog.debug("TE: (CUP) Cursor Update Position: '%s%s'"%(params, end), 4)
         y = 0
         x = 0
         if params != None:
@@ -851,6 +866,7 @@ class V102Terminal:
         return
     def __OnEscSeqED(self, params, end):
         # Handler ED: Erase Display
+        glsLog.debug("TE: (ED) Erase Display: '%s%s'"%(params, end), 4)
         n = 0
         if params != None:
             n = int(params)
@@ -865,6 +881,7 @@ class V102Terminal:
         return
     def __OnEscSeqEL(self, params, end):
         # Handler EL: Erase Line
+        glsLog.debug("TE: (EL) Erase Line: '%s%s'"%(params, end), 4)
         n = 0
         if params != None:
             n = int(params)
@@ -974,7 +991,7 @@ class V102Terminal:
         else:
             self.curRendition = 0
         params = "" if params is None else params
-        #glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
+        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
     def __OnEscSeqSM(self, params, end):
         # Handler SM: Sets Mode
