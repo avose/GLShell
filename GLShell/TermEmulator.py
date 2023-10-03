@@ -52,8 +52,8 @@ class V102Terminal:
     __ASCII_VT = 11         # Vertical Tab
     __ASCII_FF = 12         # Form Feed
     __ASCII_CR = 13         # Carriage Return
-    __ASCII_S0 = 14         # Activates G1 character set
-    __ASCII_SI = 15         # Activates G0 character set
+    __ASCII_SO = 14         # Shift out to G1 character set
+    __ASCII_SI = 15         # Shift in to G0 character set
     __ASCII_XON = 17        # Resume Transmission
     __ASCII_XOFF = 19       # Stop Transmission or Ignore Characters
     __ASCII_ESC = 27        # Escape
@@ -191,7 +191,7 @@ class V102Terminal:
                               self.__ASCII_XOFF:self.__OnCharXOFF,
                               self.__ASCII_ESC: self.__OnCharESC,
                               self.__ASCII_CSI: self.__OnCharCSI,
-                              self.__ASCII_S0:  self.__OnCharS0,
+                              self.__ASCII_SO:  self.__OnCharSO,
                               self.__ASCII_SI:  self.__OnCharSI, }
 
         # escape sequence handlers
@@ -731,23 +731,23 @@ class V102Terminal:
         index += 1
         index = self.__HandleEscSeq(text, index)
         return index
-    def __OnCharS0(self, text, index):
+    def __OnCharSO(self, text, index):
         """
-        Handler for control sequence S0 character
+        Handler SO: Shit out to the G1 character set.
         """
-        self.__UnhandledEscSeq(text[index])
+        glsLog.debug("TE: (SO) Shift Out: Unimplemented.", 3)
         index += 1
         return index
     def __OnCharSI(self, text, index):
         """
-        Handler for control sequence S0 character
+        Handler SI: Shift in to the G0 character set.
         """
-        self.__UnhandledEscSeq(text[index])
+        glsLog.debug("TE: (SI) Shift In: Unimplemented.", 3)
         index += 1
         return index
     def __OnCharIgnore(self, text, index):
         """
-        Dummy handler for unhandled characters
+        Handler: dummy for unhandled characters
         """
         return index + 1
     ################################################################
