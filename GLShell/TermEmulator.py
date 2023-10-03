@@ -104,12 +104,12 @@ class V102Terminal:
                             # as CSI 0 m (reset / normal), which is typical of most
                             # of the ANSI codes.
 
-    __ESCSEQ_SETM = 'h'     # [?] n h: Sets a mode; there are 14 modes defined for a
+    __ESCSEQ_SM = 'h'       # [?] n h: Sets a mode; there are 14 modes defined for a
                             # vt102. While not all modes are supported, some extra
                             # modes commonly used with other terminal types may be
                             # supported.
 
-    __ESCSEQ_CLRM = 'l'     # [?] n l: Clears a mode; there are 14 modes defined for a
+    __ESCSEQ_RM = 'l'       # [?] n l: Clears a mode; there are 14 modes defined for a
                             # vt102. While not all modes are supported, some extra
                             # modes commonly used with other terminal types may be
                             # supported.
@@ -209,8 +209,8 @@ class V102Terminal:
                                 self.__ESCSEQ_DCH:    self.__OnEscSeqDCH,
                                 self.__ESCSEQ_VPA:    self.__OnEscSeqVPA,
                                 self.__ESCSEQ_SGR:    self.__OnEscSeqSGR,
-                                self.__ESCSEQ_SETM:   self.__OnEscSeqSETCLRM,
-                                self.__ESCSEQ_CLRM:   self.__OnEscSeqSETCLRM,
+                                self.__ESCSEQ_SM:     self.__OnEscSeqSM,
+                                self.__ESCSEQ_RM:     self.__OnEscSeqRM,
                                 self.__ESCSEQ_DECSTBM:self.__OnEscSeqDECSTBM,
                                 self.__ESCSEQ_CSZ:    self.__OnEscSeqCSZ, }
 
@@ -976,22 +976,34 @@ class V102Terminal:
         params = "" if params is None else params
         #glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
-    def __OnEscSeqSETCLRM(self, params, end):
-        # Handler SETM / CLRM: Sets / Clear Mode
+    def __OnEscSeqSM(self, params, end):
+        # Handler SM: Sets Mode
         if params == None:
-            glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: No Parameter!", 3)
+            glsLog.debug("TE: (SM) Set Mode: No Parameter!", 3)
             return
         if params not in self.modes:
-            glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: Unknown mode: '%s%s'"%
+            glsLog.debug("TE: (SM) Set Mode: Unknown mode: '%s%s'!"%
                          (params,end), 3)
             return
-        if end == 'h':
-            self.modes[params] = True
-        elif end == 'l':
-            self.modes[params] = False
+        self.modes[params] = True
         if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
             self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
-        glsLog.debug("TE: (SETM/CLRM) Set / Clear Mode: '%s%s'"%
+        glsLog.debug("TE: (SM) Set Mode: '%s%s'"%
+                     (params,end), 5)
+        return
+    def __OnEscSeqRM(self, params, end):
+        # Handler RM: Resets Mode
+        if params == None:
+            glsLog.debug("TE: (RM) Reset Mode: No Parameter!", 3)
+            return
+        if params not in self.modes:
+            glsLog.debug("TE: (RM) Reset Mode: Unknown mode: '%s%s'!"%
+                         (params,end), 3)
+            return
+        self.modes[params] = False
+        if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
+            self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
+        glsLog.debug("TE: (RM) Reset Mode: '%s%s'"%
                      (params,end), 5)
         return
     def __OnEscSeqDECSTBM(self, params, end):
