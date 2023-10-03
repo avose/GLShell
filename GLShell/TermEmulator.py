@@ -886,12 +886,12 @@ class V102Terminal:
             line = self.screen.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 line[i] = u' '
-            self.screen.insert(self.curY+l, line)
-            self.isLineDirty[self.curY+l] = True
+            self.screen.insert(self.curY, line)
+            self.isLineDirty[self.curY] = True
             rendition = self.scrRendition.pop(self.scrollRegion[1])
             for i in range(self.cols):
-                rendition[i] = 0
-            self.scrRendition.insert(self.curY+l, rendition)
+                rendition[i] = self.curRendition
+            self.scrRendition.insert(self.curY, rendition)
         glsLog.debug("TE: (IL) Insert Lines: %d @ (%d,%d) term.rows=%d"%
                      (n, self.curY, self.scrollRegion[1], self.rows), 4)
         return
@@ -900,15 +900,15 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
-            self.isLineDirty[self.curY+l] = True
-            line = self.screen.pop(self.curY+l)
+            self.isLineDirty[self.curY] = True
+            line = self.screen.pop(self.curY)
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.scrollRegion[1], line)
             self.isLineDirty[self.scrollRegion[1]] = True
-            rendition = self.scrRendition.pop(self.curY+l)
+            rendition = self.scrRendition.pop(self.curY)
             for i in range(self.cols):
-                rendition[i] = 0
+                rendition[i] = self.curRendition
             self.scrRendition.insert(self.scrollRegion[1], rendition)
         glsLog.debug("TE: (DL) Delete Lines: %d @ (%d,%d) term.rows=%d"%
                      (n, self.curY, self.scrollRegion[1], self.rows), 5)
@@ -974,7 +974,7 @@ class V102Terminal:
         else:
             self.curRendition = 0
         params = "" if params is None else params
-        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
+        #glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
     def __OnEscSeqSETCLRM(self, params, end):
         # Handler SETM / CLRM: Sets / Clear Mode
