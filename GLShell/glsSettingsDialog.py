@@ -196,17 +196,19 @@ class TabTerminal(wx.Panel):
         self.Refresh()
         return
     def Save(self):
-        shell_path               = self.tc_shellpath.GetValue()
-        glsSettings.Set('shell_path', os.path.abspath(shell_path))
-        glsSettings.Set('shell_args', self.tc_shellargs.GetValue())
-        glsSettings.Set('term_type', self.tc_termtype.GetValue())
-        glsSettings.Set('term_color', self.cb_termcolor.IsChecked())
+        settings = []
+        shell_path = self.tc_shellpath.GetValue()
+        settings.append( ('shell_path', os.path.abspath(shell_path)) )
+        settings.append( ('shell_args', self.tc_shellargs.GetValue()) )
+        settings.append( ('term_type', self.tc_termtype.GetValue()) )
+        settings.append( ('term_color', self.cb_termcolor.IsChecked()) )
         color = self.cp_fgcolor.GetColour()
-        glsSettings.Set('term_fgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue()))
+        settings.append( ('term_fgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue())) )
         color = self.cp_bgcolor.GetColour()
-        glsSettings.Set('term_bgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue()))
-        glsSettings.Set('term_font', self.font_name)
-        glsSettings.Set('term_font_size', self.font_size)
+        settings.append( ('term_bgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue())) )
+        settings.append( ('term_font', self.font_name) )
+        settings.append( ('term_font_size', self.font_size) )
+        glsSettings.SetList(settings)
         return
 
 ################################################################
@@ -266,13 +268,15 @@ class TabGraph(wx.Panel):
         self.Refresh()
         return
     def Save(self):
+        settings = []
         dims = self.rbox.GetStringSelection()
         if dims == "3D":
-            glsSettings.Set('graph_3D', True)
+            settings.append( ('graph_3D', True) )
         else:
-            glsSettings.Set('graph_3D', False)
-        glsSettings.Set('graph_font', self.font_name)
-        glsSettings.Set('graph_font_size', self.font_size)
+            settings.append( ('graph_3D', False) )
+        settings.append( ('graph_font', self.font_name) )
+        settings.append( ('graph_font_size', self.font_size) )
+        glsSettings.SetList(settings)
         return
 
 ################################################################
@@ -343,11 +347,13 @@ class TabEditor(wx.Panel):
         self.tc_open.SetValue(glsSettings.Get('edit_open'))
         self.tc_line.SetValue(glsSettings.Get('edit_line'))
     def Save(self):
+        settings = []
         edit_path = self.tc_path.GetValue()
-        glsSettings.Set('edit_path', os.path.abspath(edit_path))
-        glsSettings.Set('edit_args', self.tc_args.GetValue())
-        glsSettings.Set('edit_open', self.tc_open.GetValue())
-        glsSettings.Set('edit_line', self.tc_line.GetValue())
+        settings.append( ('edit_path', os.path.abspath(edit_path)) )
+        settings.append( ('edit_args', self.tc_args.GetValue()) )
+        settings.append( ('edit_open', self.tc_open.GetValue()) )
+        settings.append( ('edit_line', self.tc_line.GetValue()) )
+        glsSettings.SetList(settings)
         return
 
 ################################################################

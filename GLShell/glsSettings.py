@@ -68,6 +68,11 @@ class glsSettingsManager():
         glsSettingsManager.__settings[key] = value
         self.OnChange()
         return value
+    def SetList(self, settings_list):
+        for key, value in settings_list:
+            glsSettingsManager.__settings[key] = value
+        self.OnChange()
+        return
     def OnChange(self):
         # Call this method if settings have changed.
         for watcher in glsSettingsManager.__watchers:
