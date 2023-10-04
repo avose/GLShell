@@ -358,6 +358,31 @@ class TabEditor(wx.Panel):
 
 ################################################################
 
+class TabGeneral(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent)
+        box_main = wx.BoxSizer(wx.VERTICAL)
+        # Row zero.
+        row0 = wx.BoxSizer(wx.HORIZONTAL)
+        self.st_log_level = wx.StaticText(self, wx.ID_ANY, "Debug Log Level:")
+        row0.Add(self.st_log_level, 0, wx.ALIGN_CENTER | wx.LEFT | wx.TOP | wx.RIGHT, 5)
+        log_level = glsSettings.Get('log_level')
+        self.sp_log = wx.SpinCtrl(self, id=wx.ID_ANY, value=str(log_level),
+                                  style=wx.SP_ARROW_KEYS, min=0, max=100, initial=log_level)
+        row0.Add(self.sp_log, 0, wx.ALIGN_CENTER | wx.LEFT | wx.TOP | wx.RIGHT, 5)
+        box_main.Add(row0, 0)
+        self.SetSizerAndFit(box_main)
+        self.Show(True)
+    def Load(self):
+        self.sp_log.SetValue(glsSettings.Get('lov_level'))
+    def Save(self):
+        settings = []
+        settings.append( ('log_level', self.sp_log.GetValue()) )
+        glsSettings.SetList(settings)
+        return
+
+################################################################
+
 class glsSettingsDialog(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="Settings", style=style)
@@ -371,12 +396,14 @@ class glsSettingsDialog(wx.Frame):
         self.image_list.Add(glsIcons.Get('monitor'))
         self.image_list.Add(glsIcons.Get('monitor_edit'))
         self.image_list.Add(glsIcons.Get('chart_organisation'))
+        self.image_list.Add(glsIcons.Get('cog'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = [ TabTerminal(self.notebook),
                       TabEditor(self.notebook),
-                      TabGraph(self.notebook) ]
-        self.tab_names = [ " Terminal", " Term Editor", " FDP Graph" ]
+                      TabGraph(self.notebook),
+                      TabGeneral(self.notebook) ]
+        self.tab_names = [ " Terminal", " Term Editor", " FDP Graph", " General" ]
         for t in range(len(self.tabs)):
             self.notebook.AddPage(self.tabs[t], self.tab_names[t])
             self.notebook.SetPageImage(t, t)
