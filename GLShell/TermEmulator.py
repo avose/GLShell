@@ -28,17 +28,18 @@ Emulator for VT100 terminal programs.
 
 This module provides terminal emulation for VT100 terminal programs. It handles
 V100 special characters and most important escape sequences. It also handles
-graphics rendition which specifies text style(i.e. bold, italics), foreground color
+graphics rendition which specifies text style (i.e. bold, italics), foreground color
 and background color. The handled escape sequences are CUU, CUD, CUF, CUB, CHA,
 CUP, ED, EL, VPA and SGR.
 """
 
 from __future__ import print_function
 
-import sys
 import os
+import sys
 import pty
 import select
+import traceback
 from array import *
 
 from glsLog import glsLog
@@ -104,6 +105,9 @@ class V102Terminal:
                             # as CSI 0 m (reset / normal), which is typical of most
                             # of the ANSI codes.
 
+    __ESCSEQ_DSR = 'n'      # n: Device Status Report. n == 5 => Request Operating
+                            # Status. n == 6 => Request Cursor Position.
+
     __ESCSEQ_SM = 'h'       # [?] n h: Sets a mode; there are 14 modes defined for a
                             # vt102. While not all modes are supported, some extra
                             # modes commonly used with other terminal types may be
@@ -125,25 +129,35 @@ class V102Terminal:
                             # "? n c", where n is the style.
 
     __ESC_RI = 'M'          # Non-CSI: Reverse index (linefeed).
+    __ESC_DECSC = '7'       # Non-CSI: Save cursor state.
+    __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
+    __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
+    __ESC_DECPAM = '='      # Non-CSI: keyPad Application Mode.
 
     # vt102 modes.
-    MODE_KAM     = '2'    # Keyboard action
-    MODE_IRM     = '4'    # Insert-replace
-    MODE_SRM     = '12'   # Send-receive
-    MODE_LMN     = '20'   # Linefeed / new line
-    MODE_DECCKM  = '?1'   # Cursor key
-    MODE_DECANM  = '?2'   # ANSI / VT52
-    MODE_DECCOLM = '?3'   # Column
-    MODE_DECSCLM = '?4'   # Scrolling
-    MODE_DECSCNM = '?5'   # Screen
-    MODE_DECOM   = '?6'   # Origin
-    MODE_DECAWM  = '?7'   # Auto wrap
-    MODE_DECARM  = '?8'   # Auto repeat
-    MODE_DECPFF  = '?18'  # Print form feed
-    MODE_DECPEX  = '?19'  # Print extent
+    MODE_KAM     = '2'      # Keyboard action
+    MODE_IRM     = '4'      # Insert-replace
+    MODE_SRM     = '12'     # Send-receive
+    MODE_LMN     = '20'     # Linefeed / new line
+    MODE_DECCKM  = '?1'     # Cursor key
+    MODE_DECANM  = '?2'     # ANSI / VT52
+    MODE_DECCOLM = '?3'     # Column
+    MODE_DECSCLM = '?4'     # Scrolling
+    MODE_DECSCNM = '?5'     # Screen
+    MODE_DECOM   = '?6'     # Origin
+    MODE_DECAWM  = '?7'     # Auto wrap
+    MODE_DECARM  = '?8'     # Auto repeat
+    MODE_DECPFF  = '?18'    # Print form feed
+    MODE_DECPEX  = '?19'    # Print extent
     # xterm modes.
-    MODE_DECTCEM = '?25'  # Show cursor
-    MODE_BRCKPST = '?2004'# Bracketed paste mode
+    MODE_BLINK   = '?12'    # Cursor blinking
+    MODE_DECTCEM = '?25'    # Show cursor
+    MODE_RFC     = '?1004'  # Report focus change
+    MODE_ASB_SC  = '?1049'  # Aternative screen buffer with save and clear
+    MODE_BRCKPST = '?2004'  # Bracketed paste mode
+    # TermEmulator modes.
+    MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
+    MODE_DECPAM = 'DECPAM'  # keyPad Application Mode
 
     CURSOR_STYLE_DEFAULT = 0
     CURSOR_STYLE_INVISIBLE = 1
@@ -164,22 +178,27 @@ class V102Terminal:
     CALLBACK_UPDATE_LINES = 1
     CALLBACK_UPDATE_CURSOR_POS = 2
     CALLBACK_UPDATE_WINDOW_TITLE = 3
-    CALLBACK_MODE_CHANGE = 4
-    CALLBACK_CURSOR_CHANGE = 5
+    CALLBACK_UPDATE_MODE = 4
+    CALLBACK_UPDATE_CURSOR = 5
+    CALLBACK_SEND_DATA = 6
 
     def __init__(self, rows, cols):
         """
         Initializes the terminal with specified rows and columns. User can
         resize the terminal any time using Resize method. By default the screen
-        is cleared(filled with blank spaces) and cursor positioned in the first
+        is cleared (filled with blank spaces) and cursor positioned in the first
         row and first column with the entire scrren in the scroll region.
         """
         self.cols = cols
         self.rows = rows
-        self.curX = 0
-        self.curY = 0
         self.ignoreChars = False
         self.scrollRegion = (0, self.rows-1)
+
+        # cursor state
+        self.cursorStyle = self.CURSOR_STYLE_DEFAULT
+        self.curX = 0
+        self.curY = 0
+        self.savedCursor = ( self.cursorStyle, self.curY, self.curX )
 
         # special character handlers
         self.charHandlers = { self.__ASCII_NUL: self.__OnCharIgnore,
@@ -212,6 +231,7 @@ class V102Terminal:
                                 self.__ESCSEQ_DCH:     self.__OnEscSeqDCH,
                                 self.__ESCSEQ_VPA:     self.__OnEscSeqVPA,
                                 self.__ESCSEQ_SGR:     self.__OnEscSeqSGR,
+                                self.__ESCSEQ_DSR:     self.__OnEscSeqDSR,
                                 self.__ESCSEQ_SM:      self.__OnEscSeqSM,
                                 self.__ESCSEQ_RM:      self.__OnEscSeqRM,
                                 self.__ESCSEQ_DECSCUSR:self.__OnEscSeqDECSCUSR,
@@ -219,14 +239,17 @@ class V102Terminal:
                                 self.__ESCSEQ_CSZ:     self.__OnEscSeqCSZ, }
 
         # ESC- but not CSI-sequences
-        self.escHandlers = { self.__ESC_RI: self.__OnEscRI, }
+        self.escHandlers = { self.__ESC_RI:    self.__OnEscRI,
+                             self.__ESC_DECSC: self.__OnEscDECSC,
+                             self.__ESC_DECRC: self.__OnEscDECRC,
+                             self.__ESC_DECPNM:self.__OnEscDECPNM,
+                             self.__ESC_DECPAM:self.__OnEscDECPAM, }
 
-        # cursor styles.
-        self.cursorStyle = self.CURSOR_STYLE_DEFAULT
-
-        # terminal modes.
-        self.modes = { self.MODE_DECTCEM:True,
-                       self.MODE_BRCKPST:False, }
+        # terminal modes
+        self.modes = { self.MODE_BLINK:  False,
+                       self.MODE_DECTCEM:True,
+                       self.MODE_BRCKPST:False,
+                       self.MODE_ASB_SC: False, }
 
         # defines the printable characters, only these characters are printed
         # on the terminal
@@ -250,28 +273,24 @@ class V102Terminal:
         # current rendition
         self.curRendition = 0
 
-        # list of dirty lines since last call to GetDirtyLines
-        self.isLineDirty = []
-
+        # initialize screen and rendition arrays
         for i in range(rows):
             line = array('u')
             rendition = array('L')
-
             for j in range(cols):
                 line.append(u' ')
                 rendition.append(0)
-
             self.screen.append(line)
             self.scrRendition.append(rendition)
-            self.isLineDirty.append(False)
 
         # initializes callbacks
         self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
                            self.CALLBACK_UPDATE_LINES: None,
                            self.CALLBACK_UPDATE_CURSOR_POS: None,
                            self.CALLBACK_UPDATE_WINDOW_TITLE: None,
-                           self.CALLBACK_MODE_CHANGE: None,
-                           self.CALLBACK_CURSOR_CHANGE: None, }
+                           self.CALLBACK_UPDATE_MODE: None,
+                           self.CALLBACK_UPDATE_CURSOR: None,
+                           self.CALLBACK_SEND_DATA: None, }
 
         # unparsed part of last input
         self.unparsedInput = None
@@ -319,39 +338,43 @@ class V102Terminal:
         - If the new no. cols is greater than existing no. cols then new cols
           are added at right.
         """
-        if rows < self.rows:
+        new_x = min(max(self.curX, 0), self.cols-1)
+        new_y = min(max(self.curY, 0), self.rows-1)
+        if new_x != self.curX or new_y != self.curY:
+            self.curX = new_x
+            self.curY = new_y
+            self.__Callback(self.CALLBACK_UPDATE_CURSOR_POS)
+        cur_rows = len(self.screen)
+        cur_cols = len(self.screen[0])
+        if rows < cur_rows:
             # remove rows at top
-            for i in range(self.rows - rows):
-                self.isLineDirty.pop(0)
+            for i in range(cur_rows - rows):
                 self.screen.pop(0)
                 self.scrRendition.pop(0)
-        elif rows > self.rows:
+        elif rows > cur_rows:
             # add blank rows at bottom
-            for i in range(rows - self.rows):
+            for i in range(rows - cur_rows):
                 line = array('u')
                 rendition = array('L')
-                for j in range(self.cols):
+                for j in range(cur_cols):
                     line.append(u' ')
                     rendition.append(0)
                 self.screen.append(line)
                 self.scrRendition.append(rendition)
-                self.isLineDirty.append(False)
         self.rows = rows
-        if cols < self.cols:
+        if cols < cur_cols:
             # remove cols at right
             for i in range(self.rows):
-                self.screen[i] = self.screen[i][:cols - self.cols]
-                for j in range(self.cols - cols):
+                self.screen[i] = self.screen[i][:cols - cur_cols]
+                for j in range(cur_cols - cols):
                     self.scrRendition[i].pop(len(self.scrRendition[i]) - 1)
-        elif cols > self.cols:
+        elif cols > cur_cols:
             # add cols at right
             for i in range(self.rows):
-                for j in range(cols - self.cols):
+                for j in range(cols - cur_cols):
                     self.screen[i].append(u' ')
                     self.scrRendition[i].append(0)
         self.cols = cols
-        self.curX = min(max(self.curX, 0), self.cols-1)
-        self.curY = min(max(self.curY, 0), self.rows-1)
         #!!avose: maintain state somehow?
         self.scrollRegion = (0, self.rows-1)
         return
@@ -401,8 +424,6 @@ class V102Terminal:
             for j in range(start, end + 1):
                 self.screen[i][j] = ' '
                 self.scrRendition[i][j] = 0
-            if end + 1 > start:
-                self.isLineDirty[i] = True
         return
     def GetChar(self, row, col):
         """
@@ -457,17 +478,6 @@ class V102Terminal:
             text += '\n'
         text = text.rstrip("\n") # removes leading new lines
         return text
-    def GetDirtyLines(self):
-        """
-        Returns list of dirty lines(line nos) since last call to GetDirtyLines.
-        The line no will be 0..rows - 1.
-        """
-        dirtyLines = []
-        for i in range(self.rows):
-            if self.isLineDirty[i]:
-                dirtyLines.append(i)
-                self.isLineDirty[i] = False
-        return dirtyLines
     def SetCallback(self, event, func):
         """
         Sets callback function for the specified event. The event should be
@@ -490,13 +500,17 @@ class V102Terminal:
             Called when ever a window title escape sequence encountered. The
             terminal window title will be passed as a string.
 
-        CALLBACK_MODE_CHANGE
+        CALLBACK_UPDATE_MODE
             Called whenever a terminal mode has changed. A dictionary of modes
             and their settings (True/False) will be passed as an argument.
 
-        CALLBACK_CURSOR_CHANGE
+        CALLBACK_UPDATE_CURSOR
             Called whenever a the cursor has changed. The new style will be
             passed as an argument.
+
+        CALLBACK_SEND_DATA
+            Called whenever the terminal emulator needs to send data to the child.
+            The data to send will be passed as an argument.
         """
         self.callbacks[event] = func
         return
@@ -532,11 +546,9 @@ class V102Terminal:
                     pass
                 index += 1
         # update the dirty lines
-        if self.callbacks[self.CALLBACK_UPDATE_LINES] != None:
-            self.callbacks[self.CALLBACK_UPDATE_LINES]()
+        self.__Callback(self.CALLBACK_UPDATE_LINES)
         # update cursor position
-        if self.callbacks[self.CALLBACK_UPDATE_CURSOR_POS] != None:
-            self.callbacks[self.CALLBACK_UPDATE_CURSOR_POS]()
+        self.__Callback(self.CALLBACK_UPDATE_CURSOR_POS)
         return
     def ScrollUp(self):
         """
@@ -546,11 +558,9 @@ class V102Terminal:
         """
         if self.scrollRegion[0] == 0 and self.scrollRegion[1] == self.rows-1:
             # update the dirty lines
-            if self.callbacks[self.CALLBACK_UPDATE_LINES] != None:
-                self.callbacks[self.CALLBACK_UPDATE_LINES]()
+            self.__Callback(self.CALLBACK_UPDATE_LINES)
             # scrolls up the screen
-            if self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN] != None:
-                self.callbacks[self.CALLBACK_SCROLL_UP_SCREEN]()
+            self.__Callback(self.CALLBACK_SCROLL_UP_SCREEN)
         glsLog.debug("TE: Scroll Up: rg = (%d,%d) term.rows = %d"%
                      (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
         line = self.screen.pop(self.scrollRegion[0])
@@ -582,6 +592,10 @@ class V102Terminal:
             file.write(self.screen[i].tostring())
             file.write("\n")
         return
+    def __Callback(self, callback, *args):
+        if callback in self.callbacks:
+            self.callbacks[callback](*args)
+        return
     def __NewLine(self):
         """
         Moves the cursor to the next line, if the cursor is already at the
@@ -595,7 +609,7 @@ class V102Terminal:
         return
     def __PushChar(self, ch):
         """
-        Writes the character(ch) into current cursor position and advances
+        Writes the character (ch) into current cursor position and advances
         cursor position.
         """
         glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
@@ -605,7 +619,6 @@ class V102Terminal:
         self.screen[self.curY][self.curX] = ch
         self.scrRendition[self.curY][self.curX] = self.curRendition
         self.curX += 1
-        self.isLineDirty[self.curY] = True
         return
     def __ParseEscSeq(self, text, index):
         """
@@ -662,7 +675,13 @@ class V102Terminal:
                 if interChars != None:
                     self.unparsedInput += interChars
             elif finalChar in self.escSeqHandlers.keys():
-                self.escSeqHandlers[finalChar](interChars, finalChar)
+                try:
+                    self.escSeqHandlers[finalChar](interChars, finalChar)
+                except Exception as e:
+                    glsLog.add("TE: Exception in ESC seq handler for '[%s%s'!"%
+                               (interChars, finalChar))
+                    glsLog.add("TE: Exception: '%s'"%(str(e)))
+                    #traceback.print_exception(*sys.exc_info())
             else:
                 escSeq = "["
                 if interChars != None:
@@ -683,11 +702,54 @@ class V102Terminal:
                     self.__OnEscSeqTitle(text[start:index])
         else:
             if text[index] in self.escHandlers:
-                self.escHandlers[text[index]]()
+                try:
+                    self.escHandlers[text[index]]()
+                except Exception as e:
+                    glsLog.add("TE: Exception in ESC seq handler for '%s'!"%
+                               text[index])
+                    glsLog.add("TE: Exception: '%s'"%(str(e)))
+                    #traceback.print_exception(*sys.exc_info())
             else:
                 self.__UnhandledEscSeq(text[index])
             index += 1
         return index
+    def __SaveCursor(self):
+        self.savedCursor = ( self.cursorStyle, self.curY, self.curX )
+        glsLog.debug("TE: Save Cursor: %d,%d"%(self.curY, self.curX), 3)
+        return
+    def __RestoreCursor(self):
+        self.cursorStyle, self.curY, self.curX = self.savedCursor
+        self.curX = min(max(self.curX, 0), self.cols-1)
+        self.curY = min(max(self.curY, 0), self.rows-1)
+        glsLog.debug("TE: Restore Cursor: %d,%d"%(self.curY, self.curX), 3)
+        return
+    def __AlternativeScreenEnter(self, save, clear):
+        if save:
+            self.savedScreen = []
+            self.savedRendition = []
+            for scrl,renl in zip(self.screen, self.scrRendition):
+                self.savedScreen.append(array('u', scrl))
+                self.savedRendition.append(array('L', renl))
+            self.__SaveCursor()
+            glsLog.debug("TE: Save Screen: %dx%d real=%dx%d"%
+                         (self.rows, self.cols, len(self.screen), len(self.screen[0])), 3)
+        if clear:
+            self.Clear()
+        return
+    def __AlternativeScreenExit(self, restore):
+        if not restore:
+            return
+        glsLog.debug("TE: Restore Screen: current=%dx%d new=%dx%d"%
+                     (self.rows, self.cols,
+                      len(self.savedScreen), len(self.savedScreen[0])), 3)
+        self.screen = []
+        self.scrRendition = []
+        for scrl,renl in zip(self.savedScreen, self.savedRendition):
+            self.screen.append(array('u', scrl))
+            self.scrRendition.append(array('L', renl))
+        self.Resize(self.rows, self.cols)
+        self.__RestoreCursor()
+        return
     ################################################################
     # Character Handlers
     ################################################################
@@ -695,7 +757,7 @@ class V102Terminal:
         """
         Handler for backspace character
         """
-        glsLog.debug("TE: BS: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: BS: @ (%d,%d)"%(self.curY, self.curX), 4)
         if self.curX > 0:
             self.curX -= 1
         return index + 1
@@ -703,7 +765,7 @@ class V102Terminal:
         """
         Handler for horizontal tab character
         """
-        glsLog.debug("TE: TAB: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: TAB: @ (%d,%d)"%(self.curY, self.curX), 4)
         while self.curX + 1 < self.cols:
             self.curX += 1
             if self.curX % 8 == 0:
@@ -713,35 +775,35 @@ class V102Terminal:
         """
         Handler for line feed character
         """
-        glsLog.debug("TE: LF: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: LF: @ (%d,%d)"%(self.curY, self.curX), 4)
         self.__NewLine()
         return index + 1
     def __OnCharCR(self, text, index):
         """
         Handler for carriage return character
         """
-        glsLog.debug("TE: CR: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: CR: @ (%d,%d)"%(self.curY, self.curX), 4)
         self.curX = 0
         return index + 1
     def __OnCharXON(self, text, index):
         """
         Handler for XON character
         """
-        glsLog.debug("TE: XON: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: XON: @ (%d,%d)"%(self.curY, self.curX), 4)
         self.ignoreChars = False
         return index + 1
     def __OnCharXOFF(self, text, index):
         """
         Handler for XOFF character
         """
-        glsLog.debug("TE: XOFF: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: XOFF: @ (%d,%d)"%(self.curY, self.curX), 4)
         self.ignoreChars = True
         return index + 1
     def __OnCharESC(self, text, index):
         """
         Handler for escape character
         """
-        glsLog.debug("TE: ESC: @ (%d,%d)"%(self.curX, self.curY), 4)
+        glsLog.debug("TE: ESC: @ (%d,%d)"%(self.curY, self.curX), 4)
         index += 1
         if index < len(text):
             index = self.__HandleEscSeq(text, index)
@@ -758,16 +820,14 @@ class V102Terminal:
         """
         Handler SO: Shit out to the G1 character set.
         """
-        glsLog.debug("TE: (SO) Shift Out: Unimplemented.", 3)
-        index += 1
-        return index
+        #glsLog.debug("TE: (SO) Shift Out: Unimplemented.", 3)
+        return index + 1
     def __OnCharSI(self, text, index):
         """
         Handler SI: Shift in to the G0 character set.
         """
-        glsLog.debug("TE: (SI) Shift In: Unimplemented.", 3)
-        index += 1
-        return index
+        #glsLog.debug("TE: (SI) Shift In: Unimplemented.", 3)
+        return index + 1
     def __OnCharIgnore(self, text, index):
         """
         Handler: dummy for unhandled characters
@@ -779,8 +839,7 @@ class V102Terminal:
     def __OnEscSeqTitle(self, params):
         # Handler: Window Title Escape Sequence
         glsLog.debug("TE: Set Window Title: '%s'"%(params), 4)
-        if self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE] != None:
-            self.callbacks[self.CALLBACK_UPDATE_WINDOW_TITLE](params)
+        self.__Callback(self.CALLBACK_UPDATE_WINDOW_TITLE, params)
         return
     def __OnEscSeqICH_SL(self, params, end):
         # Handler ICH / SL: Insert (Blank) Characters / Shift Left
@@ -917,12 +976,10 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
-            self.isLineDirty[self.scrollRegion[1]] = True
             line = self.screen.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.curY, line)
-            self.isLineDirty[self.curY] = True
             rendition = self.scrRendition.pop(self.scrollRegion[1])
             for i in range(self.cols):
                 rendition[i] = self.curRendition
@@ -937,12 +994,10 @@ class V102Terminal:
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
-            self.isLineDirty[self.curY] = True
             line = self.screen.pop(self.curY)
             for i in range(self.cols):
                 line[i] = u' '
             self.screen.insert(self.scrollRegion[1], line)
-            self.isLineDirty[self.scrollRegion[1]] = True
             rendition = self.scrRendition.pop(self.curY)
             for i in range(self.cols):
                 rendition[i] = self.curRendition
@@ -953,7 +1008,6 @@ class V102Terminal:
     def __OnEscSeqDCH(self, params, end):
         # Handler DCH: Delete Characters
         n = int(params) if params != None else 1
-        self.isLineDirty[self.curY] = True
         for c in range(self.curX,self.cols):
             if c + n < self.cols:
                 self.screen[self.curY][c] = self.screen[self.curY][c+n]
@@ -1013,40 +1067,67 @@ class V102Terminal:
         params = "" if params is None else params
         glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
+    def __OnEscSeqDSR(self, params, end):
+        # Handler DSR: Device Status Report
+        if params is None or params == "":
+            glsLog.debug("TE: (DSR) Device Status Report: No Parameter!", 3)
+            return
+        if params.startswith('?'):
+            params = params[1:]
+        param = int(params)
+        if param == 5:
+            reply = '\x1b[0n'
+        elif param == 6:
+            reply = '\x1b[%d;%dR'%(self.curY, self.curX)
+        else:
+            self.__UnhandledEscSeq(params+end)
+            return
+        self.__Callback(self.CALLBACK_SEND_DATA, reply)
+        glsLog.debug("TE: (DSR) Device Status Report: '%s%s' reply='%s'"%(params, end, reply), 6)
+        return
+    def __OnEscSeqSMRM(self, value, params, end):
+        if value:
+            label = "(SM) Set Mode"
+        else:
+            label = "(RM) Reset Mode"
+        if params == None or params == '':
+            glsLog.debug("TE: %s: No Parameter!"%(label), 3)
+            return
+        if params.startswith('?'):
+            params = params[1:]
+            prefix = '?'
+        else:
+            prefix = ''
+        for param in params.split(';'):
+            param = prefix + param
+            if param not in self.modes:
+                glsLog.debug("TE: %s: Unknown Mode: '%s'!"%(label, param), 3)
+                continue
+            if param == self.MODE_ASB_SC:
+                if value:
+                    self.__AlternativeScreenEnter(True, True)
+                else:
+                    self.__AlternativeScreenExit(True)
+            self.modes[param] = value
+        self.__Callback(self.CALLBACK_UPDATE_MODE, self.modes)
+        glsLog.debug("TE: %s: '%s%s'"%(label, params, end), 5)
+        return
     def __OnEscSeqSM(self, params, end):
         # Handler SM: Sets Mode
-        if params == None:
-            glsLog.debug("TE: (SM) Set Mode: No Parameter!", 3)
-            return
-        if params not in self.modes:
-            glsLog.debug("TE: (SM) Set Mode: Unknown mode: '%s%s'!"%
-                         (params,end), 3)
-            return
-        self.modes[params] = True
-        if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
-            self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
-        glsLog.debug("TE: (SM) Set Mode: '%s%s'"%
-                     (params,end), 5)
+        self.__OnEscSeqSMRM(True, params, end)
         return
     def __OnEscSeqRM(self, params, end):
         # Handler RM: Resets Mode
-        if params == None:
-            glsLog.debug("TE: (RM) Reset Mode: No Parameter!", 3)
-            return
-        if params not in self.modes:
-            glsLog.debug("TE: (RM) Reset Mode: Unknown mode: '%s%s'!"%
-                         (params,end), 3)
-            return
-        self.modes[params] = False
-        if self.callbacks[self.CALLBACK_MODE_CHANGE] != None:
-            self.callbacks[self.CALLBACK_MODE_CHANGE](self.modes)
-        glsLog.debug("TE: (RM) Reset Mode: '%s%s'"%
-                     (params,end), 5)
+        self.__OnEscSeqSMRM(False, params, end)
         return
     def __OnEscSeqDECSCUSR(self, params, end):
         # Handler DECSCUSR: Set Cursor Style
-        if params is None or len(params) > 2 or not params.endswith(' '):
+        if params is None:
+            glsLog.debug("TE: (DECSCUSR) Cursor Style: No Parameter!", 3)
+            return
+        if len(params) > 2 or not params.endswith(' '):
             self.__UnhandledEscSeq(params+end)
+            return
         params = params.strip()
         style = int(params) if params else 0
         if style == 0 or style not in range(1, 7):
@@ -1059,8 +1140,7 @@ class V102Terminal:
             style = self.CURSOR_STYLE_BAR
         if style != self.cursorStyle:
             self.cursorStyle = style
-            if self.callbacks[self.CALLBACK_CURSOR_CHANGE] != None:
-                self.callbacks[self.CALLBACK_CURSOR_CHANGE](self.cursorStyle)
+            self.__Callback(self.CALLBACK_UPDATE_CURSOR, self.cursorStyle)
         glsLog.debug("TE: (DECSCUSR) Cursor Style: %d"%(style), 6)
         return
     def __OnEscSeqDECSTBM(self, params, end):
@@ -1099,8 +1179,7 @@ class V102Terminal:
             style = self.CURSOR_STYLE_DEFAULT
         if style != self.cursorStyle:
             self.cursorStyle = style
-            if self.callbacks[self.CALLBACK_CURSOR_CHANGE] != None:
-                self.callbacks[self.CALLBACK_CURSOR_CHANGE](self.cursorStyle)
+            self.__Callback(self.CALLBACK_UPDATE_CURSOR, self.cursorStyle)
         glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 6)
         return
     def __OnEscRI(self):
@@ -1113,6 +1192,22 @@ class V102Terminal:
             return
         if self.curY > 0:
             self.curY -= 1
+        return
+    def __OnEscDECSC(self):
+        # Handler DECSC: Save Cursor
+        self.__SaveCursor()
+        return
+    def __OnEscDECRC(self):
+        # Handler DECRC: Restore Cursor
+        self.__RestoreCursor()
+        return
+    def __OnEscDECPNM(self):
+        # Handler DECPNM: keyPad Numeric
+        #glsLog.debug("TE: (DECPNM) keyPad Numeric Mode: Unsupported", 3)
+        return
+    def __OnEscDECPAM(self):
+        # Handler DECPAM: keyPad Application
+        #glsLog.debug("TE: (DECPAM) keyPad Application Mode: Unsupported", 3)
         return
 
 ################################################################

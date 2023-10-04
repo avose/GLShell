@@ -149,10 +149,12 @@ class glsTerminalPanel(wx.Window):
                                   self.OnTermUpdateCursorPos)
         self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_WINDOW_TITLE,
                                   self.OnTermUpdateWindowTitle)
-        self.terminal.SetCallback(self.terminal.CALLBACK_MODE_CHANGE,
-                                  self.OnTermModeChange)
-        self.terminal.SetCallback(self.terminal.CALLBACK_CURSOR_CHANGE,
-                                  self.OnTermCursorChange)
+        self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_MODE,
+                                  self.OnTermUpdateMode)
+        self.terminal.SetCallback(self.terminal.CALLBACK_UPDATE_CURSOR,
+                                  self.OnTermUpdateCursor)
+        self.terminal.SetCallback(self.terminal.CALLBACK_SEND_DATA,
+                                  self.OnTermSendData)
         self.cursor_style = self.terminal.CURSOR_STYLE_DEFAULT
         self.modes = dict(self.terminal.modes)
         # Start child process.
@@ -318,6 +320,9 @@ class glsTerminalPanel(wx.Window):
             screen = self.terminal.GetRawScreen()
             start = self.sel_start[0]*self.cols + self.sel_start[1]
             end   = self.sel_end[0]*self.cols + self.sel_end[1]
+            max_ndx = self.rows*self.cols - 1
+            start = min(max(start, 0), max_ndx)
+            end = min(max(end, 0), max_ndx)
             if start > end:
                 start, end = end, start
             for i in range(start, end):
@@ -517,6 +522,9 @@ class glsTerminalPanel(wx.Window):
             visible = False
         if not visible:
             return
+        new_cr = min(max(self.cursor_pos[0], 0), self.rows-1)
+        new_cc = min(max(self.cursor_pos[1], 0), self.cols-1)
+        self.cursor_pos = (new_cr, new_cc)
         if self.HasFocus():
             self.pen = wx.Pen((0,255,0,175))
             self.brush = wx.Brush((0,255,0))
@@ -659,11 +667,14 @@ class glsTerminalPanel(wx.Window):
             text += c
         self.callback_title(self, text)
         return
-    def OnTermModeChange(self, modes):
+    def OnTermUpdateMode(self, modes):
         self.modes = dict(modes)
         return
-    def OnTermCursorChange(self, style):
+    def OnTermUpdateCursor(self, style):
         self.cursor_style = style
+        return
+    def OnTermSendData(self, data):
+        self.SendText(data)
         return
     def MonitorTerminal(self):
         # Monitor the state of the child process and tell parent when closed.
