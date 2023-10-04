@@ -114,6 +114,8 @@ class V102Terminal:
                             # modes commonly used with other terminal types may be
                             # supported.
 
+    __ESCSEQ_DECSCUSR = 'q' # n ' ' q: Select cursor style.
+
     __ESCSEQ_DECSTBM = 'r'  # Multiple escape sequences end in 'r'. One of the more
                             # important ones is the scrolling region: "n ; m r" which
                             # limits effect of scrolling to specified range of lines.
@@ -122,7 +124,7 @@ class V102Terminal:
                             # important ones is setting the cursor size / style:
                             # "? n c", where n is the style.
 
-    __ESC_RI = 'M'          # Non-CSI: reverse linefeed.
+    __ESC_RI = 'M'          # Non-CSI: Reverse index (linefeed).
 
     # vt102 modes.
     MODE_KAM     = '2'    # Keyboard action
@@ -147,6 +149,7 @@ class V102Terminal:
     CURSOR_STYLE_INVISIBLE = 1
     CURSOR_STYLE_UNDERLINE = 2
     CURSOR_STYLE_BLOCK = 8
+    CURSOR_STYLE_BAR = 32
     
     RENDITION_STYLE_BOLD = 1
     RENDITION_STYLE_DIM = 2
@@ -195,24 +198,25 @@ class V102Terminal:
                               self.__ASCII_SI:  self.__OnCharSI, }
 
         # escape sequence handlers
-        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL: self.__OnEscSeqICH_SL,
-                                self.__ESCSEQ_CUU:    self.__OnEscSeqCUU,
-                                self.__ESCSEQ_CUD:    self.__OnEscSeqCUD,
-                                self.__ESCSEQ_CUF:    self.__OnEscSeqCUF,
-                                self.__ESCSEQ_CUB:    self.__OnEscSeqCUB,
-                                self.__ESCSEQ_CHA:    self.__OnEscSeqCHA,
-                                self.__ESCSEQ_CUP:    self.__OnEscSeqCUP,
-                                self.__ESCSEQ_ED:     self.__OnEscSeqED,
-                                self.__ESCSEQ_EL:     self.__OnEscSeqEL,
-                                self.__ESCSEQ_IL:     self.__OnEscSeqIL,
-                                self.__ESCSEQ_DL:     self.__OnEscSeqDL,
-                                self.__ESCSEQ_DCH:    self.__OnEscSeqDCH,
-                                self.__ESCSEQ_VPA:    self.__OnEscSeqVPA,
-                                self.__ESCSEQ_SGR:    self.__OnEscSeqSGR,
-                                self.__ESCSEQ_SM:     self.__OnEscSeqSM,
-                                self.__ESCSEQ_RM:     self.__OnEscSeqRM,
-                                self.__ESCSEQ_DECSTBM:self.__OnEscSeqDECSTBM,
-                                self.__ESCSEQ_CSZ:    self.__OnEscSeqCSZ, }
+        self.escSeqHandlers = { self.__ESCSEQ_ICH_SL:  self.__OnEscSeqICH_SL,
+                                self.__ESCSEQ_CUU:     self.__OnEscSeqCUU,
+                                self.__ESCSEQ_CUD:     self.__OnEscSeqCUD,
+                                self.__ESCSEQ_CUF:     self.__OnEscSeqCUF,
+                                self.__ESCSEQ_CUB:     self.__OnEscSeqCUB,
+                                self.__ESCSEQ_CHA:     self.__OnEscSeqCHA,
+                                self.__ESCSEQ_CUP:     self.__OnEscSeqCUP,
+                                self.__ESCSEQ_ED:      self.__OnEscSeqED,
+                                self.__ESCSEQ_EL:      self.__OnEscSeqEL,
+                                self.__ESCSEQ_IL:      self.__OnEscSeqIL,
+                                self.__ESCSEQ_DL:      self.__OnEscSeqDL,
+                                self.__ESCSEQ_DCH:     self.__OnEscSeqDCH,
+                                self.__ESCSEQ_VPA:     self.__OnEscSeqVPA,
+                                self.__ESCSEQ_SGR:     self.__OnEscSeqSGR,
+                                self.__ESCSEQ_SM:      self.__OnEscSeqSM,
+                                self.__ESCSEQ_RM:      self.__OnEscSeqRM,
+                                self.__ESCSEQ_DECSCUSR:self.__OnEscSeqDECSCUSR,
+                                self.__ESCSEQ_DECSTBM: self.__OnEscSeqDECSTBM,
+                                self.__ESCSEQ_CSZ:     self.__OnEscSeqCSZ, }
 
         # ESC- but not CSI-sequences
         self.escHandlers = { self.__ESC_RI: self.__OnEscRI, }
@@ -558,6 +562,18 @@ class V102Terminal:
             rendition[i] = 0
         self.scrRendition.insert(self.scrollRegion[1], rendition)
         return
+    def ScrollDown(self):
+        line = self.screen.pop(self.scrollRegion[1])
+        for i in range(self.cols):
+            line[i] = u' '
+        self.screen.insert(self.scrollRegion[0], line)
+        rendition = self.scrRendition.pop(self.scrollRegion[1])
+        for i in range(self.cols):
+            rendition[i] = 0
+        self.scrRendition.insert(self.scrollRegion[0], rendition)
+        glsLog.debug("TE: Scroll Down: rg = (%d,%d) term.rows = %d"%
+                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
+        return
     def Dump(self, file=sys.stdout):
         """
         Dumps the entire terminal screen into the given file/stdout
@@ -896,6 +912,8 @@ class V102Terminal:
         return
     def __OnEscSeqIL(self, params, end):
         # Handler IL: Insert Lines
+        if self.curY > self.scrollRegion[1]:
+            return
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
@@ -914,6 +932,8 @@ class V102Terminal:
         return
     def __OnEscSeqDL(self, params, end):
         # Handler DL: Delete Lines
+        if self.curY > self.scrollRegion[1]:
+            return
         self.curX = 0
         n = int(params) if params != None else 1
         for l in range(n):
@@ -1023,6 +1043,26 @@ class V102Terminal:
         glsLog.debug("TE: (RM) Reset Mode: '%s%s'"%
                      (params,end), 5)
         return
+    def __OnEscSeqDECSCUSR(self, params, end):
+        # Handler DECSCUSR: Set Cursor Style
+        if params is None or len(params) > 2 or not params.endswith(' '):
+            self.__UnhandledEscSeq(params+end)
+        params = params.strip()
+        style = int(params) if params else 0
+        if style == 0 or style not in range(1, 7):
+            style = self.CURSOR_STYLE_DEFAULT
+        elif style == 1 or style == 2:
+            style = self.CURSOR_STYLE_BLOCK
+        elif style == 3 or style == 4:
+            style = self.CURSOR_STYLE_UNDERLINE
+        elif style == 5 or style == 6:
+            style = self.CURSOR_STYLE_BAR
+        if style != self.cursorStyle:
+            self.cursorStyle = style
+            if self.callbacks[self.CALLBACK_CURSOR_CHANGE] != None:
+                self.callbacks[self.CALLBACK_CURSOR_CHANGE](self.cursorStyle)
+        glsLog.debug("TE: (DECSCUSR) Cursor Style: %d"%(style), 6)
+        return
     def __OnEscSeqDECSTBM(self, params, end):
         # Handler DECSTBM: Set Top / Bottom Margins (Scroll Region)
         if params == None:
@@ -1032,16 +1072,19 @@ class V102Terminal:
         if len(args) != 2:
             self.__UnhandledEscSeq(params+end)
             return
-        row_start, row_end = args
-        row_start = int(row_start) - 1
-        row_end   = int(row_end)   - 1
-        row_start = max(row_start, 0)
-        row_end   = min(row_end, self.cols-1)
-        self.scrollRegion = (row_start, row_end)
+        top, bottom = args
+        top = int(top) - 1
+        bottom = int(bottom) - 1
+        top = max(top, 0)
+        bottom = min(bottom, self.cols-1)
+        if top >= bottom:
+            top = 0
+            bottom = self.rows - 1
+        self.scrollRegion = (top, bottom)
         self.curX = 0
         self.curY = 0
         glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s'"%
-                     (row_start, row_end, params+end), 5)
+                     (top, bottom, params+end), 5)
         return
     def __OnEscSeqCSZ(self, params, end):
         # Handler CSZ: Cursor Style / Size
@@ -1061,17 +1104,15 @@ class V102Terminal:
         glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 6)
         return
     def __OnEscRI(self):
-        # Handler RI: Reverse LineFeed
-        line = self.screen.pop(self.scrollRegion[1])
-        for i in range(self.cols):
-            line[i] = u' '
-        self.screen.insert(self.scrollRegion[0], line)
-        rendition = self.scrRendition.pop(self.scrollRegion[1])
-        for i in range(self.cols):
-            rendition[i] = 0
-        self.scrRendition.insert(self.scrollRegion[0], rendition)
-        glsLog.debug("TE: (RI) Reverse Linefeed: rg = (%d,%d) rows = %d"%
-                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 5)
+        # Handler RI: Reverse Index (LineFeed)
+        if self.curY == self.scrollRegion[0]:
+            self.ScrollDown()
+            return
+        if self.curY > self.scrollRegion[0] and self.curY <= self.scrollRegion[1]:
+            self.curY -= 1
+            return
+        if self.curY > 0:
+            self.curY -= 1
         return
 
 ################################################################

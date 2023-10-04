@@ -529,17 +529,19 @@ class glsTerminalPanel(wx.Window):
             self.cursor_style == self.terminal.CURSOR_STYLE_BLOCK):
             dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
                              self.char_w, self.char_h)
+            screen = self.terminal.GetRawScreen()
+            self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name).Bold()
+            self.font = wx.Font(self.fontinfo)
+            dc.SetFont(self.font)
+            dc.SetTextForeground((0,0,0))
+            dc.DrawText(screen[self.cursor_pos[0]][self.cursor_pos[1]],
+                        self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h)
+        elif self.cursor_style == self.terminal.CURSOR_STYLE_BAR:
+            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
+                             2, self.char_h)
         elif self.cursor_style == self.terminal.CURSOR_STYLE_UNDERLINE:
-            dc.DrawLine(self.cursor_pos[1]*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1,
-                        (self.cursor_pos[1]+1)*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1)
-        screen = self.terminal.GetRawScreen()
-        self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
-        self.fontinfo = self.fontinfo.Bold()
-        self.font = wx.Font(self.fontinfo)
-        dc.SetFont(self.font)
-        dc.SetTextForeground((0,0,0))
-        dc.DrawText(screen[self.cursor_pos[0]][self.cursor_pos[1]],
-                    self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h)
+            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, (self.cursor_pos[0]+1)*self.char_h-2,
+                             self.char_w, 2)
         return
     def DrawSelection(self, dc):
         if self.sel_start is not None and self.sel_end is not None:
