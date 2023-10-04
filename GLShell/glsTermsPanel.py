@@ -17,6 +17,7 @@ from glsPlaceHolder import glsPlaceHolder
 from glsStatusBar import glsLog
 from glsSettings import glsSettings
 from glsKeyPress import glsKeyPress
+from glsEvents import glsEvents
 from glsIcons import glsIcons
 
 ################################################################
@@ -91,8 +92,7 @@ class glsTerminalPanel(wx.Window):
     word_chars = "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-z0123456789,./?%&#:_=+@~"
 
     def __init__(self, parent, callback_close, callback_title,
-                 callback_searchfiles, callback_searchcontents,
-                 callback_setcurrent, callback_opendir, min_size):
+                 callback_setcurrent, min_size):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
         # This also appears to influence some aspects of minimum size.
@@ -103,10 +103,7 @@ class glsTerminalPanel(wx.Window):
         self.word_chars = glsSettings.Get('term_wchars')
         self.callback_close = callback_close
         self.callback_title = callback_title
-        self.callback_searchfiles = callback_searchfiles
-        self.callback_searchcontents = callback_searchcontents
         self.callback_setcurrent = callback_setcurrent
-        self.callback_opendir = callback_opendir
         # Bind events.
         self.keys_down = {}
         self.key_press = glsKeyPress(self.keys_down)
@@ -273,18 +270,17 @@ class glsTerminalPanel(wx.Window):
         return
     def SearchSelectionFiles(self):
         text = self.GetSelectedText()
-        if text is not None:
-            self.callback_searchfiles(text)
+        evt = glsEvents.Search(id=wx.ID_ANY, name=text, content=None)
+        wx.PostEvent(self.Parent, evt)
         return
     def SearchSelectionContents(self):
         text = self.GetSelectedText()
-        if text is not None:
-            self.callback_searchcontents(text)
+        evt = glsEvents.Search(id=wx.ID_ANY, name=None, content=text)
+        wx.PostEvent(self.Parent, evt)
         return
     def OpenSelectionDir(self):
-        text = self.GetSelectedText()
-        if text is not None:
-            self.callback_opendir(text)
+        evt = glsEvents.OpenDir(wx.ID_ANY, path=self.GetSelectedText())
+        wx.PostEvent(self.Parent, evt)
         return
     def OnMenuItem(self, event):
         id = event.GetId() 
@@ -521,13 +517,14 @@ class glsTerminalPanel(wx.Window):
             visible = False
         if not visible:
             return
-        self.pen = wx.Pen((255,0,0,128))
-        dc.SetPen(self.pen)
         if self.HasFocus():
-            self.brush = wx.Brush((255,0,0,64))
+            self.pen = wx.Pen((0,255,0,175))
+            self.brush = wx.Brush((0,255,0))
         else:
-            self.brush = wx.Brush((255,0,0), wx.TRANSPARENT)
+            self.pen = wx.Pen((255,128,0,128))
+            self.brush = wx.Brush((255,128,0))
         dc.SetBrush(self.brush)
+        dc.SetPen(self.pen)
         if (self.cursor_style == self.terminal.CURSOR_STYLE_DEFAULT or
             self.cursor_style == self.terminal.CURSOR_STYLE_BLOCK):
             dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
@@ -535,6 +532,14 @@ class glsTerminalPanel(wx.Window):
         elif self.cursor_style == self.terminal.CURSOR_STYLE_UNDERLINE:
             dc.DrawLine(self.cursor_pos[1]*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1,
                         (self.cursor_pos[1]+1)*self.char_w, (self.cursor_pos[0]+1)*self.char_h-1)
+        screen = self.terminal.GetRawScreen()
+        self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
+        self.fontinfo = self.fontinfo.Bold()
+        self.font = wx.Font(self.fontinfo)
+        dc.SetFont(self.font)
+        dc.SetTextForeground((0,0,0))
+        dc.DrawText(screen[self.cursor_pos[0]][self.cursor_pos[1]],
+                    self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h)
         return
     def DrawSelection(self, dc):
         if self.sel_start is not None and self.sel_end is not None:
@@ -687,15 +692,11 @@ class glsTermNotebook(wx.Window):
     ICON_TERM      = 0
     ICON_PLACEHLDR = 1
     def __init__(self, parent, min_term_size,
-                 callback_searchfiles, callback_searchcontents,
-                 callback_current, callback_placeholder, callback_opendir):
+                 callback_current, callback_placeholder):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
-        self.callback_searchfiles = callback_searchfiles
-        self.callback_searchcontents = callback_searchcontents
         self.callback_current = callback_current
         self.callback_placeholder = callback_placeholder
-        self.callback_opendir = callback_opendir
         self.current = False
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
@@ -716,10 +717,7 @@ class glsTermNotebook(wx.Window):
         self.RemovePlaceHolder()
         terminal = glsTerminalPanel(self.notebook,
                                     self.OnTermClose, self.OnTermTitle,
-                                    self.callback_searchfiles,
-                                    self.callback_searchcontents,
                                     self.SetCurrent,
-                                    self.callback_opendir,
                                     self.min_term_size)
         self.tabs.append(terminal)
         self.notebook.AddPage(terminal, " Terminal " + str(len(self.tabs)))
@@ -739,9 +737,9 @@ class glsTermNotebook(wx.Window):
         return
     def OnTermClose(self, terminal):
         # Add tab to closed terminal list.
-        if terminal not in self.term_close_pending:
+        if terminal is not None and terminal not in self.term_close_pending:
             self.term_close_pending.append(terminal)
-        wx.CallLater(10, self.CloseTerminals)
+            wx.CallAfter(self.CloseTerminals)
         return
     def OnTermTitle(self, terminal, title):
         if len(title) > 0:
@@ -800,15 +798,10 @@ class glsTermsPanel(wx.Window):
     ID_VERTICAL    = 1007
     ID_HORIZONTAL  = 1008
     ID_EXIT        = 1009
-    def __init__(self, parent, min_term_size, callback_layout,
-                 callback_searchfiles, callback_searchcontents,
-                 callback_opendir):
+    def __init__(self, parent, min_term_size, callback_layout):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
         self.callback_layout = callback_layout
-        self.callback_searchfiles = callback_searchfiles
-        self.callback_searchcontents = callback_searchcontents
-        self.callback_opendir = callback_opendir
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.VetoEvent)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.VetoEvent)
         box_main = wx.BoxSizer(wx.VERTICAL)
@@ -838,11 +831,8 @@ class glsTermsPanel(wx.Window):
         self.notebooks = []
         for n in range(2):
             notebook = glsTermNotebook(self.splitter, self.min_term_size,
-                                       self.callback_searchfiles,
-                                       self.callback_searchcontents,
                                        self.OnCurrentNotebook,
-                                       self.OnPlaceHolder,
-                                       self.callback_opendir)
+                                       self.OnPlaceHolder)
             self.notebooks.append(notebook)
         self.notebooks_active = len(self.notebooks)
         self.split_mode = wx.SPLIT_HORIZONTAL

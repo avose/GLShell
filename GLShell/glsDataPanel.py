@@ -5,6 +5,7 @@ from glsGraphPanel import glsGraphPanel
 from glsSearch import  glsSearchResultListPopupMenu
 from glsSearch import glsSearchResultPanel
 from glsSearch import glsSearch
+from glsEvents import glsEvents
 from glsIcons import glsIcons
 
 ################################################################
@@ -28,13 +29,14 @@ class glsDataPanel(wx.Window):
         super(glsDataPanel, self).__init__(parent, style=style)
         self.terms_panel = terms_panel
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnChangeTab)
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
-                  (self.ID_RESCAN, "Rescan Directory Tree", 'arrow_refresh', self.OnToolRescan),
                   (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
                   (self.ID_SEARCH, "Search", 'magnifier', self.OnToolSearch),
                   (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnToolSearchCustom),
+                  (self.ID_RESCAN, "Rescan", 'arrow_refresh', self.OnToolRescan),
                   (self.ID_SEL_ALL, "Select All", 'chart_line_add', self.OnToolSelAll),
                   (self.ID_SEL_IVRT, "Select Inverse", 'chart_line', self.OnToolSelIvrt),
                   (self.ID_SEL_NONE, "Select None", 'chart_line_delete', self.OnToolSelNone),
@@ -57,37 +59,8 @@ class glsDataPanel(wx.Window):
         self.tabs_closing = []
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
+        wx.CallAfter(self.AddPlaceHolder)
         self.Show(True)
-        return
-    def OnToolRescan(self, event):
-        print('rescan')
-        return
-    def OnToolOpenDir(self, event):
-        print('open dir')
-        return
-    def OnToolSearch(self, event):
-        print('search')
-        return
-    def OnToolSearchCustom(self, event):
-        print('search custom')
-        return
-    def OnToolSelAll(self, event):
-        print('selall')
-        return
-    def OnToolSelNone(self, event):
-        print('selnone')
-        return
-    def OnToolSelIvrt(self, event):
-        print('selivrt')
-        return
-    def OnToolShowFiles(self, event):
-        print('showfiles')
-        return
-    def OnToolShowDirs(self, event):
-        print('showdirs')
-        return
-    def OnToolCloseTab(self, event):
-        print('close tab')
         return
     def AddDirTree(self, dirtree):
         self.RemovePlaceHolder()
@@ -97,6 +70,7 @@ class glsDataPanel(wx.Window):
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_GRAPH)
         self.notebook.SetSelection(len(self.tabs)-1)
         graph_panel.StartGraph()
+        self.EnableTools()
         return
     def GetDirTrees(self):
         return [ tab.dirtree for tab in self.tabs if isinstance(tab, glsGraphPanel) ]
@@ -116,6 +90,7 @@ class glsDataPanel(wx.Window):
         self.notebook.AddPage(result_panel, label)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_SEARCH)
         self.notebook.SetSelection(len(self.tabs)-1)
+        self.EnableTools()
         return
     def Search(self, opts):
         search = glsSearch(self.GetDirTrees(),
@@ -145,9 +120,9 @@ class glsDataPanel(wx.Window):
         self.AddPlaceHolder()
         return
     def OnCloseTab(self, tab):
-        if tab not in self.tabs_closing:
+        if tab is not None and tab not in self.tabs_closing:
             self.tabs_closing.append(tab)
-        wx.CallLater(10, self.CloseTabs)
+            wx.CallAfter(self.CloseTabs)
         return
     def RemovePlaceHolder(self):
         if len(self.tabs) != 1 or not isinstance(self.tabs[0], glsPlaceHolder):
@@ -164,6 +139,81 @@ class glsDataPanel(wx.Window):
         self.notebook.AddPage(placeholder, " No Data")
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)
         self.notebook.SetSelection(len(self.tabs)-1)
+        self.EnableTools()
+        return
+    def GetCurrentTab(self):
+        if len(self.tabs):
+            tab = self.tabs[self.notebook.GetSelection()]
+            if not isinstance(tab, glsPlaceHolder):
+                return tab
+        return None
+    def EnableTools(self):
+        return
+        tab = self.GetCurrentTab()
+        tools_graph = [ glsDataPanel.ID_RESCAN,
+                        glsDataPanel.ID_SEL_ALL,
+                        glsDataPanel.ID_SEL_NONE,
+                        glsDataPanel.ID_SEL_IVRT,
+                        glsDataPanel.ID_SHOW_FILES,
+                        glsDataPanel.ID_SHOW_DIRS ]
+        tools_always = [ glsDataPanel.ID_OPEN_DIR,
+                         glsDataPanel.ID_SEARCH,
+                         glsDataPanel.ID_SEARCH_OPT ]
+        tools_results = []
+        if tab is None:
+            self.toolbar.EnableTool(glsDataPanel.ID_EXIT, False)
+            graph = False
+            result = False
+        else:
+            self.toolbar.EnableTool(glsDataPanel.ID_EXIT, True)
+        if isinstance(tab, glsSearchResultPanel):
+            graph = False
+            result = True
+        elif isinstance(tab, glsGraphPanel):
+            graph = True
+            result = False
+        for tool in tools_results:
+            self.toolbar.EnableTool(tool, result)
+        for tool in tools_graph:
+            self.toolbar.EnableTool(tool, graph)
+        for tool in tools_always:
+            self.toolbar.EnableTool(tool, True)
+        return
+    def OnChangeTab(self, event):
+        self.EnableTools()
+        return
+    def OnToolRescan(self, event):
+        print('rescan')
+        return
+    def OnToolOpenDir(self, event):
+        evt = glsEvents.OpenDir(id=wx.ID_ANY, path=None)
+        wx.PostEvent(self.Parent, evt)
+        return
+    def OnToolSearch(self, event):
+        evt = glsEvents.Search(id=wx.ID_ANY, name=None, content=None)
+        wx.PostEvent(self.Parent, evt)
+        return
+    def OnToolSearchCustom(self, event):
+        evt = glsEvents.Search(id=wx.ID_ANY, name=None, content=None)
+        wx.PostEvent(self.Parent, evt)
+        return
+    def OnToolSelAll(self, event):
+        print('selall')
+        return
+    def OnToolSelNone(self, event):
+        print('selnone')
+        return
+    def OnToolSelIvrt(self, event):
+        print('selivrt')
+        return
+    def OnToolShowFiles(self, event):
+        print('showfiles')
+        return
+    def OnToolShowDirs(self, event):
+        print('showdirs')
+        return
+    def OnToolCloseTab(self, event):
+        self.OnCloseTab(self.GetCurrentTab())
         return
     def OnClose(self, event=None):
         for tab in self.tabs:

@@ -47,11 +47,11 @@ from glsDataPanel import glsDataPanel
 from glsSettings import glsSettings
 from glsDirTree import glsDirTree
 from glsVersion import glsVersion
+from glsEvents import glsEvents
 from glsIcons import glsIcons
 from glsHelp import glsLicenseFrame
 from glsHelp import glsAboutFrame
 from glsApp import glsApp
-
 
 ################################################################
 
@@ -72,6 +72,8 @@ class glShell(wx.Frame):
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.OnSplitChanging)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.OnSplitChanged)
+        self.Bind(glsEvents.EVT_OPEN_DIR, self.OnOpenDir)
+        self.Bind(glsEvents.EVT_SEARCH, self.OnSearch)
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(glsIcons.Get('chart_organisation'))
         self.SetIcon(self.icon)
@@ -82,8 +84,9 @@ class glShell(wx.Frame):
         return
     def OnStart(self, event):
         del self.start
-        path = sys.argv[1] if len(sys.argv) == 2 else "."
-        self.data_panel.AddDirTree(glsDirTree(path))
+        if len(sys.argv) >= 2:
+            for path in sys.argv[1:]:
+                self.data_panel.AddDirTree(glsDirTree(path))
         return
     def OnChangeSettings(self):
         return
@@ -165,7 +168,7 @@ class glShell(wx.Frame):
             search = glsSearchDialog(self)
             result_id = search.ShowModal()
             if result_id == glsSearchDialog.ID_SEARCH:
-                self.SearchWithOpts(search.SearchSettings())
+                self.SearchOpts(search.SearchSettings())
             return
         if menu_id == self.ID_ABOUT:
             if self.about_frame is None:
@@ -197,8 +200,7 @@ class glShell(wx.Frame):
         self.splitter.SetMinSize( (self.min_term_size[0]*2+100, self.min_term_size[1]*2+150) )
         # Terminals.
         self.terms_panel = glsTermsPanel(self.splitter, self.min_term_size,
-                                         self.OnChildLayout, self.OnSearchFiles,
-                                         self.OnSearchContents, self.OnOpenDir)
+                                         self.OnChildLayout)
         # Data panel.
         self.data_panel = glsDataPanel(self.splitter, self.terms_panel)
         # Finalize UI layout.
@@ -238,16 +240,25 @@ class glShell(wx.Frame):
     def AddDirTree(self, dirtree):
         self.data_panel.AddDirTree(dirtree)
         return
-    def OnOpenDir(self, path):
-        path = os.path.abspath(os.path.expanduser(path))
-        if not os.path.isfile(path) and not os.path.isdir(path):
+    def OnOpenDir(self, event):
+        if event.path:
+            path = os.path.abspath(os.path.expanduser(event.path))
+        else:
+            with wx.DirDialog(self, defaultPath=os.getcwd(),
+                              style=wx.DD_DIR_MUST_EXIST) as dir_dialog:
+                if dir_dialog.ShowModal() != wx.ID_OK:
+                    return
+                path = dir_dialog.GetPath()
+        if not os.path.isdir(path):
+            wx.MessageDialog(self, "Path '%s' is not a valid directory."%path,
+                             caption="Not a Directory").ShowModal()
             return
         self.AddDirTree(glsDirTree(path))
         return
-    def SearchWithOpts(self, opts):
+    def SearchOpts(self, opts):
         self.data_panel.Search(opts)
         return
-    def OnSearchFiles(self, text):
+    def SearchName(self, text):
         opts = { 'name': text,
                  'name_regex': False,
                  'files': True,
@@ -255,9 +266,9 @@ class glShell(wx.Frame):
                  'match_contents': False,
                  'contents': None,
                  'contents_regex': False }
-        self.SearchWithOpts(opts)
+        self.SearchOpts(opts)
         return
-    def OnSearchContents(self, text):
+    def SearchContent(self, text):
         opts = { 'name': None,
                  'name_regex': False,
                  'files': True,
@@ -265,7 +276,19 @@ class glShell(wx.Frame):
                  'match_contents': True,
                  'contents': text,
                  'contents_regex': False }
-        self.SearchWithOpts(opts)
+        self.SearchOpts(opts)
+        return
+    def OnSearch(self, event):
+        if event.name:
+            self.SearchName(event.name)
+            return
+        if event.content:
+            self.SearchContent(event.content)
+            return
+        search = glsSearchDialog(self)
+        result_id = search.ShowModal()
+        if result_id == glsSearchDialog.ID_SEARCH:
+            self.SearchOpts(search.SearchSettings())
         return
     def OnClose(self, event=None):
         if self.settings_frame is not None:
