@@ -54,6 +54,7 @@ class glsSearchDialog(wx.Dialog):
         row7.Add(self.btn_cancel)
         self.btn_search = wx.Button(panel, wx.ID_ANY, "Search")
         self.btn_search.SetBitmap(glsIcons.Get('magnifier'))
+        self.btn_search.SetDefault()
         row7.Add(self.btn_search)
         box_panel.Add(row7, 0, wx.ALIGN_RIGHT)
         panel.SetSizerAndFit(box_panel)

@@ -29,7 +29,8 @@ class glsTermPanelPopupMenu(wx.Menu):
     ID_PASTE           = 1003
     ID_SEARCH_CONTENTS = 1004
     ID_SEARCH_FILES    = 1005
-    ID_EXIT            = 1006
+    ID_NAME            = 1006
+    ID_EXIT            = 1007
     def __init__(self, parent, selection_available, paste_available):
         super(glsTermPanelPopupMenu, self).__init__()
         item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
@@ -60,6 +61,9 @@ class glsTermPanelPopupMenu(wx.Menu):
         self.Append(item)
         if not selection_available:
             item.Enable(False)
+        item = wx.MenuItem(self, self.ID_NAME, 'Set Tab Name')
+        item.SetBitmap(glsIcons.Get('pencil'))
+        self.Append(item)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Terminal')
         item.SetBitmap(glsIcons.Get('cross'))
         self.Append(item)
@@ -89,8 +93,7 @@ class glsTerminalPanel(wx.Window):
                      ( 255, 255, 255),
                      ( 255, 255, 255) )
 
-    def __init__(self, parent, callback_close, callback_title,
-                 callback_setcurrent, min_size):
+    def __init__(self, parent, min_size):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         # Give the term panel a default size to avoid errors on creation.
         # This also appears to influence some aspects of minimum size.
@@ -99,9 +102,6 @@ class glsTerminalPanel(wx.Window):
         self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
         glsSettings.AddWatcher(self.OnChangeSettings)
         self.word_chars = glsSettings.Get('term_wchars')
-        self.callback_close = callback_close
-        self.callback_title = callback_title
-        self.callback_setcurrent = callback_setcurrent
         # Bind events.
         self.keys_down = {}
         self.key_press = glsKeyPress(self.keys_down)
@@ -122,12 +122,12 @@ class glsTerminalPanel(wx.Window):
         self.Bind(wx.EVT_MOTION, self.OnMove)
         self.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
         self.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
+        self.Bind(glsEvents.EVT_CHILD_EXIT, self.OnChildOutputThreadExit)
         self.dbl_click = False
         self.left_down = False
         self.sel_start = None
         self.sel_end = None
         self.selected = None
-        wx.CallLater(10, self.MonitorTerminal)
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
         self.char_w = None
@@ -185,7 +185,6 @@ class glsTerminalPanel(wx.Window):
         tcattrib[3] = tcattrib[3] & ~termios.ICANON
         termios.tcsetattr(self.io, termios.TCSAFLUSH, tcattrib)
         self.notified_parent_closed = False
-        self.child_output_notifier_thread_done = False
         self.child_output_notifier_thread = threading.Thread(
             target = self.ChildOuputNotifier)
         self.output_wait = True
@@ -212,15 +211,18 @@ class glsTerminalPanel(wx.Window):
                 inp_ready, out_ready, err_ready = select.select(inp_set, [], [], 0)
                 if self.io in inp_ready:
                     self.output_wait = False
-                    wx.CallAfter(self.ReadProcessOutput)
+                    if self:
+                        wx.CallAfter(self.ReadProcessOutput)
                 else:
                     sleep(0.001)
             else:
                 sleep(0.001)
         if not self.ChildIsAlive():
             self.child_running = False
-            wx.CallAfter(self.ReadProcessOutput)
-        self.child_output_notifier_thread_done = True
+            if self:
+                wx.CallAfter(self.ReadProcessOutput)
+        if self:
+            wx.PostEvent(self, glsEvents.ChildExit(wx.ID_ANY))
         return
     def ReadProcessOutput(self):
         output = bytes("",'utf8')
@@ -265,7 +267,7 @@ class glsTerminalPanel(wx.Window):
         return
     def OnSetFocus(self, event):
         self.Refresh()
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         wx.YieldIfNeeded()
         return
     def OnKillFocus(self, event):
@@ -297,11 +299,17 @@ class glsTerminalPanel(wx.Window):
         elif id == glsTermPanelPopupMenu.ID_NEW_DIR:
             self.OpenSelectionDir()
         elif id == glsTermPanelPopupMenu.ID_EXIT:
-            self.OnClose(event)
+            self.OnClose()
         elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
             self.SearchSelectionFiles()
         elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
             self.SearchSelectionContents()
+        elif id == glsTermPanelPopupMenu.ID_NAME:
+            dlg = wx.TextEntryDialog(self, "Enter tab name:", caption="Enter Tab Name",
+                                     value="")
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            self.SetTitle(dlg.GetValue())
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -317,22 +325,23 @@ class glsTerminalPanel(wx.Window):
             return text_data.GetText()
         return None
     def GetSelectedText(self):
-        if self.sel_start is not None and self.sel_end is not None and self.sel_start != self.sel_end:
-            text = ""
-            screen = self.terminal.GetRawScreen()
-            start = self.sel_start[0]*self.cols + self.sel_start[1]
-            end   = self.sel_end[0]*self.cols + self.sel_end[1]
-            max_ndx = self.rows*self.cols - 1
-            start = min(max(start, 0), max_ndx)
-            end = min(max(end, 0), max_ndx)
-            if start > end:
-                start, end = end, start
-            for i in range(start, end):
-                row = int(i/self.cols)
-                col = i%self.cols
-                text += screen[row][col]
-            return text
-        return None
+        if (self.sel_start is None or self.sel_end is None or
+            self.sel_start == self.sel_end):
+            return None
+        text = ""
+        screen = self.terminal.GetRawScreen()
+        start = self.sel_start[0]*self.cols + self.sel_start[1]
+        end   = self.sel_end[0]*self.cols + self.sel_end[1]
+        max_ndx = self.rows*self.cols - 1
+        start = min(max(start, 0), max_ndx)
+        end = min(max(end, 0), max_ndx)
+        if start > end:
+            start, end = end, start
+        for i in range(start, end):
+            row = int(i/self.cols)
+            col = i%self.cols
+            text += screen[row][col]
+        return text
     def Copy(self):
         text = self.GetSelectedText()
         if text is not None:
@@ -356,7 +365,7 @@ class glsTerminalPanel(wx.Window):
         self.Paste()
         return
     def OnLeftDown(self, event):
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         self.SetFocus()
         self.left_down = True
         self.sel_start = self.PointToCursor(event.GetPosition())
@@ -379,7 +388,7 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnLeftDouble(self, event):
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         row, col = self.PointToCursor(event.GetPosition())
         screen = self.terminal.GetRawScreen()
         if screen[row][col] not in self.word_chars:
@@ -421,7 +430,7 @@ class glsTerminalPanel(wx.Window):
             wx.YieldIfNeeded()
         return
     def OnRightDown(self, event):
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         self.SetFocus()
         avail_selection = self.GetSelectedText() != None
         avail_paste = self.ReadClipboard() != None
@@ -429,7 +438,7 @@ class glsTerminalPanel(wx.Window):
                        event.GetPosition())
         return
     def OnWheel(self, event):
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         self.SetFocus()
         if wx.WXK_SHIFT in self.keys_down:
             pos = self.scrollbar.GetThumbPosition()
@@ -603,7 +612,7 @@ class glsTerminalPanel(wx.Window):
                                     self.scrollbar_w, refresh=True)
         return
     def OnScroll(self, event):
-        self.callback_setcurrent(True)
+        self.SetCurrent()
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -675,7 +684,7 @@ class glsTerminalPanel(wx.Window):
             if not c.isprintable():
                 break
             text += c
-        self.callback_title(self, text)
+        self.SetTitle(text)
         return
     def OnTermUpdateMode(self, modes):
         self.modes = dict(modes)
@@ -686,17 +695,22 @@ class glsTerminalPanel(wx.Window):
     def OnTermSendData(self, data):
         self.SendText(data)
         return
-    def MonitorTerminal(self):
-        # Monitor the state of the child process and tell parent when closed.
-        if self.child_output_notifier_thread_done == True:
-            if self.child_output_notifier_thread is not None:
-                self.child_output_notifier_thread.join()
-                self.child_output_notifier_thread = None
-            if self.notified_parent_closed == False:
-                self.callback_close(self)
-                self.notified_parent_closed = True
-        else:
-            wx.CallLater(50, self.MonitorTerminal)
+    def SetCurrent(self):
+        evt = glsEvents.TabCurrent(wx.ID_ANY, terminal=self)
+        wx.PostEvent(self.Parent, evt)
+        return
+    def SetTitle(self, title):
+        evt = glsEvents.TabTitle(id=wx.ID_ANY, title=title, terminal=self)
+        wx.PostEvent(self.Parent, evt)
+        return
+    def OnChildOutputThreadExit(self, event):
+        if self.child_output_notifier_thread is not None:
+            self.child_output_notifier_thread.join()
+            self.child_output_notifier_thread = None
+        if not self.notified_parent_closed:
+            evt = glsEvents.TabClose(wx.ID_ANY, terminal=self)
+            wx.PostEvent(self.Parent, evt)
+            self.notified_parent_closed = True
         return
     def OnClose(self, event=None):
         self.stop_output_notifier = True
@@ -714,13 +728,14 @@ class glsTerminalPanel(wx.Window):
 class glsTermNotebook(wx.Window):
     ICON_TERM      = 0
     ICON_PLACEHLDR = 1
-    def __init__(self, parent, min_term_size,
-                 callback_current, callback_placeholder):
+    def __init__(self, parent, min_term_size, callback_placeholder):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermNotebook, self).__init__(parent, style=style)
-        self.callback_current = callback_current
         self.callback_placeholder = callback_placeholder
         self.current = False
+        self.Bind(glsEvents.EVT_TAB_TITLE, self.OnTermTitle)
+        self.Bind(glsEvents.EVT_TAB_CLOSE, self.OnTermClose)
+        self.Bind(glsEvents.EVT_TAB_CURRENT, self.OnTermCurrent)
         self.min_term_size = min_term_size
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.image_list = wx.ImageList(16, 16)
@@ -729,46 +744,45 @@ class glsTermNotebook(wx.Window):
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
-        self.term_close_pending = []
         self.OnNewTerm()
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
     def OnNewTerm(self):
-        # Create a new terminal and add the tab to the notebook.
         self.RemovePlaceHolder()
-        terminal = glsTerminalPanel(self.notebook,
-                                    self.OnTermClose, self.OnTermTitle,
-                                    self.SetCurrent,
-                                    self.min_term_size)
+        terminal = glsTerminalPanel(self.notebook, self.min_term_size)
         self.tabs.append(terminal)
         self.notebook.AddPage(terminal, " Terminal " + str(len(self.tabs)))
         self.notebook.ChangeSelection(len(self.tabs)-1)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_TERM)
         return terminal
-    def CloseTerminals(self):
-        # Check for closed terminals and clean up their tabs.
-        for terminal in self.term_close_pending:
-            for i,t in enumerate(self.tabs):
-                if terminal == t:
-                    self.notebook.DeletePage(i)
-                    self.notebook.SendSizeEvent()
-                    self.tabs.remove(self.tabs[i])
-            self.term_close_pending.remove(terminal)
+    def CloseTerminal(self, terminal):
+        if terminal is None:
+            return
+        for i,t in enumerate(self.tabs):
+            if terminal == t:
+                self.notebook.DeletePage(i)
+                self.notebook.SendSizeEvent()
+                self.tabs.remove(self.tabs[i])
         self.AddPlaceHolder()
         return
-    def OnTermClose(self, terminal):
-        # Add tab to closed terminal list.
-        if terminal is not None and terminal not in self.term_close_pending:
-            self.term_close_pending.append(terminal)
-            wx.CallAfter(self.CloseTerminals)
+    def OnTermClose(self, event):
+        self.CloseTerminal(event.terminal)
         return
-    def OnTermTitle(self, terminal, title):
-        if len(title) > 0:
-            for i,t in enumerate(self.tabs):
-                    if terminal == t:
-                        self.notebook.SetPageText(i, title)
+    def OnTermTitle(self, event):
+        title = event.title
+        if not len(title):
+            return
+        if len(title) > 24:
+            title = title[:24]
+        terminal = event.terminal
+        for i,t in enumerate(self.tabs):
+            if terminal == t:
+                self.notebook.SetPageText(i, " "+title)
+        return
+    def OnTermCurrent(self, event):
+        self.SetCurrent(True)
         return
     def RemovePlaceHolder(self):
         if len(self.tabs) != 1 or not isinstance(self.tabs[0], glsPlaceHolder):
@@ -793,12 +807,13 @@ class glsTermNotebook(wx.Window):
     def SetCurrent(self, state):
         self.current = state
         if self.current:
-            self.callback_current(self)
+            evt = glsEvents.TabCurrent(wx.ID_ANY, notebook=self)
+            wx.PostEvent(self.Parent, evt)
         return
     def GetCurrentTerm(self):
         current = self.notebook.GetSelection()
         if (current >= 0 and current < len(self.tabs) and
-            not isinstance(self.tabs[current],glsPlaceHolder)):
+            not isinstance(self.tabs[current], glsPlaceHolder)):
             return self.tabs[current]
         return None
     def SendText(self, text):
@@ -827,6 +842,7 @@ class glsTermsPanel(wx.Window):
         self.callback_layout = callback_layout
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGING, self.VetoEvent)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.VetoEvent)
+        self.Bind(glsEvents.EVT_TAB_CURRENT, self.OnCurrentNotebook)
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
@@ -854,7 +870,6 @@ class glsTermsPanel(wx.Window):
         self.notebooks = []
         for n in range(2):
             notebook = glsTermNotebook(self.splitter, self.min_term_size,
-                                       self.OnCurrentNotebook,
                                        self.OnPlaceHolder)
             self.notebooks.append(notebook)
         self.notebooks_active = len(self.notebooks)
@@ -968,7 +983,8 @@ class glsTermsPanel(wx.Window):
         elif self.notebooks_active == 0:
             self.Resize(None)
         return
-    def OnCurrentNotebook(self, notebook):
+    def OnCurrentNotebook(self, event):
+        notebook = event.notebook
         for nb in self.notebooks:
             if nb != notebook:
                 nb.SetCurrent(False)
@@ -1025,7 +1041,7 @@ class glsTermsPanel(wx.Window):
             return
         term = notebook.GetCurrentTerm()
         if term is not None:
-            notebook.OnTermClose(term)
+            notebook.CloseTerminal(term)
         return
 
 ################################################################
