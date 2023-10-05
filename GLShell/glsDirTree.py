@@ -82,19 +82,21 @@ class glsDirTree(wx.EvtHandler):
                 pass
         else:
             return
+        exclude = glsSettings.Get('graph_ignore')
         nodes = []
         edges = []
-        for root, dirs, files in os.walk(self.path):
-            root = os.path.abspath(root)
-            nodes.append(glsDir(root))
+        for root, dirs, files in os.walk(self.path, topdown=True):
+            abs_root = os.path.abspath(root)
+            nodes.append(glsDir(abs_root))
             for name in files:
-                node = glsFile(os.path.join(root, name))
+                node = glsFile(os.path.join(abs_root, name))
                 nodes.append(node)
-                edges.append((root, node))
+                edges.append((abs_root, node))
             for name in dirs:
-                node = glsDir(os.path.join(root, name))
+                node = glsDir(os.path.join(abs_root, name))
                 nodes.append(node)
-                edges.append((root, node))
+                edges.append((abs_root, node))
+            dirs[:] = [ d for d in dirs if d not in exclude ]
         new_graph = fdpGraph(glsSettings, self.KINDS)
         for node in nodes:
             new_graph.add_node(node)

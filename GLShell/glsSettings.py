@@ -1,13 +1,15 @@
 import os
 import json
 
+from copy import deepcopy
+
 ################################################################
 
 class glsSettingsManager():
     __watchers = None
     __settings = None
     __defaults = { "path": "~/.glshell",
-                   "log_level": 10,
+                   "log_level": 1,
                    "shell_path": "/bin/bash",
                    "shell_args": "",
                    "term_type": "linux",
@@ -20,6 +22,7 @@ class glsSettingsManager():
                    "term_font": "Monospace",
                    "term_font_size": 11,
                    "graph_3D": True,
+                   "graph_ignore": [".git", ".svn"],
                    "graph_font": "Monospace",
                    "graph_font_size": 10,
                    "edit_path": "/usr/bin/emacs",
@@ -62,7 +65,7 @@ class glsSettingsManager():
         return
     def Get(self, key):
         if key in glsSettingsManager.__settings:
-            return glsSettingsManager.__settings[key]
+            return deepcopy(glsSettingsManager.__settings[key])
         return None
     def Set(self, key, value):
         glsSettingsManager.__settings[key] = value

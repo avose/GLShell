@@ -218,6 +218,15 @@ class TabGraph(wx.Panel):
         wx.Panel.__init__(self, parent)
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Row one.
+        row1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.st_graph_ignore = wx.StaticText(self, wx.ID_ANY, "Path Ignore List:")
+        row1.Add(self.st_graph_ignore, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
+        self.tc_graph_ignore = wx.TextCtrl(self, wx.ID_ANY)
+        graph_ignore = ", ".join(glsSettings.Get('graph_ignore'))
+        self.tc_graph_ignore.SetValue(graph_ignore)
+        row1.Add(self.tc_graph_ignore, 1, wx.ALIGN_CENTER | wx.ALL)
+        box_main.Add(row1, 0, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Row two.
         dims = ['3D', '2D']
         self.rbox = wx.RadioBox(self, label='Graph Rendering', choices=dims,
                                 majorDimension=1, style=wx.RA_SPECIFY_ROWS)
@@ -225,12 +234,12 @@ class TabGraph(wx.Panel):
             self.rbox.SetSelection(0)
         else:
             self.rbox.SetSelection(1)
-        box_main.Add(self.rbox, 0, wx.EXPAND | wx.ALL, 5)
-        # Row two.
+        box_main.Add(self.rbox, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        # Row three.
         btn_font = wx.Button(self, wx.ID_ANY, "Select Graph Font")
         btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
         box_main.Add(btn_font, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 5)
-        # Row three.
+        # Row four.
         p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
         p_sample.SetBackgroundColour((255,255,255))
         self.st_sample = wx.StaticText(p_sample, -1, "Font Sample Text",
@@ -262,6 +271,8 @@ class TabGraph(wx.Panel):
             dims = "3D"
         else:
             dims = "2D"            
+        graph_ignore = ", ".join(glsSettings.Get('graph_ignore'))
+        self.tc_graph_ignore.SetValue(graph_ignore)
         self.rbox.SetStringSelection(dims)
         self.SetFontSelection(glsSettings.Get('graph_font'),
                               glsSettings.Get('graph_font_size'))
@@ -274,6 +285,10 @@ class TabGraph(wx.Panel):
             settings.append( ('graph_3D', True) )
         else:
             settings.append( ('graph_3D', False) )
+        ignore = self.tc_graph_ignore.GetValue().split(",")
+        ignore = [ i.strip() for i in ignore if i != "" ]
+        ignore = [ i for i in ignore if i != "" ]
+        settings.append( ('graph_ignore', ignore) )
         settings.append( ('graph_font', self.font_name) )
         settings.append( ('graph_font_size', self.font_size) )
         glsSettings.SetList(settings)
@@ -374,7 +389,7 @@ class TabGeneral(wx.Panel):
         self.SetSizerAndFit(box_main)
         self.Show(True)
     def Load(self):
-        self.sp_log.SetValue(glsSettings.Get('lov_level'))
+        self.sp_log.SetValue(glsSettings.Get('log_level'))
     def Save(self):
         settings = []
         settings.append( ('log_level', self.sp_log.GetValue()) )
