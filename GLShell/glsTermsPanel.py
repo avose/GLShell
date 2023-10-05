@@ -72,26 +72,59 @@ class glsTermPanelPopupMenu(wx.Menu):
 ################################################################
 
 class glsTerminalPanel(wx.Window):
-    color_map_fg = ( ( 192, 192, 192),
-                     ( 0,   0,     0),
-                     ( 255, 0,     0),
-                     ( 0,   255,   0),
-                     ( 255, 255,   0),
-                     ( 0,   0,   255),
-                     ( 255, 0,   255),
-                     ( 0,   255, 255),
-                     ( 255, 255, 255) )
+    color_map_fg = ( (192, 192, 192),
+                     (0,   0,     0),
+                     (255, 0,     0),
+                     (0,   255,   0),
+                     (255, 255,   0),
+                     (0,   0,   255),
+                     (255, 0,   255),
+                     (0,   255, 255),
+                     (255, 255, 255) )
 
-    color_map_bg = ( ( 0,   0,     0),
-                     ( 0,   0,     0),
-                     ( 255, 0,     0),
-                     ( 0,   255,   0),
-                     ( 255, 255,   0),
-                     ( 0,   0,   255),
-                     ( 255, 0,   255),
-                     ( 0,   255, 255),
-                     ( 255, 255, 255),
-                     ( 255, 255, 255) )
+    color_map_bg = ( (0,   0,     0),
+                     (0,   0,     0),
+                     (255, 0,     0),
+                     (0,   255,   0),
+                     (255, 255,   0),
+                     (0,   0,   255),
+                     (255, 0,   255),
+                     (0,   255, 255),
+                     (255, 255, 255),
+                     (255, 255, 255) )
+
+    # Color table for 256-color mode.
+    # Inspired by:
+    # https://github.com/terminalguide/terminalguide/
+    # https://github.com/selectel/pyte
+    # Indices 0-7 alias 8 standard FG colors.
+    # Indices 8-15 alias 8 standard bright FG colors.
+    COLORS_256 = [ (0x00, 0x00, 0x00),
+                   (0xcd, 0x00, 0x00),
+                   (0x00, 0xcd, 0x00),
+                   (0xcd, 0xcd, 0x00),
+                   (0x00, 0x00, 0xee),
+                   (0xcd, 0x00, 0xcd),
+                   (0x00, 0xcd, 0xcd),
+                   (0xe5, 0xe5, 0xe5),
+                   (0x7f, 0x7f, 0x7f),
+                   (0xff, 0x00, 0x00),
+                   (0x00, 0xff, 0x00),
+                   (0xff, 0xff, 0x00),
+                   (0x5c, 0x5c, 0xff),
+                   (0xff, 0x00, 0xff),
+                   (0x00, 0xff, 0xff),
+                   (0xff, 0xff, 0xff), ]
+    # Indices 16-231 form a 6x6x6 RGB color cube.
+    intensity = (0, 95, 135, 175, 215, 255)
+    for i in range(216):
+        COLORS_256.append( (intensity[(i//36)%6],
+                            intensity[(i//6)%6],
+                            intensity[i%6]) )
+    # Indices 232-255 form a grey ramp; no black or white.
+    for i in range(24):
+        rgb = i*10 + 8
+        COLORS_256.append( (rgb, rgb, rgb) )
 
     def __init__(self, parent, min_size):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
