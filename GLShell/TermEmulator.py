@@ -604,10 +604,14 @@ class V102Terminal:
         glsLog.debug("TE: Newline: @ (%d,%d) SR=%d,%d rows=%d"%
                      (self.curY, self.curX, self.scrollRegion[0], self.scrollRegion[1],
                       self.rows), 4)
-        if self.curY + 1 < self.scrollRegion[1]:
+        if self.curY >= self.scrollRegion[0] and self.curY <= self.scrollRegion[1]:
+            if self.curY + 1 <= self.scrollRegion[1]:
+                self.curY += 1
+            else:
+                self.ScrollUp()
+            return
+        if self.curY + 1 < self.rows:
             self.curY += 1
-        else:
-            self.ScrollUp()
         return
     def __PushChar(self, ch):
         """
@@ -679,11 +683,9 @@ class V102Terminal:
             elif finalChar in self.escSeqHandlers.keys():
                 try:
                     self.escSeqHandlers[finalChar](interChars, finalChar)
-                except Exception as e:
-                    glsLog.add("TE: Exception in ESC seq handler for '[%s%s'!"%
-                               (interChars, finalChar))
-                    glsLog.add("TE: Exception: '%s'"%(str(e)))
-                    #traceback.print_exception(*sys.exc_info())
+                except:
+                    glsLog.add("TE: Exception in ESC seq handler for '[%s%s'!\n%s"%
+                               (interChars, finalChar, traceback.format_exc()))
             else:
                 escSeq = "["
                 if interChars != None:
@@ -706,11 +708,9 @@ class V102Terminal:
             if text[index] in self.escHandlers:
                 try:
                     self.escHandlers[text[index]]()
-                except Exception as e:
-                    glsLog.add("TE: Exception in ESC seq handler for '%s'!"%
-                               text[index])
-                    glsLog.add("TE: Exception: '%s'"%(str(e)))
-                    #traceback.print_exception(*sys.exc_info())
+                except:
+                    glsLog.add("TE: Exception in ESC handler for '[%s%s'!\n%s"%
+                               (interChars, finalChar, traceback.format_exc()))
             else:
                 self.__UnhandledEscSeq(text[index])
             index += 1
@@ -805,10 +805,12 @@ class V102Terminal:
         """
         Handler for escape character
         """
-        glsLog.debug("TE: ESC: @ (%d,%d)"%(self.curY, self.curX), 4)
         index += 1
         if index < len(text):
             index = self.__HandleEscSeq(text, index)
+        else:
+            glsLog.debug("TE: ESC: @ (%d,%d) without sequence!"%
+                         (self.curY, self.curX), 1)
         return index
     def __OnCharCSI(self, text, index):
         """
@@ -924,7 +926,6 @@ class V102Terminal:
         return
     def __OnEscSeqCUP(self, params, end):
         # Handler CUP: Cursor Update Position
-        glsLog.debug("TE: (CUP) Cursor Update Position: '%s%s'"%(params, end), 4)
         y = 0
         x = 0
         if params != None:
@@ -932,6 +933,7 @@ class V102Terminal:
             if len(values) == 2:
                 y = int(values[0]) - 1
                 x = int(values[1]) - 1
+                glsLog.debug("TE: (CUP) Cursor Update Position: (%d,%d)"%(y, x), 4)
             else:
                 glsLog.debug("TE: (CUP) Cursor Position: Invalid Parameters '%s%s'!"%
                              (params, end), 3)
@@ -949,25 +951,36 @@ class V102Terminal:
             n = int(params)
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.rows - 1, self.cols - 1)
+            glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
+                         (self.curY, self.curX, self.rows - 1, self.cols - 1), 4)
         elif n == 1:
             self.ClearRect(0, 0, self.curY, self.curX)
+            glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
+                         (0, 0, self.curY, self.curX), 4)
         elif n == 2 or n == 3:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
+            glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
+                         (0, 0, self.rows - 1, self.cols - 1), 4)
         else:
             glsLog.debug("TE: (ED) Erase Display: Invalid Parameter %d!"%(n), 3)
         return
     def __OnEscSeqEL(self, params, end):
         # Handler EL: Erase Line
-        glsLog.debug("TE: (EL) Erase Line: '%s%s'"%(params, end), 4)
         n = 0
         if params != None:
             n = int(params)
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.curY, self.cols - 1)
+            glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
+                         (self.curY, self.curX, self.curY, self.cols - 1), 4)
         elif n == 1:
             self.ClearRect(self.curY, 0, self.curY, self.curX)
+            glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
+                         (self.curY, 0, self.curY, self.curX), 4)
         elif n == 2:
             self.ClearRect(self.curY, 0, self.curY, self.cols - 1)
+            glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
+                         (self.curY, 0, self.curY, self.cols - 1), 4)
         else:
             glsLog.debug("TE: (EL) Erase Line: Invalid Parameter %d!"%(n), 3)
         return
