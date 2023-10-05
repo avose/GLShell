@@ -338,10 +338,10 @@ class glsTerminalPanel(wx.Window):
         elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
             self.SearchSelectionContents()
         elif id == glsTermPanelPopupMenu.ID_NAME:
-            dlg = wx.TextEntryDialog(self, "Enter tab name:", caption="Enter Tab Name",
-                                     value="")
-            if dlg.ShowModal() != wx.ID_OK:
-                return
+            with wx.TextEntryDialog(self, "Enter tab name:", caption="Enter Tab Name",
+                                    value="") as dlg:
+                if dlg.ShowModal() != wx.ID_OK:
+                    return
             self.SetTitle(dlg.GetValue())
         return
     def WriteClipboard(self, text):

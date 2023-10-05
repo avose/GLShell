@@ -36,6 +36,8 @@ if 'WAYLAND_DISPLAY' in os.environ and 'PYOPENGL_PLATFORM' not in os.environ:
     os.environ['PYOPENGL_PLATFORM'] = 'egl'
 if "Ubuntu" in platform.version():
     os.environ['PYOPENGL_PLATFORM'] = 'egl'
+# !!avose: For now, always set this.
+os.environ['PYOPENGL_PLATFORM'] = 'egl'
 import sys
 import wx
 
@@ -140,7 +142,6 @@ class glShell(wx.Frame):
         menu_id = event.GetId()
         if menu_id == self.ID_EXIT:
             self.OnClose()
-            self.Destroy()
             return
         if menu_id == self.ID_OPEN_FILE:
             style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
@@ -165,10 +166,10 @@ class glShell(wx.Frame):
                 self.settings_frame.Raise()
             return
         if menu_id == self.ID_SEARCH:
-            search = glsSearchDialog(self)
-            result_id = search.ShowModal()
-            if result_id == glsSearchDialog.ID_SEARCH:
-                self.SearchOpts(search.SearchSettings())
+            with glsSearchDialog(self) as search:
+                result_id = search.ShowModal()
+                if result_id == glsSearchDialog.ID_SEARCH:
+                    self.SearchOpts(search.SearchSettings())
             return
         if menu_id == self.ID_ABOUT:
             if self.about_frame is None:
@@ -291,6 +292,13 @@ class glShell(wx.Frame):
             self.SearchOpts(search.SearchSettings())
         return
     def OnClose(self, event=None):
+        msg = "Are you sure you want to exit?\n\nYou will lose any unsaved work."
+        with wx.MessageDialog(self, msg, caption="Exit GLShell?",
+                              style=wx.OK|wx.CANCEL) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                if event is not None:
+                    event.StopPropagation()
+                return
         if self.settings_frame is not None:
             self.settings_frame.OnClose()
         if self.about_frame is not None:
@@ -299,8 +307,7 @@ class glShell(wx.Frame):
             self.license_frame.OnClose()
         self.data_panel.OnClose()
         glsSettings.RemoveWatcher(self.OnChangeSettings)
-        if event is not None:
-            event.Skip()
+        self.Destroy()
         return
     def OnDestroy(self, event):
         glsSettings.RemoveWatcher(self.OnChangeSettings)
