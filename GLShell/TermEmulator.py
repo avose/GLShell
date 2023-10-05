@@ -153,7 +153,10 @@ class V102Terminal:
     MODE_BLINK   = '?12'    # Cursor blinking
     MODE_DECTCEM = '?25'    # Show cursor
     MODE_RFC     = '?1004'  # Report focus change
-    MODE_ALTBUF  = '?1049'  # Aternative screen buffer with save and clear
+    MODE_ALTBUF  = '?47'    # Aternative screen buffer
+    MODE_ALTB_SCO= '?1047'  # ALTBUF with save and clear on out
+    MODE_ALTB_CSR= '?1048'  # DECSC on ALTBUF in and DECRC on ALTBUF out
+    MODE_ALTB_SCI= '?1049'  # ALTBUF with save and clear on in
     MODE_BRCKPST = '?2004'  # Bracketed paste mode
     # TermEmulator modes.
     MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
@@ -247,10 +250,13 @@ class V102Terminal:
                              self.__ESC_DECPAM:self.__OnEscDECPAM, }
 
         # terminal modes
-        self.modes = { self.MODE_BLINK:  False,
-                       self.MODE_DECTCEM:True,
-                       self.MODE_BRCKPST:False,
-                       self.MODE_ALTBUF: False, }
+        self.modes = { self.MODE_BLINK:   False,
+                       self.MODE_DECTCEM: True,
+                       self.MODE_BRCKPST: False,
+                       self.MODE_ALTBUF:  False,
+                       self.MODE_ALTB_SCO:False,
+                       self.MODE_ALTB_CSR:False,
+                       self.MODE_ALTB_SCI:False, }
 
         # defines the printable characters, only these characters are printed
         # on the terminal
@@ -283,6 +289,13 @@ class V102Terminal:
                 rendition.append(0)
             self.screen.append(line)
             self.scrRendition.append(rendition)
+
+        # initialize saved screen
+        self.savedScreen = []
+        self.savedRendition = []
+        for scrl,renl in zip(self.screen, self.scrRendition):
+            self.savedScreen.append(array('u', scrl))
+            self.savedRendition.append(array('L', renl))
 
         # initializes callbacks
         self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
@@ -561,7 +574,8 @@ class V102Terminal:
             # update the dirty lines
             self.__Callback(self.CALLBACK_UPDATE_LINES)
             # scrolls up the screen
-            self.__Callback(self.CALLBACK_SCROLL_UP_SCREEN)
+            if not self.modes[self.MODE_ALTBUF]:
+                self.__Callback(self.CALLBACK_SCROLL_UP_SCREEN)
         glsLog.debug("TE: Scroll Up: rg = (%d,%d) term.rows = %d"%
                      (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
         line = self.screen.pop(self.scrollRegion[0])
@@ -730,27 +744,33 @@ class V102Terminal:
         glsLog.debug("TE: Restore Cursor: %d,%d [%s]"%
                      (self.curY, self.curX, 'ALT' if ndx == 1 else 'PRI'), 3)
         return
-    def __AlternativeScreenEnter(self, clear):
-        self.savedScreen = []
-        self.savedRendition = []
-        for scrl,renl in zip(self.screen, self.scrRendition):
-            self.savedScreen.append(array('u', scrl))
-            self.savedRendition.append(array('L', renl))
-        glsLog.debug("TE: (ALTBUF) Enter: %dx%d real=%dx%d"%
-                     (self.rows, self.cols, len(self.screen), len(self.screen[0])), 3)
+    def __AltBuffIn(self, save=False, clear=False):
+        if self.modes[self.MODE_ALTBUF]:
+            return
+        if save:
+            self.__SaveCursor()
+        self.modes[self.MODE_ALTBUF] = True
+        self.savedScreen, self.screen = self.screen, self.savedScreen
+        self.savedRendition, self.scrRendition = self.scrRendition, self.savedRendition
+        self.Resize(self.rows, self.cols)
         if clear:
             self.Clear()
+        glsLog.debug("TE: (ALTBUF) Enter: save=%s clear=%s"%
+                     (str(save), str(clear)), 3)
         return
-    def __AlternativeScreenExit(self):
-        glsLog.debug("TE: (ALTBUF) Exit: current=%dx%d new=%dx%d"%
-                     (self.rows, self.cols,
-                      len(self.savedScreen), len(self.savedScreen[0])), 3)
-        self.screen = []
-        self.scrRendition = []
-        for scrl,renl in zip(self.savedScreen, self.savedRendition):
-            self.screen.append(array('u', scrl))
-            self.scrRendition.append(array('L', renl))
+    def __AltBuffOut(self, restore=False, clear=False):
+        if not self.modes[self.MODE_ALTBUF]:
+            return
+        self.modes[self.MODE_ALTBUF] = False
+        if clear:
+            self.Clear()
+        self.savedScreen, self.screen = self.screen, self.savedScreen
+        self.savedRendition, self.scrRendition = self.scrRendition, self.savedRendition
         self.Resize(self.rows, self.cols)
+        if restore:
+            self.__RestoreCursor()
+        glsLog.debug("TE: (ALTBUF) Exit: restore=%s clear=%s"%
+                     (str(restore), str(clear)), 3)
         return
     ################################################################
     # Character Handlers
@@ -1120,13 +1140,26 @@ class V102Terminal:
                 continue
             if param == self.MODE_ALTBUF:
                 if value:
-                    self.__SaveCursor()
-                    self.__AlternativeScreenEnter(True)
-                    self.modes[self.MODE_ALTBUF] = True
+                    self.__AltBuffIn(save=False, clear=False)
                 else:
-                    self.__AlternativeScreenExit()
-                    self.modes[self.MODE_ALTBUF] = False
-                    self.__RestoreCursor()
+                    self.__AltBuffOut(restore=False, clear=False)
+            elif param == self.MODE_ALTB_SCI:
+                if value:
+                    self.__AltBuffIn(save=True, clear=True)
+                else:
+                    self.__AltBuffOut(restore=True, clear=False)
+            elif param == self.MODE_ALTB_SCO:
+                if value:
+                    self.__AltBuffIn(save=True, clear=False)
+                else:
+                    self.__AltBuffOut(restore=True, clear=True)
+            elif param == self.MODE_ALTB_CSR:
+                if value:
+                    if not self.modes[self.MODE_ALTB_CSR]:
+                        self.SaveCursor()
+                else:
+                    if self.modes[self.MODE_ALTB_CSR]:
+                        self.RestoreCursor()
             self.modes[param] = value
         self.__Callback(self.CALLBACK_UPDATE_MODE, self.modes)
         glsLog.debug("TE: %s: '%s%s'"%(label, params, end), 5)
