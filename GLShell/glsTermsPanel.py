@@ -639,7 +639,8 @@ class glsTerminalPanel(wx.Window):
         dc = wx.BufferedPaintDC(self, self.dc_buffer)
         return
     def UpdateScrollbar(self, new_lines=0):
-        self.scrollbar.SetSize(self.Size[0]-self.scrollbar_w, 0, 10, self.Size[1])
+        self.scrollbar.SetSize(self.Size[0]-self.scrollbar_w, 0, self.scrollbar_w,
+                               self.Size[1])
         self.scrollbar.SetScrollbar(self.scrollbar.GetThumbPosition() + new_lines,
                                     self.rows, self.rows + len(self.scrolled_text),
                                     self.scrollbar_w, refresh=True)

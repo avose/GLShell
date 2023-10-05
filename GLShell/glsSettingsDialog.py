@@ -104,6 +104,7 @@ class KeyPressesFrame(wx.Frame):
 class TabTerminal(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
+        self.SetBackgroundColour((192,192,192))
         vbox = wx.BoxSizer(wx.VERTICAL)
         # Row zero.
         row0 = wx.BoxSizer(wx.HORIZONTAL)
@@ -217,6 +218,7 @@ class TabGraph(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         box_main = wx.BoxSizer(wx.VERTICAL)
+        self.SetBackgroundColour((192,192,192))
         # Row one.
         row1 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_graph_ignore = wx.StaticText(self, wx.ID_ANY, "Path Ignore List:")
@@ -300,6 +302,7 @@ class TabEditor(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         box_main = wx.BoxSizer(wx.VERTICAL)
+        self.SetBackgroundColour((192,192,192))
         # Row zero.
         row0 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_edit_path = wx.StaticText(self, wx.ID_ANY, "Editor Path:")
@@ -377,6 +380,7 @@ class TabGeneral(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         box_main = wx.BoxSizer(wx.VERTICAL)
+        self.SetBackgroundColour((192,192,192))
         # Row zero.
         row0 = wx.BoxSizer(wx.HORIZONTAL)
         self.st_log_level = wx.StaticText(self, wx.ID_ANY, "Debug Log Level:")
@@ -402,7 +406,7 @@ class glsSettingsDialog(wx.Frame):
     def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER):
         wx.Frame.__init__(self, parent, title="Settings", style=style)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        # Create panel and notebook on the panel.
+        self.SetBackgroundColour((192,192,192))
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(glsIcons.Get('cog'))
