@@ -140,6 +140,9 @@ class glsFDPProcess(Process):
             cmd, nodes, edges, nkinds, ekinds, dims = self.in_q.get()
             if cmd == "stop":
                 break
+            if cmd == "wait":
+                sleep(1/10.0)
+                continue
             if nodes is not None:
                 self.nodes = np.array(nodes)
                 self.converged = False
@@ -214,6 +217,7 @@ class glsFDPThread(Thread):
         self.in_q    = Queue()
         self.out_q   = Queue()
         self.time    = 0
+        self.paused  = False
         self.proc = glsFDPProcess(self.settings, self.in_q, self.out_q, self.speed)
         self.proc.start()
         return
@@ -231,6 +235,10 @@ class glsFDPThread(Thread):
                     edges  = None
                     nkinds = None
                     ekinds = None
+            if self.paused:
+                self.in_q.put(["wait", None, None, None, None, None])
+                sleep(1/10.0)
+                continue
             dims = 3 if self.settings.Get('graph_3D') else 2
             self.in_q.put(["run", nodes, edges, nkinds, ekinds, dims])
             data = False
@@ -271,6 +279,14 @@ class glsFDPThread(Thread):
     def set_speed(self, speed):
         with self.lock:
             self.speed = speed
+        return
+    def resume(self):
+        with self.lock:
+            self.paused = False
+        return
+    def pause(self):
+        with self.lock:
+            self.paused = True
         return
     def stop(self):
         self.in_q.put(["stop", None, None, None, None, None])

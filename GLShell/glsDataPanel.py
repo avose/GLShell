@@ -11,16 +11,18 @@ from glsIcons import glsIcons
 ################################################################
 
 class glsDataPanel(wx.Window):
-    ID_RESCAN     = 1000
-    ID_OPEN_DIR   = 1001
-    ID_SEARCH     = 1002
-    ID_SEARCH_OPT = 1003
-    ID_SEL_ALL    = 1004
-    ID_SEL_NONE   = 1005
-    ID_SEL_IVRT   = 1006
-    ID_SHOW_FILES = 1007
-    ID_SHOW_DIRS  = 1008
-    ID_EXIT       = 1009
+    ID_START      = 1000
+    ID_STOP       = 1001
+    ID_RESCAN     = 1002
+    ID_OPEN_DIR   = 1003
+    ID_SEARCH     = 1004
+    ID_SEARCH_OPT = 1005
+    ID_SEL_ALL    = 1006
+    ID_SEL_NONE   = 1007
+    ID_SEL_IVRT   = 1008
+    ID_SHOW_FILES = 1009
+    ID_SHOW_DIRS  = 1010
+    ID_EXIT       = 1011
     ICON_GRAPH     = 0
     ICON_SEARCH    = 1
     ICON_PLACEHLDR = 2
@@ -34,6 +36,8 @@ class glsDataPanel(wx.Window):
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
                   (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
+                  (self.ID_START, "Resume Layout", 'control_play_blue', self.OnToolStart),
+                  (self.ID_STOP, "Pause Layout", 'control_pause_blue', self.OnToolStop),
                   (self.ID_SEARCH, "Search", 'magnifier', self.OnToolSearch),
                   (self.ID_SEARCH_OPT, "Custom Search", 'magnifier_zoom_in', self.OnToolSearchCustom),
                   (self.ID_RESCAN, "Rescan", 'arrow_refresh', self.OnToolRescan),
@@ -181,6 +185,16 @@ class glsDataPanel(wx.Window):
         return
     def OnChangeTab(self, event):
         self.EnableTools()
+        return
+    def OnToolStart(self, event):
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.Resume()
+        return
+    def OnToolStop(self, event):
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.Pause()
         return
     def OnToolRescan(self, event):
         print('rescan')

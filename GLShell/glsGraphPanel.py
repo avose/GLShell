@@ -564,6 +564,12 @@ class glsGraphPanel(wx.Window):
             return
         self.graph_canvas.SetSize(0, 0, self.Size[0], self.Size[1])
         return
+    def Resume(self):
+        self.dirtree.Resume()
+        return
+    def Pause(self):
+        self.dirtree.Pause()
+        return
     def CloseGraph(self):
         self.callback_close(self)
         return

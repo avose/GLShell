@@ -171,5 +171,11 @@ class glsDirTree(wx.EvtHandler):
     def SetKinds(self, kinds):
         self.thread.set_kinds(kinds)
         return
+    def Resume(self):
+        self.thread.resume()
+        return
+    def Pause(self):
+        self.thread.pause()
+        return
 
 ################################################################
