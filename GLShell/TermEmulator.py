@@ -601,8 +601,10 @@ class V102Terminal:
         Moves the cursor to the next line, if the cursor is already at the
         bottom row then scroll up.
         """
-        glsLog.debug("TE: Newline: @ (%d,%d)"%(self.curX, self.curY), 4)
-        if self.curY + 1 < self.rows:
+        glsLog.debug("TE: Newline: @ (%d,%d) SR=%d,%d rows=%d"%
+                     (self.curY, self.curX, self.scrollRegion[0], self.scrollRegion[1],
+                      self.rows), 4)
+        if self.curY + 1 < self.scrollRegion[1]:
             self.curY += 1
         else:
             self.ScrollUp()
@@ -612,7 +614,7 @@ class V102Terminal:
         Writes the character (ch) into current cursor position and advances
         cursor position.
         """
-        glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curX, self.curY), 4)
+        glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curY, self.curX), 4)
         if self.curX >= self.cols:
             self.__NewLine()
             self.curX = 0
@@ -1163,8 +1165,8 @@ class V102Terminal:
         self.scrollRegion = (top, bottom)
         self.curX = 0
         self.curY = 0
-        glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s'"%
-                     (top, bottom, params+end), 5)
+        glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s' rows=%d"%
+                     (top, bottom, params+end, self.rows), 5)
         return
     def __OnEscSeqCSZ(self, params, end):
         # Handler CSZ: Cursor Style / Size
