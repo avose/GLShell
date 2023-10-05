@@ -1068,38 +1068,53 @@ class V102Terminal:
         return
     def __OnEscSeqSGR(self, params, end):
         # Handler SGR: Select Graphic Rendition
-        if params != None:
-            renditions = params.split(';')
-            for rendition in renditions:
-                irendition = int(rendition)
-                if irendition == 0:
-                    # reset rendition
-                    self.curRendition = 0
-                elif irendition > 0 and irendition < 9:
-                    # style
-                    self.curRendition |= (1 << (irendition - 1))
-                elif irendition >= 30 and irendition <= 37:
-                    # foreground
-                    self.curRendition |= ((irendition - 29) << 8) & 0x00000f00
-                elif irendition >= 40 and irendition <= 47:
-                    # background
-                    self.curRendition |= ((irendition - 39) << 12) & 0x0000f000
-                elif irendition == 27:
-                    # reverse video off
-                    self.curRendition &= 0xffffffbf
-                elif irendition == 39:
-                    # set underscore off, set default foreground color
-                    self.curRendition &= 0xfffff0ff
-                elif irendition == 49:
-                    # set default background color
-                    self.curRendition &= 0xffff0fff
-                else:
-                    glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported rendition %s"
-                                 %irendition, 3)
-                    pass
-        else:
+        if params is None:
             self.curRendition = 0
-        params = "" if params is None else params
+            glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 6)
+            return
+        if (params.startswith("38:5:") or params.startswith("38;5:") or
+            params.startswith("38;5;") or params.startswith("48:5:") or
+            params.startswith("48;5:") or params.startswith("48;5;")):
+            orig_params = params
+            params = params.replace(':',';')
+            params = params.split(';')
+            if len(params) != 3:
+                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported: '%s'."%
+                             (orig_params), 3)
+                return
+            fg = True if params[0] == '38' else False
+            color = int(params[2])
+            glsLog.debug("TE: (SGR) Select Graphic Rendition: %s Color-256: %s."%
+                         ('FG' if fg else 'BG', color), 0)
+            return
+        renditions = params.split(';')
+        for rendition in renditions:
+            irendition = int(rendition)
+            if irendition == 0:
+                # reset rendition
+                self.curRendition = 0
+            elif irendition > 0 and irendition < 9:
+                # style
+                self.curRendition |= (1 << (irendition - 1))
+            elif irendition >= 30 and irendition <= 37:
+                # foreground
+                self.curRendition |= ((irendition - 29) << 8) & 0x00000f00
+            elif irendition >= 40 and irendition <= 47:
+                # background
+                self.curRendition |= ((irendition - 39) << 12) & 0x0000f000
+            elif irendition == 27:
+                # reverse video off
+                self.curRendition &= 0xffffffbf
+            elif irendition == 39:
+                # set underscore off, set default foreground color
+                self.curRendition &= 0xfffff0ff
+            elif irendition == 49:
+                # set default background color
+                self.curRendition &= 0xffff0fff
+            else:
+                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported rendition %s"
+                             %irendition, 3)
+                pass
         glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
         return
     def __OnEscSeqDSR(self, params, end):
