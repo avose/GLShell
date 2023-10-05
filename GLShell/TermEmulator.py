@@ -153,7 +153,7 @@ class V102Terminal:
     MODE_BLINK   = '?12'    # Cursor blinking
     MODE_DECTCEM = '?25'    # Show cursor
     MODE_RFC     = '?1004'  # Report focus change
-    MODE_ASB_SC  = '?1049'  # Aternative screen buffer with save and clear
+    MODE_ALTBUF  = '?1049'  # Aternative screen buffer with save and clear
     MODE_BRCKPST = '?2004'  # Bracketed paste mode
     # TermEmulator modes.
     MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
@@ -198,7 +198,8 @@ class V102Terminal:
         self.cursorStyle = self.CURSOR_STYLE_DEFAULT
         self.curX = 0
         self.curY = 0
-        self.savedCursor = ( self.cursorStyle, self.curY, self.curX )
+        self.savedCursor = [ (self.curY, self.curX, self.cursorStyle, 0),
+                             (self.curY, self.curX, self.cursorStyle, 0) ]
 
         # special character handlers
         self.charHandlers = { self.__ASCII_NUL: self.__OnCharIgnore,
@@ -249,7 +250,7 @@ class V102Terminal:
         self.modes = { self.MODE_BLINK:  False,
                        self.MODE_DECTCEM:True,
                        self.MODE_BRCKPST:False,
-                       self.MODE_ASB_SC: False, }
+                       self.MODE_ALTBUF: False, }
 
         # defines the printable characters, only these characters are printed
         # on the terminal
@@ -716,32 +717,32 @@ class V102Terminal:
             index += 1
         return index
     def __SaveCursor(self):
-        self.savedCursor = ( self.cursorStyle, self.curY, self.curX )
-        glsLog.debug("TE: Save Cursor: %d,%d"%(self.curY, self.curX), 3)
+        ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
+        self.savedCursor[ndx] = (self.curY, self.curX, self.cursorStyle, self.curRendition)
+        glsLog.debug("TE: Save Cursor: %d,%d [%s]"%
+                     (self.curY, self.curX, 'ALT' if ndx == 1 else 'PRI'), 3)
         return
     def __RestoreCursor(self):
-        self.cursorStyle, self.curY, self.curX = self.savedCursor
+        ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
+        self.curY, self.curX, self.cursorStyle, self.curRendition = self.savedCursor[ndx]
         self.curX = min(max(self.curX, 0), self.cols-1)
         self.curY = min(max(self.curY, 0), self.rows-1)
-        glsLog.debug("TE: Restore Cursor: %d,%d"%(self.curY, self.curX), 3)
+        glsLog.debug("TE: Restore Cursor: %d,%d [%s]"%
+                     (self.curY, self.curX, 'ALT' if ndx == 1 else 'PRI'), 3)
         return
-    def __AlternativeScreenEnter(self, save, clear):
-        if save:
-            self.savedScreen = []
-            self.savedRendition = []
-            for scrl,renl in zip(self.screen, self.scrRendition):
-                self.savedScreen.append(array('u', scrl))
-                self.savedRendition.append(array('L', renl))
-            self.__SaveCursor()
-            glsLog.debug("TE: Save Screen: %dx%d real=%dx%d"%
-                         (self.rows, self.cols, len(self.screen), len(self.screen[0])), 3)
+    def __AlternativeScreenEnter(self, clear):
+        self.savedScreen = []
+        self.savedRendition = []
+        for scrl,renl in zip(self.screen, self.scrRendition):
+            self.savedScreen.append(array('u', scrl))
+            self.savedRendition.append(array('L', renl))
+        glsLog.debug("TE: (ALTBUF) Enter: %dx%d real=%dx%d"%
+                     (self.rows, self.cols, len(self.screen), len(self.screen[0])), 3)
         if clear:
             self.Clear()
         return
-    def __AlternativeScreenExit(self, restore):
-        if not restore:
-            return
-        glsLog.debug("TE: Restore Screen: current=%dx%d new=%dx%d"%
+    def __AlternativeScreenExit(self):
+        glsLog.debug("TE: (ALTBUF) Exit: current=%dx%d new=%dx%d"%
                      (self.rows, self.cols,
                       len(self.savedScreen), len(self.savedScreen[0])), 3)
         self.screen = []
@@ -750,7 +751,6 @@ class V102Terminal:
             self.screen.append(array('u', scrl))
             self.scrRendition.append(array('L', renl))
         self.Resize(self.rows, self.cols)
-        self.__RestoreCursor()
         return
     ################################################################
     # Character Handlers
@@ -1118,11 +1118,15 @@ class V102Terminal:
             if param not in self.modes:
                 glsLog.debug("TE: %s: Unknown Mode: '%s'!"%(label, param), 3)
                 continue
-            if param == self.MODE_ASB_SC:
+            if param == self.MODE_ALTBUF:
                 if value:
-                    self.__AlternativeScreenEnter(True, True)
+                    self.__SaveCursor()
+                    self.__AlternativeScreenEnter(True)
+                    self.modes[self.MODE_ALTBUF] = True
                 else:
-                    self.__AlternativeScreenExit(True)
+                    self.__AlternativeScreenExit()
+                    self.modes[self.MODE_ALTBUF] = False
+                    self.__RestoreCursor()
             self.modes[param] = value
         self.__Callback(self.CALLBACK_UPDATE_MODE, self.modes)
         glsLog.debug("TE: %s: '%s%s'"%(label, params, end), 5)
