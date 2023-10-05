@@ -4,7 +4,7 @@ from threading import Thread, Lock
 from queue import Empty
 from time import sleep
 import numpy as np
-import sys, math
+import os, sys, math
 import datetime
 
 ################################################################
@@ -135,6 +135,7 @@ class glsFDPProcess(Process):
             forces[edges[e,1]] -= eforces[e]
         return forces
     def run(self):
+        os.nice(20)
         while(True):
             cmd, nodes, edges, nkinds, ekinds, dims = self.in_q.get()
             if cmd == "stop":
