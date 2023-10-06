@@ -276,26 +276,33 @@ class V102Terminal:
         # italics and etc). The next 4 bits specifies the foreground color and
         # next 4 bits for background
         self.scrRendition = []
+        self.scrColor = []
 
         # current rendition
         self.curRendition = 0
+        self.curColor = 0
 
         # initialize screen and rendition arrays
         for i in range(rows):
             line = array('u')
             rendition = array('L')
+            color = array('L')
             for j in range(cols):
                 line.append(u' ')
                 rendition.append(0)
+                color.append(0)
             self.screen.append(line)
             self.scrRendition.append(rendition)
+            self.scrColor.append(color)
 
         # initialize saved screen
         self.savedScreen = []
         self.savedRendition = []
-        for scrl,renl in zip(self.screen, self.scrRendition):
+        self.savedColor = []
+        for scrl,renl,color in zip(self.screen, self.scrRendition, self.scrColor):
             self.savedScreen.append(array('u', scrl))
             self.savedRendition.append(array('L', renl))
+            self.savedColor.append(array('L', color))
 
         # initializes callbacks
         self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
@@ -324,7 +331,7 @@ class V102Terminal:
         The next 4 bits represents foreground color and next 4 bits for
         background color.
         """
-        return self.scrRendition
+        return self.scrRendition, self.scrColor
     def GetRows(self):
         """
         Returns no. rows in the terminal
@@ -365,16 +372,20 @@ class V102Terminal:
             for i in range(cur_rows - rows):
                 self.screen.pop(0)
                 self.scrRendition.pop(0)
+                self.scrColor.pop(0)
         elif rows > cur_rows:
             # add blank rows at bottom
             for i in range(rows - cur_rows):
                 line = array('u')
                 rendition = array('L')
+                color = array('L')
                 for j in range(cur_cols):
                     line.append(u' ')
                     rendition.append(0)
+                    color.append(0)
                 self.screen.append(line)
                 self.scrRendition.append(rendition)
+                self.scrColor.append(color)
         self.rows = rows
         if cols < cur_cols:
             # remove cols at right
@@ -382,12 +393,14 @@ class V102Terminal:
                 self.screen[i] = self.screen[i][:cols - cur_cols]
                 for j in range(cur_cols - cols):
                     self.scrRendition[i].pop(len(self.scrRendition[i]) - 1)
+                    self.scrColor[i].pop(len(self.scrColor[i]) - 1)
         elif cols > cur_cols:
             # add cols at right
             for i in range(self.rows):
                 for j in range(cols - cur_cols):
                     self.screen[i].append(u' ')
                     self.scrRendition[i].append(0)
+                    self.scrColor[i].append(0)
         self.cols = cols
         #!!avose: maintain state somehow?
         self.scrollRegion = (0, self.rows-1)
@@ -438,6 +451,7 @@ class V102Terminal:
             for j in range(start, end + 1):
                 self.screen[i][j] = ' '
                 self.scrRendition[i][j] = 0
+                self.scrColor[i][j] = 0
         return
     def GetChar(self, row, col):
         """
@@ -463,7 +477,8 @@ class V102Terminal:
         style = self.scrRendition[row][col] & 0x000000ff
         fgcolor = (self.scrRendition[row][col] & 0x00000f00) >> 8
         bgcolor = (self.scrRendition[row][col] & 0x0000f000) >> 12
-        return (style, fgcolor, bgcolor)
+        color = self.scrColor[row][col]
+        return (style, fgcolor, bgcolor, color)
     def GetLine(self, lineno):
         """
         Returns the terminal screen line specified by lineno. The line is
@@ -586,6 +601,10 @@ class V102Terminal:
         for i in range(self.cols):
             rendition[i] = 0
         self.scrRendition.insert(self.scrollRegion[1], rendition)
+        color = self.scrColor.pop(self.scrollRegion[0])
+        for i in range(self.cols):
+            color[i] = 0
+        self.scrColor.insert(self.scrollRegion[1], color)
         return
     def ScrollDown(self):
         line = self.screen.pop(self.scrollRegion[1])
@@ -596,6 +615,10 @@ class V102Terminal:
         for i in range(self.cols):
             rendition[i] = 0
         self.scrRendition.insert(self.scrollRegion[0], rendition)
+        color = self.scrColor.pop(self.scrollRegion[1])
+        for i in range(self.cols):
+            color[i] = 0
+        self.scrColor.insert(self.scrollRegion[0], color)
         glsLog.debug("TE: Scroll Down: rg = (%d,%d) term.rows = %d"%
                      (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
         return
@@ -639,6 +662,7 @@ class V102Terminal:
             self.curX = 0
         self.screen[self.curY][self.curX] = ch
         self.scrRendition[self.curY][self.curX] = self.curRendition
+        self.scrColor[self.curY][self.curX] = self.curColor
         self.curX += 1
         return
     def __ParseEscSeq(self, text, index):
@@ -732,13 +756,15 @@ class V102Terminal:
         return index
     def __SaveCursor(self):
         ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
-        self.savedCursor[ndx] = (self.curY, self.curX, self.cursorStyle, self.curRendition)
+        self.savedCursor[ndx] = (self.curY, self.curX, self.cursorStyle,
+                                 self.curRendition, self.curColor)
         glsLog.debug("TE: Save Cursor: %d,%d [%s]"%
                      (self.curY, self.curX, 'ALT' if ndx == 1 else 'PRI'), 3)
         return
     def __RestoreCursor(self):
         ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
-        self.curY, self.curX, self.cursorStyle, self.curRendition = self.savedCursor[ndx]
+        self.curY, self.curX, self.cursorStyle, self.curRendition, self.curColor = \
+            self.savedCursor[ndx]
         self.curX = min(max(self.curX, 0), self.cols-1)
         self.curY = min(max(self.curY, 0), self.rows-1)
         glsLog.debug("TE: Restore Cursor: %d,%d [%s]"%
@@ -752,6 +778,7 @@ class V102Terminal:
         self.modes[self.MODE_ALTBUF] = True
         self.savedScreen, self.screen = self.screen, self.savedScreen
         self.savedRendition, self.scrRendition = self.scrRendition, self.savedRendition
+        self.savedColor, self.scrColor = self.scrColor, self.savedColor
         self.Resize(self.rows, self.cols)
         if clear:
             self.Clear()
@@ -766,6 +793,7 @@ class V102Terminal:
             self.Clear()
         self.savedScreen, self.screen = self.screen, self.savedScreen
         self.savedRendition, self.scrRendition = self.scrRendition, self.savedRendition
+        self.savedColor, self.scrColor = self.scrColor, self.savedColor
         self.Resize(self.rows, self.cols)
         if restore:
             self.__RestoreCursor()
@@ -888,8 +916,10 @@ class V102Terminal:
                 for c in reversed(range(col, self.cols-1)):
                     self.screen[row][c+1] = self.screen[row][c]
                     self.scrRendition[row][c+1] = self.scrRendition[row][c]
+                    self.scrColor[row][c+1] = self.scrColor[row][c]
                 self.screen[row][col] = ' '
                 self.scrRendition[row][col] = self.curRendition
+                self.scrColor[row][col] = self.curColor
         return
     def __OnEscSeqCUU(self, params, end):
         # Handler CUU: Cursor Update Up
@@ -1019,6 +1049,10 @@ class V102Terminal:
             for i in range(self.cols):
                 rendition[i] = self.curRendition
             self.scrRendition.insert(self.curY, rendition)
+            color = self.scrColor.pop(self.scrollRegion[1])
+            for i in range(self.cols):
+                color[i] = self.curColor
+            self.scrColor.insert(self.curY, color)
         glsLog.debug("TE: (IL) Insert Lines: %d @ (%d,%d) term.rows=%d"%
                      (n, self.curY, self.scrollRegion[1], self.rows), 4)
         return
@@ -1037,6 +1071,10 @@ class V102Terminal:
             for i in range(self.cols):
                 rendition[i] = self.curRendition
             self.scrRendition.insert(self.scrollRegion[1], rendition)
+            color = self.scrColor.pop(self.curY)
+            for i in range(self.cols):
+                color[i] = self.curColor
+            self.scrColor.insert(self.scrollRegion[1], color)
         glsLog.debug("TE: (DL) Delete Lines: %d @ (%d,%d) term.rows=%d"%
                      (n, self.curY, self.scrollRegion[1], self.rows), 5)
         return
@@ -1047,9 +1085,11 @@ class V102Terminal:
             if c + n < self.cols:
                 self.screen[self.curY][c] = self.screen[self.curY][c+n]
                 self.scrRendition[self.curY][c] = self.scrRendition[self.curY][c+n]
+                self.scrColor[self.curY][c] = self.scrColor[self.curY][c+n]
             else:
                 self.screen[self.curY][c] = ' '
                 self.scrRendition[self.curY][c] = 0
+                self.scrColor[self.curY][c] = 0
         glsLog.debug("TE: (DCH) Delete Characters: %d @ (%d,%d)"%
                      (n, self.curY, self.curX), 5)
         return
@@ -1070,7 +1110,18 @@ class V102Terminal:
         # Handler SGR: Select Graphic Rendition
         if params is None:
             self.curRendition = 0
+            self.curColor = (0<<8) | 0
             glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 6)
+            return
+        def SetColor(fg=None, bg=None):
+            if fg is not None and bg is not None:
+                self.curColor = (bg<<8) | fg
+                return
+            if fg is not None:
+                self.curColor = (self.curColor & (255<<8)) | fg
+                return
+            if bg is not None:
+                self.curColor = (bg<<8) | (self.curColor & 255)
             return
         if (params.startswith("38:5:") or params.startswith("38;5:") or
             params.startswith("38;5;") or params.startswith("48:5:") or
@@ -1084,8 +1135,12 @@ class V102Terminal:
                 return
             fg = True if params[0] == '38' else False
             color = int(params[2])
+            if fg:
+                SetColor(fg=color)
+            else:
+                SetColor(bg=color)
             glsLog.debug("TE: (SGR) Select Graphic Rendition: %s Color-256: %s."%
-                         ('FG' if fg else 'BG', color), 0)
+                         ('FG' if fg else 'BG', color), 3)
             return
         renditions = params.split(';')
         for rendition in renditions:
@@ -1093,24 +1148,29 @@ class V102Terminal:
             if irendition == 0:
                 # reset rendition
                 self.curRendition = 0
+                self.curColor = 0
             elif irendition > 0 and irendition < 9:
                 # style
                 self.curRendition |= (1 << (irendition - 1))
             elif irendition >= 30 and irendition <= 37:
                 # foreground
                 self.curRendition |= ((irendition - 29) << 8) & 0x00000f00
+                SetColor(fg=(irendition - 29 + 7))
             elif irendition >= 40 and irendition <= 47:
                 # background
                 self.curRendition |= ((irendition - 39) << 12) & 0x0000f000
+                SetColor(bg=(irendition - 39 + 7))
             elif irendition == 27:
                 # reverse video off
                 self.curRendition &= 0xffffffbf
             elif irendition == 39:
                 # set underscore off, set default foreground color
                 self.curRendition &= 0xfffff0ff
+                SetColor(fg=0)
             elif irendition == 49:
                 # set default background color
                 self.curRendition &= 0xffff0fff
+                SetColor(bg=0)
             else:
                 glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported rendition %s"
                              %irendition, 3)
