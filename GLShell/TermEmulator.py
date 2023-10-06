@@ -24,13 +24,12 @@
 # avose@aaronvose.net
 
 """
-Emulator for VT100 terminal programs.
+Emulator for VT100+ terminal programs.
 
-This module provides terminal emulation for VT100 terminal programs. It handles
+This module provides terminal emulation for VT100+ terminal programs. It handles
 V100 special characters and most important escape sequences. It also handles
 graphics rendition which specifies text style (i.e. bold, italics), foreground color
-and background color. The handled escape sequences are CUU, CUD, CUF, CUB, CHA,
-CUP, ED, EL, VPA and SGR.
+and background color. New sequences from Xterm and the Linux terminal are added.
 """
 
 from __future__ import print_function
@@ -42,6 +41,7 @@ import select
 import traceback
 from array import *
 
+from glsVersion import glsVersion
 from glsLog import glsLog
 
 class V102Terminal:
@@ -127,6 +127,9 @@ class V102Terminal:
     __ESCSEQ_CSZ = 'c'      # Multiple escape sequences end in 'c'. One of the more
                             # important ones is setting the cursor size / style:
                             # "? n c", where n is the style.
+
+    __ESCSEQ_TWS = 't'      # Multiple escape sequences which interact with the
+                            # terminal window, from Xterm. Includes window title.
 
     __ESC_RI = 'M'          # Non-CSI: Reverse index (linefeed).
     __ESC_DECSC = '7'       # Non-CSI: Save cursor state.
@@ -240,7 +243,8 @@ class V102Terminal:
                                 self.__ESCSEQ_RM:      self.__OnEscSeqRM,
                                 self.__ESCSEQ_DECSCUSR:self.__OnEscSeqDECSCUSR,
                                 self.__ESCSEQ_DECSTBM: self.__OnEscSeqDECSTBM,
-                                self.__ESCSEQ_CSZ:     self.__OnEscSeqCSZ, }
+                                self.__ESCSEQ_CSZ:     self.__OnEscSeqCSZ,
+                                self.__ESCSEQ_TWS:     self.__OnEscSeqTWS, }
 
         # ESC- but not CSI-sequences
         self.escHandlers = { self.__ESC_RI:    self.__OnEscRI,
@@ -704,7 +708,7 @@ class V102Terminal:
                 if len(esc) < 2:
                     esc = '0' + esc
                 printable_seq += '\\x' + esc
-        glsLog.debug("TE: Unhandled ESC Seq: '%s'"%printable_seq, 3)
+        glsLog.debug("TE: Unhandled ESC Seq: '%s'"%printable_seq, 1)
         return
     def __HandleEscSeq(self, text, index):
         """
@@ -900,7 +904,7 @@ class V102Terminal:
             glsLog.debug("TE: (SL) Shift Left: '%s%s'"%(params, end), 4)
             plist = params.split(' ')
             if len(plist) != 2:
-                self.__UnhandledEscSeq(params+end)
+                self.__UnhandledEscSeq('['+params+end)
                 return
             count = int(plist[0]) if plist[0] != '' else 1
             newX = self.curX + count
@@ -1110,8 +1114,11 @@ class V102Terminal:
         # Handler SGR: Select Graphic Rendition
         if params is None:
             self.curRendition = 0
-            self.curColor = (0<<8) | 0
+            self.curColor = 0
             glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 6)
+            return
+        if '?' in params or '>' in params or '%' in params:
+            self.__UnhandledEscSeq('['+params+end)
             return
         def SetColor(fg=None, bg=None):
             if fg is not None and bg is not None:
@@ -1155,11 +1162,11 @@ class V102Terminal:
             elif irendition >= 30 and irendition <= 37:
                 # foreground
                 self.curRendition |= ((irendition - 29) << 8) & 0x00000f00
-                SetColor(fg=(irendition - 29 + 7))
+                SetColor(fg=(irendition - 29 - 1))
             elif irendition >= 40 and irendition <= 47:
                 # background
                 self.curRendition |= ((irendition - 39) << 12) & 0x0000f000
-                SetColor(bg=(irendition - 39 + 7))
+                SetColor(bg=(irendition - 39 - 1))
             elif irendition == 27:
                 # reverse video off
                 self.curRendition &= 0xffffffbf
@@ -1190,7 +1197,7 @@ class V102Terminal:
         elif param == 6:
             reply = '\x1b[%d;%dR'%(self.curY, self.curX)
         else:
-            self.__UnhandledEscSeq(params+end)
+            self.__UnhandledEscSeq('['+params+end)
             return
         self.__Callback(self.CALLBACK_SEND_DATA, reply)
         glsLog.debug("TE: (DSR) Device Status Report: '%s%s' reply='%s'"%(params, end, reply), 6)
@@ -1253,7 +1260,7 @@ class V102Terminal:
             glsLog.debug("TE: (DECSCUSR) Cursor Style: No Parameter!", 3)
             return
         if len(params) > 2 or not params.endswith(' '):
-            self.__UnhandledEscSeq(params+end)
+            self.__UnhandledEscSeq('['+params+end)
             return
         params = params.strip()
         style = int(params) if params else 0
@@ -1277,7 +1284,7 @@ class V102Terminal:
             return
         args = params.split(';')
         if len(args) != 2:
-            self.__UnhandledEscSeq(params+end)
+            self.__UnhandledEscSeq('['+params+end)
             return
         top, bottom = args
         top = int(top) - 1
@@ -1293,13 +1300,21 @@ class V102Terminal:
         glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s' rows=%d"%
                      (top, bottom, params+end, self.rows), 5)
         return
+    def __OnEscSeqDA2(self, params, end):
+        # Handler DA2: Secondary Device Attributes
+        reply = '\x1b[>1;' + glsVersion.replace('.','')  + ';0c'
+        self.__Callback(self.CALLBACK_SEND_DATA, reply)
+        return
     def __OnEscSeqCSZ(self, params, end):
         # Handler CSZ: Cursor Style / Size
         if params == None:
             glsLog.debug("TE: (CSZ) Cursor Style: No Parameter!", 3)
             return
         if len(params) != 2 or params[0] != '?':
-            self.__UnhandledEscSeq(params+end)
+            if len(params) >= 1 and params[0] == '>':
+                self.__OnEscSeqDA2(params, end)
+                return
+            self.__UnhandledEscSeq('['+params+end)
             return
         style = int(params[1])
         if style not in (0, 1, 2, 8):
@@ -1309,6 +1324,16 @@ class V102Terminal:
             self.__Callback(self.CALLBACK_UPDATE_CURSOR, self.cursorStyle)
         glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 6)
         return
+    def __OnEscSeqTWS(self, params, end):
+        # Handler TWS: Terminal Window Settings
+        if params == None:
+            glsLog.debug("TE: (TWS) Terminal Window Settings: No Parameter!", 3)
+            return
+        glsLog.debug("TE: (TWS) Not Implemented: '%s'."%('['+params+end), 1)
+        return
+    ################################################################
+    # Escape Handlers (Non-CSI)
+    ################################################################
     def __OnEscRI(self):
         # Handler RI: Reverse Index (LineFeed)
         if self.curY == self.scrollRegion[0]:

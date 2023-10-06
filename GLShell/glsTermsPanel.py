@@ -1,18 +1,17 @@
 import os
 import wx
+import pty
+import tty
 import fcntl
 import termios
 import struct
 import select
-import pty
-import tty
 import string
 import threading
 import traceback
+import numpy as np
 from time import sleep
 from array import *
-
-import TermEmulator
 
 from glsPlaceHolder import glsPlaceHolder
 from glsStatusBar import glsLog
@@ -20,6 +19,8 @@ from glsSettings import glsSettings
 from glsKeyPress import glsKeyPress
 from glsEvents import glsEvents
 from glsIcons import glsIcons
+
+import TermEmulator
 
 ################################################################
 
@@ -471,18 +472,22 @@ class glsTerminalPanel(wx.Window):
                 for i in range(self.scroll_delta):
                     self.SendText(self.key_press.special_key_map[wx.WXK_UP])
         return
-    def GetFgColor(self, color):
+    def GetColors(self, fgndx, bgndx):
         if glsSettings.Get('term_color'):
-            if color == 0:
-                return glsSettings.Get('term_fgcolor')
-            return self.COLORS_256[color]
-        return glsSettings.Get('term_fgcolor')
-    def GetBgColor(self, color):
-        if glsSettings.Get('term_color'):
-            if color == 0:
-                return glsSettings.Get('term_bgcolor')
-            return self.COLORS_256[color]
-        return glsSettings.Get('term_bgcolor')
+            if fgndx == 0:
+                fgcolor = glsSettings.Get('term_fgcolor')
+            else:
+                fgcolor = self.COLORS_256[fgndx]
+            if bgndx == 0:
+                bgcolor = glsSettings.Get('term_bgcolor')
+            else:
+                bgcolor = self.COLORS_256[bgndx]
+        else:
+            fgcolor = glsSettings.Get('term_fgcolor')
+            bgcolor = glsSettings.Get('term_bgcolor')
+        if abs(sum(np.subtract(fgcolor, bgcolor))) < 64:
+            fgcolor = tuple(np.subtract((255, 255, 255), fgcolor))
+        return fgcolor, bgcolor
     def SetTextStyle(self, dc, cur_style, style, fgcolor, bgcolor):
         if cur_style != style:
             self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
@@ -527,8 +532,7 @@ class glsTerminalPanel(wx.Window):
             rendition = self.scrolled_rendition[start:end]
             colors = self.scrolled_colors[start:end]
         cur_style   = 0
-        cur_fgcolor = self.GetFgColor(0)
-        cur_bgcolor = self.GetBgColor(0)
+        cur_fgcolor, cur_bgcolor = self.GetColors(0, 0)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
         for row in range(len(screen)):
             col_start = 0
@@ -536,8 +540,8 @@ class glsTerminalPanel(wx.Window):
             for col in range(min(len(screen[row]),self.cols)):
                 rend = rendition[row][col]
                 style = rend & 0x000000ff
-                fgcolor = self.GetFgColor(colors[row][col] & 255)
-                bgcolor = self.GetBgColor((colors[row][col]>>8) & 255)
+                fgcolor, bgcolor = self.GetColors(colors[row][col] & 255,
+                                                  (colors[row][col]>>8) & 255)
                 if cur_style != style or cur_fgcolor != fgcolor or cur_bgcolor != bgcolor:
                     self.DrawText(dc, text, row, col_start)
                     col_start = col
