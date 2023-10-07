@@ -132,7 +132,9 @@ class V102Terminal:
                             # terminal window, from Xterm. Includes window title.
 
 
-    __ESC_RI = 'M'          # Non-CSI: Reverse index (linefeed).
+    __ESC_IND = 'D'         # Non-CSI: Index (linefeed).
+    __ESC_NEL = 'E'         # Non-CSI: Next line (CR+LF).
+    __ESC_RI = 'M'          # Non-CSI: Reverse index (reverse linefeed).
     __ESC_DECSC = '7'       # Non-CSI: Save cursor state.
     __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
     __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
@@ -162,7 +164,9 @@ class V102Terminal:
     MODE_DECARM  = '?8'     # Auto repeat
     MODE_DECPFF  = '?18'    # Print form feed
     MODE_DECPEX  = '?19'    # Print extent
-    # xterm modes.
+    MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
+    MODE_DECPAM = 'DECPAM'  # keyPad Application Mode
+    # Xterm and newer modes.
     MODE_BLINK   = '?12'    # Cursor blinking
     MODE_DECTCEM = '?25'    # Show cursor
     MODE_RFC     = '?1004'  # Report focus change
@@ -171,9 +175,6 @@ class V102Terminal:
     MODE_ALTB_CSR= '?1048'  # DECSC on ALTBUF in and DECRC on ALTBUF out
     MODE_ALTB_SCI= '?1049'  # ALTBUF with save and clear on in
     MODE_BRCKPST = '?2004'  # Bracketed paste mode
-    # TermEmulator modes.
-    MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
-    MODE_DECPAM = 'DECPAM'  # keyPad Application Mode
 
     CURSOR_STYLE_DEFAULT = 0
     CURSOR_STYLE_INVISIBLE = 1
@@ -257,7 +258,9 @@ class V102Terminal:
                                 self.__ESCSEQ_TWS:     self.__OnEscSeqTWS, }
 
         # ESC- but not CSI-sequences
-        self.escHandlers = { self.__ESC_RI:    self.__OnEscRI,
+        self.escHandlers = { self.__ESC_IND:   self.__OnEscIND,
+                             self.__ESC_NEL:   self.__OnEscNEL,
+                             self.__ESC_RI:    self.__OnEscRI,
                              self.__ESC_DECSC: self.__OnEscDECSC,
                              self.__ESC_DECRC: self.__OnEscDECRC,
                              self.__ESC_DECPNM:self.__OnEscDECPNM,
@@ -274,6 +277,12 @@ class V102Terminal:
                        self.MODE_ALTB_SCO:False,
                        self.MODE_ALTB_CSR:False,
                        self.MODE_ALTB_SCI:False, }
+
+        # mode handlers for mode enter / exit
+        self.modeHandlers = { self.MODE_ALTBUF:  self.__OnModeALTBUF,
+                              self.MODE_ALTB_SCO:self.__OnModeALTBUF_SCO,
+                              self.MODE_ALTB_CSR:self.__OnModeALTBUF_SCR,
+                              self.MODE_ALTB_SCI:self.__OnModeALTBUF_SCI, }
 
         # defines the printable characters, only these characters are printed
         # on the terminal
@@ -986,6 +995,35 @@ class V102Terminal:
         """
         return index + 1
     ################################################################
+    # Mode Enter / Exit Handlers
+    ################################################################
+    def __OnModeALTBUF(self, enable):
+        if enable:
+            self.__AltBuffIn(save=False, clear=False)
+        else:
+            self.__AltBuffOut(restore=False, clear=False)
+        return
+    def __OnModeALTBUF_SCO(self, enable):
+        if enable:
+            self.__AltBuffIn(save=True, clear=False)
+        else:
+            self.__AltBuffOut(restore=True, clear=True)
+        return
+    def __OnModeALTBUF_SCR(self, enable):
+        if enable:
+            if not self.modes[self.MODE_ALTB_CSR]:
+                self.SaveCursor()
+        else:
+            if self.modes[self.MODE_ALTB_CSR]:
+                self.RestoreCursor()
+        return
+    def __OnModeALTBUF_SCI(self, enable):
+        if enable:
+            self.__AltBuffIn(save=True, clear=True)
+        else:
+            self.__AltBuffOut(restore=True, clear=False)
+        return
+    ################################################################
     # Escape Sequence Handlers
     ################################################################
     def __OnEscSeqICH_SL(self, first, params, last):
@@ -1311,28 +1349,8 @@ class V102Terminal:
             if param not in self.modes:
                 glsLog.debug("TE: %s: Unknown Mode: '%s'!"%(label, param), 1)
                 continue
-            if param == self.MODE_ALTBUF:
-                if enable:
-                    self.__AltBuffIn(save=False, clear=False)
-                else:
-                    self.__AltBuffOut(restore=False, clear=False)
-            elif param == self.MODE_ALTB_SCI:
-                if enable:
-                    self.__AltBuffIn(save=True, clear=True)
-                else:
-                    self.__AltBuffOut(restore=True, clear=False)
-            elif param == self.MODE_ALTB_SCO:
-                if enable:
-                    self.__AltBuffIn(save=True, clear=False)
-                else:
-                    self.__AltBuffOut(restore=True, clear=True)
-            elif param == self.MODE_ALTB_CSR:
-                if enable:
-                    if not self.modes[self.MODE_ALTB_CSR]:
-                        self.SaveCursor()
-                else:
-                    if self.modes[self.MODE_ALTB_CSR]:
-                        self.RestoreCursor()
+            if param in self.modeHandlers:
+                self.modeHandlers[param](enable)
             self.modes[param] = enable
         self.__Callback(self.CALLBACK_UPDATE_MODE, self.modes)
         glsLog.debug("TE: %s: '%s'"%(label, first+params+last), 3)
@@ -1425,6 +1443,19 @@ class V102Terminal:
     ################################################################
     # Escape Handlers (Non-CSI)
     ################################################################
+    def __OnEscIND(self):
+        # Handler IND: Index (Linefeed)
+        glsLog.debug("TE: (IND) Index: @ (%d,%d)"%
+                     (self.curY, self.curX), 3)
+        self.__NewLine()
+        return
+    def __OnEscNEL(self):
+        # Handler NEL: Next Line
+        glsLog.debug("TE: (NEL) Next Line: @ (%d,%d)"%
+                     (self.curY, self.curX), 3)
+        self.curX = 0
+        self.__NewLine()
+        return
     def __OnEscRI(self):
         # Handler RI: Reverse Index (LineFeed)
         if self.curY == self.scrollRegion[0]:
