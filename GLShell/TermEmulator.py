@@ -131,11 +131,21 @@ class V102Terminal:
     __ESCSEQ_TWS = 't'      # Multiple escape sequences which interact with the
                             # terminal window, from Xterm. Includes window title.
 
+
     __ESC_RI = 'M'          # Non-CSI: Reverse index (linefeed).
     __ESC_DECSC = '7'       # Non-CSI: Save cursor state.
     __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
     __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
     __ESC_DECPAM = '='      # Non-CSI: keyPad Application Mode.
+
+    # A large number of extended escape sequences have the form:
+    # '\x1b' <params> [ '\x07', '\x1b\\' ]
+    #
+    # These are almost all new sequences which were added by Xterm and
+    # modern terminals.  These sequences are better distinguished by
+    # their starting characters rather than by their ending character.
+
+    __EX_ICON_TITLE = ']0;' # Set icon name and terminal title.
 
     # vt102 modes.
     MODE_KAM     = '2'      # Keyboard action
@@ -252,6 +262,9 @@ class V102Terminal:
                              self.__ESC_DECRC: self.__OnEscDECRC,
                              self.__ESC_DECPNM:self.__OnEscDECPNM,
                              self.__ESC_DECPAM:self.__OnEscDECPAM, }
+
+        # extended escape sequences
+        self.exHandlers = { self.__EX_ICON_TITLE:self.__OnExICON_TITLE }
 
         # terminal modes
         self.modes = { self.MODE_BLINK:   False,
@@ -570,14 +583,13 @@ class V102Terminal:
                 continue
             if ascii in self.charHandlers.keys():
                 index = self.charHandlers[ascii](text, index)
+                continue
+            if ch in self.printableChars:
+                self.__PushChar(ch)
             else:
-                if ch in self.printableChars:
-                    self.__PushChar(ch)
-                else:
-                    glsLog.debug("TE: Unsupported Character: '%s' (%d)"%
-                                 (ch, ascii), 3)
-                    pass
-                index += 1
+                glsLog.debug("TE: Unsupported Character: '%s' (%d)"%
+                             (ch, ascii), 1)
+            index += 1
         # update the dirty lines
         self.__Callback(self.CALLBACK_UPDATE_LINES)
         # update cursor position
@@ -596,7 +608,7 @@ class V102Terminal:
             if not self.modes[self.MODE_ALTBUF]:
                 self.__Callback(self.CALLBACK_SCROLL_UP_SCREEN)
         glsLog.debug("TE: Scroll Up: rg = (%d,%d) term.rows = %d"%
-                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
+                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 3)
         line = self.screen.pop(self.scrollRegion[0])
         for i in range(self.cols):
             line[i] = u' '
@@ -624,7 +636,7 @@ class V102Terminal:
             color[i] = 0
         self.scrColor.insert(self.scrollRegion[0], color)
         glsLog.debug("TE: Scroll Down: rg = (%d,%d) term.rows = %d"%
-                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 4)
+                     (self.scrollRegion[0], self.scrollRegion[1], self.rows), 3)
         return
     def Dump(self, file=sys.stdout):
         """
@@ -645,7 +657,7 @@ class V102Terminal:
         """
         glsLog.debug("TE: Newline: @ (%d,%d) SR=%d,%d rows=%d"%
                      (self.curY, self.curX, self.scrollRegion[0], self.scrollRegion[1],
-                      self.rows), 4)
+                      self.rows), 3)
         if self.curY >= self.scrollRegion[0] and self.curY <= self.scrollRegion[1]:
             if self.curY + 1 <= self.scrollRegion[1]:
                 self.curY += 1
@@ -660,7 +672,7 @@ class V102Terminal:
         Writes the character (ch) into current cursor position and advances
         cursor position.
         """
-        glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curY, self.curX), 4)
+        glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curY, self.curX), 10)
         if self.curX >= self.cols:
             self.__NewLine()
             self.curX = 0
@@ -668,6 +680,21 @@ class V102Terminal:
         self.scrRendition[self.curY][self.curX] = self.curRendition
         self.scrColor[self.curY][self.curX] = self.curColor
         self.curX += 1
+        return
+    def __UnhandledEscSeq(self, seq, ex=False):
+        printable_seq = ""
+        for c in seq:
+            if c in self.printableChars:
+                printable_seq += c
+                if c == "\\":
+                    printable_seq += c
+            else:
+                esc = hex(ord(c)).replace('0x','')
+                if len(esc) < 2:
+                    esc = '0' + esc
+                printable_seq += '\\x' + esc
+        glsLog.debug("TE: Unhandled %s Sequence: '%s'"%
+                     ('EX ESC' if ex else 'ESC', printable_seq), 1)
         return
     def __ParseEscSeq(self, text, index):
         """
@@ -691,73 +718,138 @@ class V102Terminal:
                 # final char
                 return (index + 1, chr(ascii), interChars)
             else:
-                glsLog.debug("TE: Unexpected character in escape sequence: %s"%ch, 3)
+                glsLog.debug("TE: Unexpected character in escape sequence: %s"%ch, 1)
             index += 1
         # the escape sequence is not complete, inform this to caller by giving
         # '?' as final char
         return (index, '?', interChars)
-    def __UnhandledEscSeq(self, seq):
-        printable_seq = ""
-        for c in seq:
-            if c in self.printableChars:
-                printable_seq += c
-                if c == "\\":
-                    printable_seq += c
-            else:
-                esc = hex(ord(c)).replace('0x','')
-                if len(esc) < 2:
-                    esc = '0' + esc
-                printable_seq += '\\x' + esc
-        glsLog.debug("TE: Unhandled ESC Seq: '%s'"%printable_seq, 1)
-        return
-    def __HandleEscSeq(self, text, index):
+    def __ParseExtendedSeq(self, first, text, index):
+        textlen = len(text)
+        params = []
+        kind = None
+        while index < textlen:
+            ch = text[index]
+            if ch == '\x07':
+                # Sequence ended with a bell.
+                index += 1
+                kind = '' if kind is None else kind
+                params = ''.join(params)
+                params = None if params == '' else params
+                return (index, kind, params)
+            if ch == '\x1b':
+                if index + 1 < textlen:
+                    index += 1
+                    if text[index] == '\\':
+                        # Sequence is complete.
+                        index += 1
+                        kind = '' if kind is None else kind
+                        params = ''.join(params)
+                        params = None if params == '' else params
+                        return (index, kind, params)
+                    else:
+                        # Escape without '\': unknown sequence.
+                        kind = '' if kind is None else kind + ';'
+                        params = ''.join(params)
+                        seq = first + kind + params + '\x1b' + text[index]
+                        self.__UnhandledEscSeq(seq, ex=True)
+                        return (index+1, None, None)
+                break
+            if ch == ';' and kind is None:
+                # Found end to kind portion of sequence.
+                index += 1
+                if len(params) == 0:
+                    self.__UnhandledEscSeq(first+';', ex=True)
+                    return (index, None, None)
+                kind = ''.join(params)
+                params = []
+                continue
+            # Character is part of unfinished kind or of parameters.
+            params.append(ch)
+            index += 1
+        # The escape sequence is not complete, inform this to caller by giving
+        # '?' as sequence kind and all read text in params.
+        kind = '' if kind is None else kind
+        params = ''.join(params)
+        return (index, '?', kind+params)
+    def __HandleEscSeq(self, text, index, csi=False):
         """
         Tries to parse escape sequence from input and if its not complete then
         puts it in unparsedInput and process it when the ProcessInput called
         next time.
         """
-        if text[index] == '[':
-            index += 1
+        if csi or text[index] == '[':
+            # Traditional escape sequences.
+            if csi:
+                firstChar = '['
+            else:
+                firstChar = text[index]
+                index += 1
             index, finalChar, interChars = self.__ParseEscSeq(text, index)
             if finalChar == '?':
-                self.unparsedInput = "\033["
+                # Partial sequence; save and parse later.
+                self.unparsedInput = "\x1b" + firstChar
                 if interChars != None:
                     self.unparsedInput += interChars
-            elif finalChar in self.escSeqHandlers.keys():
+                return index
+            if finalChar in self.escSeqHandlers.keys():
+                # Complete sequence with handler.
                 try:
-                    self.escSeqHandlers[finalChar](interChars, finalChar)
+                    self.escSeqHandlers[finalChar](firstChar, interChars, finalChar)
                 except:
                     glsLog.add("TE: Exception in ESC seq handler for '[%s%s'!\n%s"%
                                (interChars, finalChar, traceback.format_exc()))
-            else:
-                escSeq = "["
-                if interChars != None:
-                    escSeq += interChars
-                escSeq += finalChar
-                self.__UnhandledEscSeq(escSeq)
-        elif text[index] == ']':
-            textlen = len(text)
-            if index + 2 < textlen:
-                if text[index + 1] == '0' and text[index + 2] == ';':
-                    # parse title, terminated by bell char(\007)
-                    index += 3 # ignore '0' and ';'
-                    start = index
-                    while index < textlen:
-                        if ord(text[index]) == self.__ASCII_BEL:
-                            break
-                        index += 1
-                    self.__OnEscSeqTitle(text[start:index])
-        else:
-            if text[index] in self.escHandlers:
-                try:
-                    self.escHandlers[text[index]]()
-                except:
-                    glsLog.add("TE: Exception in ESC handler for '[%s%s'!\n%s"%
-                               (interChars, finalChar, traceback.format_exc()))
-            else:
-                self.__UnhandledEscSeq(text[index])
+                return index
+            # Unhandled sequence.
+            escSeq = "["
+            if interChars != None:
+                escSeq += interChars
+            escSeq += finalChar
+            self.__UnhandledEscSeq(escSeq)
+            return index
+        if text[index] == ']':
+            # Extended escape sequences used by Xterm and modern terminals.
+            firstChar = text[index]
             index += 1
-        return index
+            index, kind, params = self.__ParseExtendedSeq(firstChar, text, index)
+            if kind is None:
+                # Unhandled sequence (already notified logger).
+                return index
+            if kind == '?':
+                # Partial sequence; save and parse later.
+                self.unparsedInput = "\x1b" + firstChar + params
+                return index
+            if kind not in self.exHandlers:
+                params = '' if params is None else params
+                escSeq = firstChar + kind + ';' + params
+                self.__UnhandledEscSeq(escSeq, ex=True)
+                return index
+            try:
+                self.exHandlers[kind](firstChar, params)
+            except:
+                params = '' if params is None else params
+                glsLog.add("TE: Exception in EX handler for ']%s%s'!\n%s"%
+                           (kind, params, traceback.format_exc()))
+            return index
+        if text[index] == 'P':
+            # Additional extended escape sequences.
+            # !!avose: TODO
+            index += 1
+            textlen = len(text)
+            while index < textlen:
+                if text[index] == '\x1b' or text[index] == '\x07':
+                    return index + 1
+                index += 1
+            return index
+        # Escape but non-CSI sequences.
+        if text[index] in self.escHandlers:
+            try:
+                self.escHandlers[text[index]]()
+            except:
+                glsLog.add("TE: Exception in ESC handler for '[%s%s'!\n%s"%
+                           (interChars, finalChar, traceback.format_exc()))
+        else:
+            self.__UnhandledEscSeq(text[index])
+        return index + 1
     def __SaveCursor(self):
         ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
         self.savedCursor[ndx] = (self.curY, self.curX, self.cursorStyle,
@@ -811,7 +903,7 @@ class V102Terminal:
         """
         Handler for backspace character
         """
-        glsLog.debug("TE: BS: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: BS: @ (%d,%d)"%(self.curY, self.curX), 3)
         if self.curX > 0:
             self.curX -= 1
         return index + 1
@@ -819,7 +911,7 @@ class V102Terminal:
         """
         Handler for horizontal tab character
         """
-        glsLog.debug("TE: TAB: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: TAB: @ (%d,%d)"%(self.curY, self.curX), 3)
         while self.curX + 1 < self.cols:
             self.curX += 1
             if self.curX % 8 == 0:
@@ -829,28 +921,28 @@ class V102Terminal:
         """
         Handler for line feed character
         """
-        glsLog.debug("TE: LF: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: LF: @ (%d,%d)"%(self.curY, self.curX), 3)
         self.__NewLine()
         return index + 1
     def __OnCharCR(self, text, index):
         """
         Handler for carriage return character
         """
-        glsLog.debug("TE: CR: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: CR: @ (%d,%d)"%(self.curY, self.curX), 3)
         self.curX = 0
         return index + 1
     def __OnCharXON(self, text, index):
         """
         Handler for XON character
         """
-        glsLog.debug("TE: XON: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: XON: @ (%d,%d)"%(self.curY, self.curX), 3)
         self.ignoreChars = False
         return index + 1
     def __OnCharXOFF(self, text, index):
         """
         Handler for XOFF character
         """
-        glsLog.debug("TE: XOFF: @ (%d,%d)"%(self.curY, self.curX), 4)
+        glsLog.debug("TE: XOFF: @ (%d,%d)"%(self.curY, self.curX), 3)
         self.ignoreChars = True
         return index + 1
     def __OnCharESC(self, text, index):
@@ -868,21 +960,25 @@ class V102Terminal:
         """
         Handler for control sequence intruducer(CSI) character
         """
-        glsLog.debug("TE: CSI Character!", 3)
+        glsLog.debug("TE: CSI Character!", 1)
         index += 1
-        index = self.__HandleEscSeq(text, index)
+        if index < len(text):
+            index = self.__HandleEscSeq(text, index, csi=True)
+        else:
+            glsLog.debug("TE: CSI: @ (%d,%d) without sequence!"%
+                         (self.curY, self.curX), 1)
         return index
     def __OnCharSO(self, text, index):
         """
-        Handler SO: Shit out to the G1 character set.
+        Handler SO: Shift out to the G1 character set.
         """
-        #glsLog.debug("TE: (SO) Shift Out: Unimplemented.", 3)
+        glsLog.debug("TE: (SO) Shift Out: Unimplemented.", 10)
         return index + 1
     def __OnCharSI(self, text, index):
         """
         Handler SI: Shift in to the G0 character set.
         """
-        #glsLog.debug("TE: (SI) Shift In: Unimplemented.", 3)
+        glsLog.debug("TE: (SI) Shift In: Unimplemented.", 10)
         return index + 1
     def __OnCharIgnore(self, text, index):
         """
@@ -892,26 +988,21 @@ class V102Terminal:
     ################################################################
     # Escape Sequence Handlers
     ################################################################
-    def __OnEscSeqTitle(self, params):
-        # Handler: Window Title Escape Sequence
-        glsLog.debug("TE: Set Window Title: '%s'"%(params), 4)
-        self.__Callback(self.CALLBACK_UPDATE_WINDOW_TITLE, params)
-        return
-    def __OnEscSeqICH_SL(self, params, end):
+    def __OnEscSeqICH_SL(self, first, params, last):
         # Handler ICH / SL: Insert (Blank) Characters / Shift Left
         if ' ' in params:
             # Escape sequence SL
-            glsLog.debug("TE: (SL) Shift Left: '%s%s'"%(params, end), 4)
+            glsLog.debug("TE: (SL) Shift Left: '%s%s'"%(params, last), 3)
             plist = params.split(' ')
             if len(plist) != 2:
-                self.__UnhandledEscSeq('['+params+end)
+                self.__UnhandledEscSeq(first+params+last)
                 return
             count = int(plist[0]) if plist[0] != '' else 1
             newX = self.curX + count
             self.curX = newX if newX < self.cols else self.cols
         else:
             # Escape sequence ICH
-            glsLog.debug("TE: (ICH) Insert (Blank) Chars: '%s%s'"%(params, end), 4)
+            glsLog.debug("TE: (ICH) Insert (Blank) Chars: '%s%s'"%(params, last), 3)
             row = self.curY
             col = self.curX
             count = int(params) if params != '' else 1
@@ -925,9 +1016,9 @@ class V102Terminal:
                 self.scrRendition[row][col] = self.curRendition
                 self.scrColor[row][col] = self.curColor
         return
-    def __OnEscSeqCUU(self, params, end):
+    def __OnEscSeqCUU(self, first, params, last):
         # Handler CUU: Cursor Update Up
-        glsLog.debug("TE: (CUU) Cursor Update Up: '%s%s'"%(params, end), 4)
+        glsLog.debug("TE: (CUU) Cursor Update Up: '%s%s'"%(params, last), 3)
         n = 1
         if params != None:
             n = int(params)
@@ -935,9 +1026,9 @@ class V102Terminal:
         if self.curY < 0:
             self.curY = 0
         return
-    def __OnEscSeqCUD(self, params, end):
+    def __OnEscSeqCUD(self, first, params, last):
         # Handler CUD: Cursor Update Down
-        glsLog.debug("TE: (CUD) Cursor Update Down: '%s%s'"%(params, end), 4)
+        glsLog.debug("TE: (CUD) Cursor Update Down: '%s%s'"%(params, last), 3)
         n = 1
         if params != None:
             n = int(params)
@@ -945,9 +1036,9 @@ class V102Terminal:
         if self.curY >= self.rows:
             self.curY = self.rows - 1
         return
-    def __OnEscSeqCUF(self, params, end):
+    def __OnEscSeqCUF(self, first, params, last):
         # Handler CUF: Cursor Update Forward
-        glsLog.debug("TE: (CUF) Cursor Update Forward: '%s%s'"%(params, end), 4)
+        glsLog.debug("TE: (CUF) Cursor Update Forward: '%s%s'"%(params, last), 3)
         n = 1
         if params != None:
             n = int(params)
@@ -955,9 +1046,9 @@ class V102Terminal:
         if self.curX >= self.cols:
             self.curX = self.cols - 1
         return
-    def __OnEscSeqCUB(self, params, end):
+    def __OnEscSeqCUB(self, first, params, last):
         # Handler CUB: Cursor Update Back
-        glsLog.debug("TE: (CUB) Cursor Update Back: '%s%s'"%(params, end), 4)
+        glsLog.debug("TE: (CUB) Cursor Update Back: '%s%s'"%(params, last), 3)
         n = 1
         if params != None:
             n = int(params)
@@ -965,7 +1056,7 @@ class V102Terminal:
         if self.curX < 0:
             self.curX = 0
         return
-    def __OnEscSeqCHA(self, params, end):
+    def __OnEscSeqCHA(self, first, params, last):
         # Handler CHA: Cursor Horizontal Absolute Position
         if params == None:
             glsLog.debug("TE: (CHA) Cursor Horizontal Position: No Parameter!", 3)
@@ -975,10 +1066,10 @@ class V102Terminal:
             self.curX = col
         else:
             glsLog.debug("TE: (CHA) Cursor Horizontal Position: %d out of bounds (%d)!"%
-                         (col, self.cols), 3)
-        glsLog.debug("TE: (CHA) Cursor Horizontal Absolute: %d"%(col), 5)
+                         (col, self.cols), 1)
+        glsLog.debug("TE: (CHA) Cursor Horizontal Absolute: %d"%(col), 3)
         return
-    def __OnEscSeqCUP(self, params, end):
+    def __OnEscSeqCUP(self, first, params, last):
         # Handler CUP: Cursor Update Position
         y = 0
         x = 0
@@ -987,38 +1078,37 @@ class V102Terminal:
             if len(values) == 2:
                 y = int(values[0]) - 1
                 x = int(values[1]) - 1
-                glsLog.debug("TE: (CUP) Cursor Update Position: (%d,%d)"%(y, x), 4)
+                glsLog.debug("TE: (CUP) Cursor Update Position: (%d,%d)"%(y, x), 3)
             else:
                 glsLog.debug("TE: (CUP) Cursor Position: Invalid Parameters '%s%s'!"%
-                             (params, end), 3)
+                             (params, last), 1)
                 return
         x = min(max(x, 0), self.cols-1)
         y = min(max(y, 0), self.rows-1)
         self.curX = x
         self.curY = y
         return
-    def __OnEscSeqED(self, params, end):
+    def __OnEscSeqED(self, first, params, last):
         # Handler ED: Erase Display
-        glsLog.debug("TE: (ED) Erase Display: '%s%s'"%(params, end), 4)
         n = 0
         if params != None:
             n = int(params)
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.rows - 1, self.cols - 1)
             glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
-                         (self.curY, self.curX, self.rows - 1, self.cols - 1), 4)
+                         (self.curY, self.curX, self.rows - 1, self.cols - 1), 3)
         elif n == 1:
             self.ClearRect(0, 0, self.curY, self.curX)
             glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
-                         (0, 0, self.curY, self.curX), 4)
+                         (0, 0, self.curY, self.curX), 3)
         elif n == 2 or n == 3:
             self.ClearRect(0, 0, self.rows - 1, self.cols - 1)
             glsLog.debug("TE: (ED) Erase Display: (%d,%d) to (%d,%d)"%
-                         (0, 0, self.rows - 1, self.cols - 1), 4)
+                         (0, 0, self.rows - 1, self.cols - 1), 3)
         else:
-            glsLog.debug("TE: (ED) Erase Display: Invalid Parameter %d!"%(n), 3)
+            glsLog.debug("TE: (ED) Erase Display: Invalid Parameter %d!"%(n), 1)
         return
-    def __OnEscSeqEL(self, params, end):
+    def __OnEscSeqEL(self, first, params, last):
         # Handler EL: Erase Line
         n = 0
         if params != None:
@@ -1026,19 +1116,19 @@ class V102Terminal:
         if n == 0:
             self.ClearRect(self.curY, self.curX, self.curY, self.cols - 1)
             glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
-                         (self.curY, self.curX, self.curY, self.cols - 1), 4)
+                         (self.curY, self.curX, self.curY, self.cols - 1), 3)
         elif n == 1:
             self.ClearRect(self.curY, 0, self.curY, self.curX)
             glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
-                         (self.curY, 0, self.curY, self.curX), 4)
+                         (self.curY, 0, self.curY, self.curX), 3)
         elif n == 2:
             self.ClearRect(self.curY, 0, self.curY, self.cols - 1)
             glsLog.debug("TE: (EL) Erase Line: (%d,%d) to (%d,%d)"%
-                         (self.curY, 0, self.curY, self.cols - 1), 4)
+                         (self.curY, 0, self.curY, self.cols - 1), 3)
         else:
-            glsLog.debug("TE: (EL) Erase Line: Invalid Parameter %d!"%(n), 3)
+            glsLog.debug("TE: (EL) Erase Line: Invalid Parameter %d!"%(n), 1)
         return
-    def __OnEscSeqIL(self, params, end):
+    def __OnEscSeqIL(self, first, params, last):
         # Handler IL: Insert Lines
         if self.curY > self.scrollRegion[1]:
             return
@@ -1058,9 +1148,9 @@ class V102Terminal:
                 color[i] = self.curColor
             self.scrColor.insert(self.curY, color)
         glsLog.debug("TE: (IL) Insert Lines: %d @ (%d,%d) term.rows=%d"%
-                     (n, self.curY, self.scrollRegion[1], self.rows), 4)
+                     (n, self.curY, self.scrollRegion[1], self.rows), 3)
         return
-    def __OnEscSeqDL(self, params, end):
+    def __OnEscSeqDL(self, first, params, last):
         # Handler DL: Delete Lines
         if self.curY > self.scrollRegion[1]:
             return
@@ -1080,9 +1170,9 @@ class V102Terminal:
                 color[i] = self.curColor
             self.scrColor.insert(self.scrollRegion[1], color)
         glsLog.debug("TE: (DL) Delete Lines: %d @ (%d,%d) term.rows=%d"%
-                     (n, self.curY, self.scrollRegion[1], self.rows), 5)
+                     (n, self.curY, self.scrollRegion[1], self.rows), 3)
         return
-    def __OnEscSeqDCH(self, params, end):
+    def __OnEscSeqDCH(self, first, params, last):
         # Handler DCH: Delete Characters
         n = int(params) if params != None else 1
         for c in range(self.curX,self.cols):
@@ -1095,30 +1185,30 @@ class V102Terminal:
                 self.scrRendition[self.curY][c] = 0
                 self.scrColor[self.curY][c] = 0
         glsLog.debug("TE: (DCH) Delete Characters: %d @ (%d,%d)"%
-                     (n, self.curY, self.curX), 5)
+                     (n, self.curY, self.curX), 3)
         return
-    def __OnEscSeqVPA(self, params, end):
+    def __OnEscSeqVPA(self, first, params, last):
         # Handler VPA: Cursor Vertical Position Absolute
         if params == None:
-            glsLog.debug("TE: (VPA) Cursor Vertical Position: No Parameter!", 3)
+            glsLog.debug("TE: (VPA) Cursor Vertical Position: No Parameter!", 1)
             return
         row = int(params) - 1
         if row >= 0 and row < self.rows:
             self.curY = row
         else:
             glsLog.debug("TE: (VPA) Cursor Vertical Position: %d out of bounds!"%
-                         (row), 3)
-        glsLog.debug("TE: (VPA) Cursor Vertical Position: %d"%(row), 5)
+                         (row), 1)
+        glsLog.debug("TE: (VPA) Cursor Vertical Position: %d"%(row), 3)
         return
-    def __OnEscSeqSGR(self, params, end):
+    def __OnEscSeqSGR(self, first, params, last):
         # Handler SGR: Select Graphic Rendition
         if params is None:
             self.curRendition = 0
             self.curColor = 0
-            glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 6)
+            glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 3)
             return
         if '?' in params or '>' in params or '%' in params:
-            self.__UnhandledEscSeq('['+params+end)
+            self.__UnhandledEscSeq(first+params+last)
             return
         def SetColor(fg=None, bg=None):
             if fg is not None and bg is not None:
@@ -1138,7 +1228,7 @@ class V102Terminal:
             params = params.split(';')
             if len(params) != 3:
                 glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported: '%s'."%
-                             (orig_params), 3)
+                             (orig_params), 1)
                 return
             fg = True if params[0] == '38' else False
             color = int(params[2])
@@ -1179,15 +1269,15 @@ class V102Terminal:
                 self.curRendition &= 0xffff0fff
                 SetColor(bg=0)
             else:
-                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported rendition %s"
-                             %irendition, 3)
+                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported %d"%
+                             (irendition), 1)
                 pass
-        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s%s'"%(params, end), 6)
+        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s'"%(first+params+last), 5)
         return
-    def __OnEscSeqDSR(self, params, end):
+    def __OnEscSeqDSR(self, first, params, last):
         # Handler DSR: Device Status Report
         if params is None or params == "":
-            glsLog.debug("TE: (DSR) Device Status Report: No Parameter!", 3)
+            glsLog.debug("TE: (DSR) Device Status Report: No Parameter!", 1)
             return
         if params.startswith('?'):
             params = params[1:]
@@ -1197,18 +1287,19 @@ class V102Terminal:
         elif param == 6:
             reply = '\x1b[%d;%dR'%(self.curY, self.curX)
         else:
-            self.__UnhandledEscSeq('['+params+end)
+            self.__UnhandledEscSeq(first+params+last)
             return
         self.__Callback(self.CALLBACK_SEND_DATA, reply)
-        glsLog.debug("TE: (DSR) Device Status Report: '%s%s' reply='%s'"%(params, end, reply), 6)
+        glsLog.debug("TE: (DSR) Device Status Report: '%s' reply='%s'"%
+                     (first+params+last, reply), 3)
         return
-    def __OnEscSeqSMRM(self, value, params, end):
-        if value:
+    def __OnEscSeqSMRM(self, first, params, last, enable):
+        if enable:
             label = "(SM) Set Mode"
         else:
             label = "(RM) Reset Mode"
         if params == None or params == '':
-            glsLog.debug("TE: %s: No Parameter!"%(label), 3)
+            glsLog.debug("TE: %s: No Parameter!"%(label), 1)
             return
         if params.startswith('?'):
             params = params[1:]
@@ -1218,49 +1309,49 @@ class V102Terminal:
         for param in params.split(';'):
             param = prefix + param
             if param not in self.modes:
-                glsLog.debug("TE: %s: Unknown Mode: '%s'!"%(label, param), 3)
+                glsLog.debug("TE: %s: Unknown Mode: '%s'!"%(label, param), 1)
                 continue
             if param == self.MODE_ALTBUF:
-                if value:
+                if enable:
                     self.__AltBuffIn(save=False, clear=False)
                 else:
                     self.__AltBuffOut(restore=False, clear=False)
             elif param == self.MODE_ALTB_SCI:
-                if value:
+                if enable:
                     self.__AltBuffIn(save=True, clear=True)
                 else:
                     self.__AltBuffOut(restore=True, clear=False)
             elif param == self.MODE_ALTB_SCO:
-                if value:
+                if enable:
                     self.__AltBuffIn(save=True, clear=False)
                 else:
                     self.__AltBuffOut(restore=True, clear=True)
             elif param == self.MODE_ALTB_CSR:
-                if value:
+                if enable:
                     if not self.modes[self.MODE_ALTB_CSR]:
                         self.SaveCursor()
                 else:
                     if self.modes[self.MODE_ALTB_CSR]:
                         self.RestoreCursor()
-            self.modes[param] = value
+            self.modes[param] = enable
         self.__Callback(self.CALLBACK_UPDATE_MODE, self.modes)
-        glsLog.debug("TE: %s: '%s%s'"%(label, params, end), 5)
+        glsLog.debug("TE: %s: '%s'"%(label, first+params+last), 3)
         return
-    def __OnEscSeqSM(self, params, end):
+    def __OnEscSeqSM(self, first, params, last):
         # Handler SM: Sets Mode
-        self.__OnEscSeqSMRM(True, params, end)
+        self.__OnEscSeqSMRM(first, params, last, True)
         return
-    def __OnEscSeqRM(self, params, end):
+    def __OnEscSeqRM(self, first, params, last):
         # Handler RM: Resets Mode
-        self.__OnEscSeqSMRM(False, params, end)
+        self.__OnEscSeqSMRM(first, params, last, False)
         return
-    def __OnEscSeqDECSCUSR(self, params, end):
+    def __OnEscSeqDECSCUSR(self, first, params, last):
         # Handler DECSCUSR: Set Cursor Style
         if params is None:
-            glsLog.debug("TE: (DECSCUSR) Cursor Style: No Parameter!", 3)
+            glsLog.debug("TE: (DECSCUSR) Cursor Style: No Parameter!", 1)
             return
         if len(params) > 2 or not params.endswith(' '):
-            self.__UnhandledEscSeq('['+params+end)
+            self.__UnhandledEscSeq(first+params+last)
             return
         params = params.strip()
         style = int(params) if params else 0
@@ -1275,16 +1366,16 @@ class V102Terminal:
         if style != self.cursorStyle:
             self.cursorStyle = style
             self.__Callback(self.CALLBACK_UPDATE_CURSOR, self.cursorStyle)
-        glsLog.debug("TE: (DECSCUSR) Cursor Style: %d"%(style), 6)
+        glsLog.debug("TE: (DECSCUSR) Cursor Style: %d"%(style), 3)
         return
-    def __OnEscSeqDECSTBM(self, params, end):
+    def __OnEscSeqDECSTBM(self, first, params, last):
         # Handler DECSTBM: Set Top / Bottom Margins (Scroll Region)
         if params == None:
-            glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: No Parameter!", 3)
+            glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: No Parameter!", 1)
             return
         args = params.split(';')
         if len(args) != 2:
-            self.__UnhandledEscSeq('['+params+end)
+            self.__UnhandledEscSeq(first+params+last)
             return
         top, bottom = args
         top = int(top) - 1
@@ -1298,23 +1389,23 @@ class V102Terminal:
         self.curX = 0
         self.curY = 0
         glsLog.debug("TE: (DECSTBM) Top/Bottom Margins: (%d,%d) '%s' rows=%d"%
-                     (top, bottom, params+end, self.rows), 5)
+                     (top, bottom, first+params+last, self.rows), 3)
         return
-    def __OnEscSeqDA2(self, params, end):
+    def __OnEscSeqDA2(self, first, params, last):
         # Handler DA2: Secondary Device Attributes
         reply = '\x1b[>1;' + glsVersion.replace('.','')  + ';0c'
         self.__Callback(self.CALLBACK_SEND_DATA, reply)
         return
-    def __OnEscSeqCSZ(self, params, end):
+    def __OnEscSeqCSZ(self, first, params, last):
         # Handler CSZ: Cursor Style / Size
         if params == None:
-            glsLog.debug("TE: (CSZ) Cursor Style: No Parameter!", 3)
+            glsLog.debug("TE: (CSZ) Cursor Style: No Parameter!", 1)
             return
         if len(params) != 2 or params[0] != '?':
             if len(params) >= 1 and params[0] == '>':
-                self.__OnEscSeqDA2(params, end)
+                self.__OnEscSeqDA2(first, params, last)
                 return
-            self.__UnhandledEscSeq('['+params+end)
+            self.__UnhandledEscSeq(first+params+last)
             return
         style = int(params[1])
         if style not in (0, 1, 2, 8):
@@ -1322,14 +1413,14 @@ class V102Terminal:
         if style != self.cursorStyle:
             self.cursorStyle = style
             self.__Callback(self.CALLBACK_UPDATE_CURSOR, self.cursorStyle)
-        glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 6)
+        glsLog.debug("TE: (CSZ) Cursor Style: %d"%(style), 3)
         return
-    def __OnEscSeqTWS(self, params, end):
+    def __OnEscSeqTWS(self, first, params, last):
         # Handler TWS: Terminal Window Settings
         if params == None:
-            glsLog.debug("TE: (TWS) Terminal Window Settings: No Parameter!", 3)
+            glsLog.debug("TE: (TWS) Terminal Window Settings: No Parameter!", 1)
             return
-        glsLog.debug("TE: (TWS) Not Implemented: '%s'."%('['+params+end), 1)
+        glsLog.debug("TE: (TWS) Not Implemented: '%s'."%(first+params+last), 1)
         return
     ################################################################
     # Escape Handlers (Non-CSI)
@@ -1355,11 +1446,19 @@ class V102Terminal:
         return
     def __OnEscDECPNM(self):
         # Handler DECPNM: keyPad Numeric
-        #glsLog.debug("TE: (DECPNM) keyPad Numeric Mode: Unsupported", 3)
+        glsLog.debug("TE: (DECPNM) keyPad Numeric Mode: Unsupported", 10)
         return
     def __OnEscDECPAM(self):
         # Handler DECPAM: keyPad Application
-        #glsLog.debug("TE: (DECPAM) keyPad Application Mode: Unsupported", 3)
+        glsLog.debug("TE: (DECPAM) keyPad Application Mode: Unsupported", 10)
+        return
+    ################################################################
+    # Extended Escape Sequence Handlers
+    ################################################################
+    def __OnExICON_TITLE(self):
+        # Handler: Window Title
+        glsLog.debug("TE: Set Window Title: Unimplemented.", 1)
+        #self.__Callback(self.CALLBACK_UPDATE_WINDOW_TITLE, params)
         return
 
 ################################################################

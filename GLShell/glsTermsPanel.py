@@ -256,7 +256,6 @@ class glsTerminalPanel(wx.Window):
         except:
             glsLog.add("Terminal: Exception in ProcessInput()!\n%s"%
                        (traceback.format_exc()))
-            pass
         self.output_wait = True
         return
     def SetFont(self):
