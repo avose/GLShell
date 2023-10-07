@@ -156,7 +156,6 @@ class glsTerminalPanel(wx.Window):
         self.scrollbar.Bind(wx.EVT_SCROLL, self.OnScroll)
         self.scrolled_text = []
         self.scrolled_rendition = []
-        self.scrolled_colors = []
         self.max_scroll_history = 10000
         # Setup terminal emulator.
         self.rows = int((self.Size[1]) / self.char_h)
@@ -519,17 +518,15 @@ class glsTerminalPanel(wx.Window):
         return
     def DrawScreen(self, dc, scroll):
         screen = self.terminal.GetRawScreen()
-        rendition, colors = self.terminal.GetRawScreenRendition()
+        rendition = self.terminal.GetRawScreenRendition()
         if scroll > 0 and scroll < self.rows:
             screen = self.scrolled_text[-scroll:] + screen[:-scroll]
             rendition = self.scrolled_rendition[-scroll:] + rendition[:-scroll]
-            colors = self.scrolled_colors[-scroll:] + colors[:-scroll]
         elif scroll >= self.rows:
             start = len(self.scrolled_text) - scroll
             end = start + self.rows
             screen = self.scrolled_text[start:end]
             rendition = self.scrolled_rendition[start:end]
-            colors = self.scrolled_colors[start:end]
         cur_style   = 0
         cur_fgcolor, cur_bgcolor = self.GetColors(0, 0)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
@@ -538,9 +535,9 @@ class glsTerminalPanel(wx.Window):
             text = ""
             for col in range(min(len(screen[row]),self.cols)):
                 rend = rendition[row][col]
-                style = rend & 0x000000ff
-                fgcolor, bgcolor = self.GetColors(colors[row][col] & 255,
-                                                  (colors[row][col]>>8) & 255)
+                style = rend & 0x0000ffff
+                fgcolor, bgcolor = self.GetColors((rend>>16) & 255,
+                                                  (rend>>24) & 255)
                 if cur_style != style or cur_fgcolor != fgcolor or cur_bgcolor != bgcolor:
                     self.DrawText(dc, text, row, col_start)
                     col_start = col
@@ -671,21 +668,16 @@ class glsTerminalPanel(wx.Window):
         return
     def OnTermScrollUpScreen(self):
         text = "".join(self.terminal.GetRawScreen()[0])
-        rendition, colors = self.terminal.GetRawScreenRendition()
+        rendition = self.terminal.GetRawScreenRendition()
         rendition = rendition[0]
-        colors = colors[0]
         rend = array('L')
-        clrs = array('L')
         for c in range(self.cols):
             rend.append(rendition[c])
-            clrs.append(colors[c])
         if len(self.scrolled_text) >= self.max_scroll_history:
             self.scrolled_text.pop(0)
             self.scrolled_rendition.pop(0)
-            self.scrolled_colors.pop(0)
         self.scrolled_text.append(text)
         self.scrolled_rendition.append(rend)
-        self.scrolled_colors.append(clrs)
         self.UpdateScrollbar(new_lines=1)
         return
     def OnTermUpdateLines(self):
