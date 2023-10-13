@@ -131,7 +131,6 @@ class V102Terminal:
     __ESCSEQ_TWS = 't'      # Multiple escape sequences which interact with the
                             # terminal window, from Xterm. Includes window title.
 
-
     __ESC_IND = 'D'         # Non-CSI: Index (linefeed).
     __ESC_NEL = 'E'         # Non-CSI: Next line (CR+LF).
     __ESC_RI = 'M'          # Non-CSI: Reverse index (reverse linefeed).
@@ -139,6 +138,15 @@ class V102Terminal:
     __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
     __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
     __ESC_DECPAM = '='      # Non-CSI: keyPad Application Mode.
+
+    __ESC_CHRST = '()*+-./' # Non-CSI: Setup G* charsets with 94 or 96 characters.
+                            # These are a bit different, as they also take either a
+                            # one or two character parameter. They will be handled
+                            # as a special case.
+                            # '(' - '+' => G0-G3 with 94 characters.
+                            # '-' - '/' => G1-G3 with 96 characters.
+                            # Parameter is two chars if it starts with '%' or '"',
+                            # else it is one character.
 
     # A large number of extended escape sequences have the form:
     # '\x1b' <params> [ '\x07', '\x1b\\' ]
@@ -579,11 +587,14 @@ class V102Terminal:
             if ascii in self.charHandlers.keys():
                 index = self.charHandlers[ascii](text, index)
                 continue
+            self.__PushChar(ch)
+            '''
             if ch in self.printableChars:
                 self.__PushChar(ch)
             else:
                 glsLog.debug("TE: Unsupported Character: '%s' (%d)"%
                              (ch, ascii), 1)
+            '''
             index += 1
         # update the dirty lines
         self.__Callback(self.CALLBACK_UPDATE_LINES)
@@ -826,15 +837,33 @@ class V102Terminal:
                     return index + 1
                 index += 1
             return index
+        # Special case for character set sequences.
+        if text[index] in self.__ESC_CHRST:
+            firstChar = text[index]
+            index += 1
+            textlen = len(text)
+            if index >= textlen:
+                self.unparsedInput += "\x1b" + firstChar
+                return index
+            interChars = text[index]
+            if interChars in '%"':
+                index += 1
+                if index >= textlen:
+                    self.unparsedInput += "\x1b" + firstChar + interChars
+                    return index
+                interChars += text[index]
+            glsLog.debug("TE: Charset: Unsupported '%s' @ (%d,%d)"%
+                         (firstChar + interChars, self.curY, self.curX), 10)
+            return index + 1
         # Escape but non-CSI sequences.
         if text[index] in self.escHandlers:
             try:
                 self.escHandlers[text[index]]()
             except:
-                glsLog.add("TE: Exception in ESC handler for '[%s%s'!\n%s"%
-                           (interChars, finalChar, traceback.format_exc()))
-        else:
-            self.__UnhandledEscSeq(text[index])
+                glsLog.add("TE: Exception in ESC handler for '%s'!\n%s"%
+                           (text[index], traceback.format_exc()))
+            return index + 1
+        self.__UnhandledEscSeq("\x1b" + text[index])
         return index + 1
     def __SaveCursor(self):
         ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
