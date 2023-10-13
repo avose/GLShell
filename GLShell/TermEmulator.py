@@ -138,6 +138,7 @@ class V102Terminal:
     __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
     __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
     __ESC_DECPAM = '='      # Non-CSI: keyPad Application Mode.
+    __ESC_RIS = 'c'         # Non-CSI: Full reset.
 
     __ESC_CHRST = '()*+-./' # Non-CSI: Setup G* charsets with 94 or 96 characters.
                             # These are a bit different, as they also take either a
@@ -216,15 +217,16 @@ class V102Terminal:
         """
         self.cols = cols
         self.rows = rows
-        self.ignoreChars = False
-        self.scrollRegion = (0, self.rows-1)
 
-        # cursor state
-        self.cursorStyle = self.CURSOR_STYLE_DEFAULT
-        self.curX = 0
-        self.curY = 0
-        self.savedCursor = [ (self.curY, self.curX, self.cursorStyle, 0),
-                             (self.curY, self.curX, self.cursorStyle, 0) ]
+        # printable characters, only these characters are printed
+        self.printableChars = "0123456789"
+        self.printableChars += "abcdefghijklmnopqrstuvwxyz"
+        self.printableChars += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        self.printableChars += """!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ """
+        self.printableChars += "\t"
+
+        # unparsed part of last input
+        self.unparsedInput = None
 
         # special character handlers
         self.charHandlers = { self.__ASCII_NUL: self.__OnCharIgnore,
@@ -272,65 +274,17 @@ class V102Terminal:
                              self.__ESC_DECSC: self.__OnEscDECSC,
                              self.__ESC_DECRC: self.__OnEscDECRC,
                              self.__ESC_DECPNM:self.__OnEscDECPNM,
-                             self.__ESC_DECPAM:self.__OnEscDECPAM, }
+                             self.__ESC_DECPAM:self.__OnEscDECPAM,
+                             self.__ESC_RIS:   self.__OnEscRIS, }
 
         # extended escape sequences
-        self.exHandlers = { self.__EX_ICON_TITLE:self.__OnExICON_TITLE }
-
-        # terminal modes
-        self.modes = { self.MODE_BLINK:   False,
-                       self.MODE_DECTCEM: True,
-                       self.MODE_BRCKPST: False,
-                       self.MODE_ALTBUF:  False,
-                       self.MODE_ALTB_SCO:False,
-                       self.MODE_ALTB_CSR:False,
-                       self.MODE_ALTB_SCI:False, }
+        self.exHandlers = { self.__EX_ICON_TITLE:self.__OnExICON_TITLE, }
 
         # mode handlers for mode enter / exit
         self.modeHandlers = { self.MODE_ALTBUF:  self.__OnModeALTBUF,
                               self.MODE_ALTB_SCO:self.__OnModeALTBUF_SCO,
                               self.MODE_ALTB_CSR:self.__OnModeALTBUF_SCR,
                               self.MODE_ALTB_SCI:self.__OnModeALTBUF_SCI, }
-
-        # defines the printable characters, only these characters are printed
-        # on the terminal
-        self.printableChars = "0123456789"
-        self.printableChars += "abcdefghijklmnopqrstuvwxyz"
-        self.printableChars += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        self.printableChars += """!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ """
-        self.printableChars += "\t"
-
-        # terminal screen, its a list of string in which each string always
-        # holds self.cols characters. If the screen doesn't contain any
-        # character then it'll blank space
-        self.screen = []
-
-        # terminal screen rendition, its a list of array of long. The first
-        # 8 bits of the long holds the rendition style/attribute(i.e. bold,
-        # italics and etc). The next 4 bits specifies the foreground color and
-        # next 4 bits for background
-        self.scrRendition = []
-
-        # current rendition
-        self.curRendition = 0
-
-        # initialize screen and rendition arrays
-        for i in range(rows):
-            line = array('u')
-            rendition = array('L')
-            color = array('L')
-            for j in range(cols):
-                line.append(u' ')
-                rendition.append(0)
-            self.screen.append(line)
-            self.scrRendition.append(rendition)
-
-        # initialize saved screen
-        self.savedScreen = []
-        self.savedRendition = []
-        for scrl,renl in zip(self.screen, self.scrRendition):
-            self.savedScreen.append(array('u', scrl))
-            self.savedRendition.append(array('L', renl))
 
         # initializes callbacks
         self.callbacks = { self.CALLBACK_SCROLL_UP_SCREEN: None,
@@ -341,8 +295,44 @@ class V102Terminal:
                            self.CALLBACK_UPDATE_CURSOR: None,
                            self.CALLBACK_SEND_DATA: None, }
 
-        # unparsed part of last input
-        self.unparsedInput = None
+        # perform initial reset
+        self.Reset()
+        return
+    def Reset(self):
+        # Screen and rendition arrays.
+        self.curRendition = 0
+        self.screen = []
+        self.scrRendition = []
+        for i in range(self.rows):
+            line = array('u')
+            rendition = array('L')
+            for j in range(self.cols):
+                line.append(u' ')
+                rendition.append(0)
+            self.screen.append(line)
+            self.scrRendition.append(rendition)
+        self.savedScreen = []
+        self.savedRendition = []
+        for scrl,renl in zip(self.screen, self.scrRendition):
+            self.savedScreen.append(array('u', scrl))
+            self.savedRendition.append(array('L', renl))
+        # Cursor.
+        self.curY = 0
+        self.curX = 0
+        self.cursorStyle = self.CURSOR_STYLE_DEFAULT
+        self.savedCursor = [ (self.curY, self.curX, self.cursorStyle, self.curRendition),
+                             (self.curY, self.curX, self.cursorStyle, self.curRendition) ]
+        # Scroll region.
+        self.scrollRegion = (0, self.rows-1)
+        # Modes.
+        self.ignoreChars = False
+        self.modes = { self.MODE_BLINK:   False,
+                       self.MODE_DECTCEM: True,
+                       self.MODE_BRCKPST: False,
+                       self.MODE_ALTBUF:  False,
+                       self.MODE_ALTB_SCO:False,
+                       self.MODE_ALTB_CSR:False,
+                       self.MODE_ALTB_SCI:False, }
         return
     def GetRawScreen(self):
         """
@@ -1475,6 +1465,11 @@ class V102Terminal:
     def __OnEscDECPAM(self):
         # Handler DECPAM: keyPad Application
         glsLog.debug("TE: (DECPAM) keyPad Application Mode: Unsupported", 10)
+        return
+    def __OnEscRIS(self):
+        # Handler RIS: Full Reset
+        glsLog.debug("TE: (RIS) Full Reset", 3)
+        self.Reset()
         return
     ################################################################
     # Extended Escape Sequence Handlers
