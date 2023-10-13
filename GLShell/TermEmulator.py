@@ -923,7 +923,7 @@ class V102Terminal:
         if bg is not None:
             mask |= (0xff)      << 24
             bits |= (0xff & bg) << 24
-        self.curRendition = (self.curRendition & mask) | bits
+        self.curRendition = (self.curRendition & (~mask)) | bits
         return
     ################################################################
     # Character Handlers
