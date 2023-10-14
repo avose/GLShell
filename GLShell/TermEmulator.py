@@ -176,8 +176,8 @@ class V102Terminal:
     MODE_DECARM  = '?8'     # Auto repeat
     MODE_DECPFF  = '?18'    # Print form feed
     MODE_DECPEX  = '?19'    # Print extent
-    MODE_DECPNM = 'DECPNM'  # keyPad Numeric Mode
-    MODE_DECPAM = 'DECPAM'  # keyPad Application Mode
+    MODE_DECPNM  = 'DECPNM' # keyPad Numeric Mode
+    MODE_DECPAM  = 'DECPAM' # keyPad Application Mode
     # Xterm and newer modes.
     MODE_BLINK   = '?12'    # Cursor blinking
     MODE_DECTCEM = '?25'    # Show cursor
@@ -304,6 +304,9 @@ class V102Terminal:
         # perform initial reset
         self.Reset()
         return
+    ################################################################
+    # Public Functions
+    ################################################################
     def Reset(self):
         # Screen and rendition arrays.
         self.curRendition = 0
@@ -340,14 +343,14 @@ class V102Terminal:
                        self.MODE_ALTB_CSR:False,
                        self.MODE_ALTB_SCI:False, }
         return
-    def GetRawScreen(self):
+    def GetScreen(self):
         """
         Returns the screen as a list of strings. The list will have rows no. of
         strings and each string will have columns no. of characters. Blank space
         used represents no character.
         """
         return self.screen
-    def GetRawScreenRendition(self):
+    def GetRendition(self):
         """
         Returns the screen as a list of array of long. The list will have rows
         no. of array and each array will have columns no. of longs. The first
@@ -356,16 +359,6 @@ class V102Terminal:
         background color.
         """
         return self.scrRendition
-    def GetRows(self):
-        """
-        Returns no. rows in the terminal
-        """
-        return self.rows
-    def GetCols(self):
-        """
-        Returns no. cols in the terminal
-        """
-        return self.cols
     def GetSize(self):
         """
         Returns terminal rows and cols as tuple
@@ -470,59 +463,6 @@ class V102Terminal:
                 self.screen[i][j] = ' '
                 self.scrRendition[i][j] = 0
         return
-    def GetChar(self, row, col):
-        """
-        Returns the character at the location specified by row and col. The
-        row and col should be in the range 0..rows - 1 and 0..cols - 1."
-        """
-        if row < 0 or row >= self.rows:
-            return None
-        if col < 0 or col >= self.cols:
-            return None
-        return self.screen[row][col]
-    def GetRendition(self, row, col):
-        """
-        Returns the screen rendition at the location specified by row and col.
-        The returned value is a long, the first 8 bits specifies the rendition
-        style and next 4 bits for foreground and another 4 bits for background
-        color.
-        """
-        if row < 0 or row >= self.rows:
-            return None
-        if col < 0 or col >= self.cols:
-            return None
-        style = self.scrRendition[row][col] & 0x0000ffff
-        fgcolor = (self.scrRendition[row][col] & 0x00ff0000) >> 16
-        bgcolor = (self.scrRendition[row][col] & 0xff000000) >> 24
-        return (style, fgcolor, bgcolor)
-    def GetLine(self, lineno):
-        """
-        Returns the terminal screen line specified by lineno. The line is
-        returned as string, blank space represents empty character. The lineno
-        should be in the range 0..rows - 1
-        """
-        if lineno < 0 or lineno >= self.rows:
-            return None
-        return self.screen[lineno].tostring()
-    def GetLines(self):
-        """
-        Returns terminal screen lines as a list, same as GetScreen
-        """
-        lines = []
-        for i in range(self.rows):
-            lines.append(self.screen[i].tostring())
-        return lines
-    def GetLinesAsText(self):
-        """
-        Returns the entire terminal screen as a single big string. Each row
-        is seperated by \\n and blank space represents empty character.
-        """
-        text = ""
-        for i in range(self.rows):
-            text += self.screen[i].tostring()
-            text += '\n'
-        text = text.rstrip("\n") # removes leading new lines
-        return text
     def SetCallback(self, event, func):
         """
         Sets callback function for the specified event. The event should be
@@ -597,12 +537,10 @@ class V102Terminal:
         # update cursor position
         self.__Callback(self.CALLBACK_UPDATE_CURSOR_POS)
         return
-    def ScrollUp(self):
-        """
-        Scrolls up the terminal screen by one line. The callbacks
-        CALLBACK_UPDATE_LINES and CALLBACK_SCROLL_UP_SCREEN are called before
-        scrolling the screen.
-        """
+    ################################################################
+    # Private Functions
+    ################################################################
+    def __ScrollUp(self):
         if self.scrollRegion[0] == 0 and self.scrollRegion[1] == self.rows-1:
             # update the dirty lines
             self.__Callback(self.CALLBACK_UPDATE_LINES)
@@ -620,7 +558,7 @@ class V102Terminal:
             rendition[i] = 0
         self.scrRendition.insert(self.scrollRegion[1], rendition)
         return
-    def ScrollDown(self):
+    def __ScrollDown(self):
         line = self.screen.pop(self.scrollRegion[1])
         for i in range(self.cols):
             line[i] = u' '
@@ -631,14 +569,6 @@ class V102Terminal:
         self.scrRendition.insert(self.scrollRegion[0], rendition)
         glsLog.debug("TE: Scroll Down: rg = (%d,%d) term.rows = %d"%
                      (self.scrollRegion[0], self.scrollRegion[1], self.rows), 3)
-        return
-    def Dump(self, file=sys.stdout):
-        """
-        Dumps the entire terminal screen into the given file/stdout
-        """
-        for i in range(self.rows):
-            file.write(self.screen[i].tostring())
-            file.write("\n")
         return
     def __Callback(self, callback, *args):
         if callback in self.callbacks:
@@ -656,7 +586,7 @@ class V102Terminal:
             if self.curY + 1 <= self.scrollRegion[1]:
                 self.curY += 1
             else:
-                self.ScrollUp()
+                self.__ScrollUp()
             return
         if self.curY + 1 < self.rows:
             self.curY += 1
@@ -1456,7 +1386,7 @@ class V102Terminal:
         glsLog.debug("TE: (RI) Reverse Index @ (%d,%d)"%
                      (self.curY, self.curX), 3)
         if self.curY == self.scrollRegion[0]:
-            self.ScrollDown()
+            self.__ScrollDown()
             return
         if self.curY > self.scrollRegion[0] and self.curY <= self.scrollRegion[1]:
             self.curY -= 1

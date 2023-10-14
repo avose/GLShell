@@ -359,7 +359,7 @@ class glsTerminalPanel(wx.Window):
             self.sel_start == self.sel_end):
             return None
         text = ""
-        screen = self.terminal.GetRawScreen()
+        screen = self.terminal.GetScreen()
         start = self.sel_start[0]*self.cols + self.sel_start[1]
         end   = self.sel_end[0]*self.cols + self.sel_end[1]
         max_ndx = self.rows*self.cols - 1
@@ -420,7 +420,7 @@ class glsTerminalPanel(wx.Window):
     def OnLeftDouble(self, event):
         self.SetCurrent()
         row, col = self.PointToCursor(event.GetPosition())
-        screen = self.terminal.GetRawScreen()
+        screen = self.terminal.GetScreen()
         if screen[row][col] not in self.word_chars:
             self.sel_start = None
             self.sel_end = None
@@ -532,8 +532,8 @@ class glsTerminalPanel(wx.Window):
         dc.DrawText(text, col*self.char_w, row*self.char_h)
         return
     def DrawScreen(self, dc, scroll):
-        screen = self.terminal.GetRawScreen()
-        rendition = self.terminal.GetRawScreenRendition()
+        screen = self.terminal.GetScreen()
+        rendition = self.terminal.GetRendition()
         if scroll > 0 and scroll < self.rows:
             screen = self.scrolled_text[-scroll:] + screen[:-scroll]
             rendition = self.scrolled_rendition[-scroll:] + rendition[:-scroll]
@@ -592,7 +592,7 @@ class glsTerminalPanel(wx.Window):
             self.cursor_style == self.terminal.CURSOR_STYLE_BLOCK):
             dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
                              self.char_w, self.char_h)
-            screen = self.terminal.GetRawScreen()
+            screen = self.terminal.GetScreen()
             self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name).Bold()
             self.font = wx.Font(self.fontinfo)
             dc.SetFont(self.font)
@@ -689,9 +689,8 @@ class glsTerminalPanel(wx.Window):
         event.Skip()
         return
     def OnTermScrollUpScreen(self):
-        text = "".join(self.terminal.GetRawScreen()[0])
-        rendition = self.terminal.GetRawScreenRendition()
-        rendition = rendition[0]
+        text = "".join(self.terminal.GetScreen()[0])
+        rendition = self.terminal.GetRendition()[0]
         rend = array('L')
         for c in range(self.cols):
             rend.append(rendition[c])
