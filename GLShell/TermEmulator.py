@@ -73,6 +73,7 @@ class V102Terminal:
     __ESCSEQ_CHA = 'G'      # n G: Cursor horizontal absolute position. 'n' denotes
                             # the column no(1 based index). Should retain the line
                             # position.
+    __ESCSEQ_HPA = '`'      # This and above 'G' sequence alias to the same action.
 
     __ESCSEQ_CUP = 'H'      # n ; m H: Moves the cursor to row n, column m.
                             # The values are 1-based, and default to 1 (top left
@@ -253,6 +254,7 @@ class V102Terminal:
                                 self.__ESCSEQ_CUF:     self.__OnEscSeqCUF,
                                 self.__ESCSEQ_CUB:     self.__OnEscSeqCUB,
                                 self.__ESCSEQ_CHA:     self.__OnEscSeqCHA,
+                                self.__ESCSEQ_HPA:     self.__OnEscSeqCHA,
                                 self.__ESCSEQ_CUP:     self.__OnEscSeqCUP,
                                 self.__ESCSEQ_ED:      self.__OnEscSeqED,
                                 self.__ESCSEQ_EL:      self.__OnEscSeqEL,
