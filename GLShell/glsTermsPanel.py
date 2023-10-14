@@ -295,12 +295,14 @@ class glsTerminalPanel(wx.Window):
         self.Refresh()
         wx.YieldIfNeeded()
         return
-    def OnSetFocus(self, event):
+    def OnSetFocus(self, event=None):
+        self.terminal.SetFocus(True)
         self.Refresh()
         self.SetCurrent()
         wx.YieldIfNeeded()
         return
     def OnKillFocus(self, event):
+        self.terminal.SetFocus(False)
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -382,9 +384,7 @@ class glsTerminalPanel(wx.Window):
         text = self.ReadClipboard()
         if text is None:
             return
-        if self.terminal.MODE_BRCKPST in self.modes and self.modes[self.terminal.MODE_BRCKPST]:
-            text = '\x1b[200~' + text + '\x1b[201~'
-        os.write(self.io, bytes(text,'utf-8'))
+        self.terminal.PasteText(text)
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -689,6 +689,8 @@ class glsTerminalPanel(wx.Window):
         event.Skip()
         return
     def OnTermScrollUpScreen(self):
+        if not self:
+            return
         text = "".join(self.terminal.GetScreen()[0])
         rendition = self.terminal.GetRendition()[0]
         rend = array('L')
@@ -702,6 +704,8 @@ class glsTerminalPanel(wx.Window):
         self.UpdateScrollbar(new_lines=1)
         return
     def OnTermUpdateLines(self):
+        if not self:
+            return
         self.Refresh()
         text = self.GetSelectedText()
         if text != self.selected and self.left_down == False:
@@ -711,11 +715,15 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnTermUpdateCursorPos(self):
+        if not self:
+            return
         self.cursor_pos = self.terminal.GetCursorPos()
         self.Refresh()
         wx.YieldIfNeeded()
         return
     def OnTermUpdateWindowTitle(self, title):
+        if not self:
+            return
         text = ""
         for c in title:
             if not c.isprintable():
@@ -724,12 +732,18 @@ class glsTerminalPanel(wx.Window):
         self.SetTitle(text)
         return
     def OnTermUpdateMode(self, modes):
+        if not self:
+            return
         self.modes = dict(modes)
         return
     def OnTermUpdateCursor(self, style):
+        if not self:
+            return
         self.cursor_style = style
         return
     def OnTermSendData(self, data):
+        if not self:
+            return
         self.SendText(data)
         return
     def SetCurrent(self):

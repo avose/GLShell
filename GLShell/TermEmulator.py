@@ -337,6 +337,7 @@ class V102Terminal:
         self.ignoreChars = False
         self.modes = { self.MODE_BLINK:   False,
                        self.MODE_DECTCEM: True,
+                       self.MODE_RFC:     False,
                        self.MODE_BRCKPST: False,
                        self.MODE_ALTBUF:  False,
                        self.MODE_ALTB_SCO:False,
@@ -536,6 +537,20 @@ class V102Terminal:
         self.__Callback(self.CALLBACK_UPDATE_LINES)
         # update cursor position
         self.__Callback(self.CALLBACK_UPDATE_CURSOR_POS)
+        return
+    def PasteText(self, text):
+        if self.modes[self.MODE_BRCKPST]:
+            text = '\x1b[200~' + text + '\x1b[201~'
+        self.__Callback(self.CALLBACK_SEND_DATA, text)
+        glsLog.debug("TE: Paste Text '%s'."%(text), 3)
+        return
+    def SetFocus(self, focus=True):
+        if self.modes[self.MODE_RFC]:
+            if focus:
+                self.__Callback(self.CALLBACK_SEND_DATA, '\x1b[I')
+            else:
+                self.__Callback(self.CALLBACK_SEND_DATA, '\x1b[O')
+        glsLog.debug("TE: Set Focus '%s'."%(str(focus)), 3)
         return
     ################################################################
     # Private Functions
@@ -1204,8 +1219,8 @@ class V102Terminal:
                 self.__SetRenditionBits(fg=color)
             else:
                 self.__SetRenditionBits(bg=color)
-            glsLog.debug("TE: (SGR) Select Graphic Rendition: %s Color-256: %s."%
-                         ('FG' if fg else 'BG', color), 3)
+            glsLog.debug("TE: (SGR) Select Graphic Rendition: %scolor: %s."%
+                         ('fg' if fg else 'bg', color), 3)
             return
         renditions = params.split(';')
         for rendition in renditions:
