@@ -13,6 +13,7 @@ import traceback
 import numpy as np
 from time import sleep
 from array import *
+from datetime import datetime
 
 from glsPlaceHolder import glsPlaceHolder
 from glsStatusBar import glsLog
@@ -148,6 +149,7 @@ class glsTerminalPanel(wx.Window):
         self.sel_start = None
         self.sel_end = None
         self.selected = None
+        self.select_delay = 0.15
         # Set background and font.
         self.SetBackgroundColour(wx.BLACK)
         self.char_w = None
@@ -398,6 +400,7 @@ class glsTerminalPanel(wx.Window):
         self.SetCurrent()
         self.SetFocus()
         self.left_down = True
+        self.left_down_time = datetime.now()
         self.sel_start = self.PointToCursor(event.GetPosition())
         self.sel_end = self.sel_start
         self.Refresh()
@@ -409,7 +412,8 @@ class glsTerminalPanel(wx.Window):
             self.dbl_click = False
             return
         self.sel_end = self.PointToCursor(event.GetPosition())
-        if self.sel_start == self.sel_end:
+        if (self.sel_start == self.sel_end or
+            (datetime.now()-self.left_down_time).total_seconds() < self.select_delay):
             self.sel_start = None
             self.sel_end = None
         else:
@@ -454,7 +458,8 @@ class glsTerminalPanel(wx.Window):
         wx.YieldIfNeeded()
         return
     def OnMove(self, event):
-        if self.left_down:
+        if (self.left_down and
+            (datetime.now()-self.left_down_time).total_seconds() > self.select_delay):
             self.sel_end = self.PointToCursor(event.GetPosition())
             self.Refresh()
             wx.YieldIfNeeded()
