@@ -536,9 +536,10 @@ class glsTerminalPanel(wx.Window):
                          len(text)*self.char_w, self.char_h)
         dc.DrawText(text, col*self.char_w, row*self.char_h)
         return
-    def DrawScreen(self, dc, scroll):
+    def GetScrolledScreen(self):
         screen = self.terminal.GetScreen()
         rendition = self.terminal.GetRendition()
+        scroll = self.scroll
         if scroll > 0 and scroll < self.rows:
             screen = self.scrolled_text[-scroll:] + screen[:-scroll]
             rendition = self.scrolled_rendition[-scroll:] + rendition[:-scroll]
@@ -547,7 +548,10 @@ class glsTerminalPanel(wx.Window):
             end = start + self.rows
             screen = self.scrolled_text[start:end]
             rendition = self.scrolled_rendition[start:end]
-        cur_style   = 0
+        return screen, rendition
+    def DrawScreen(self, dc):
+        screen, rendition = self.GetScrolledScreen()
+        cur_style = 0
         cur_fgcolor_ndx = 0
         cur_bgcolor_ndx = 0
         cur_fgcolor, cur_bgcolor = self.GetColors(cur_fgcolor_ndx, cur_bgcolor_ndx)
@@ -575,16 +579,18 @@ class glsTerminalPanel(wx.Window):
                 text += screen[row][col]
             self.DrawText(dc, text, row, col_start)
         return
-    def DrawCursor(self, dc, scroll):
-        visible = True
-        if (scroll != 0 or not self.modes[self.terminal.MODE_DECTCEM] or
+    def DrawCursor(self, dc):
+        if (not self.modes[self.terminal.MODE_DECTCEM] or
             self.cursor_style == self.terminal.CURSOR_STYLE_INVISIBLE):
-            visible = False
-        if not visible:
+            return
+        if self.scroll >= self.rows:
             return
         new_cr = min(max(self.cursor_pos[0], 0), self.rows-1)
         new_cc = min(max(self.cursor_pos[1], 0), self.cols-1)
         self.cursor_pos = (new_cr, new_cc)
+        cursor_pos = [new_cr + self.scroll, new_cc]
+        if cursor_pos[0] >= self.rows:
+            return
         if self.HasFocus():
             self.pen = wx.Pen((0,255,0,175))
             self.brush = wx.Brush((0,255,0))
@@ -595,20 +601,20 @@ class glsTerminalPanel(wx.Window):
         dc.SetPen(self.pen)
         if (self.cursor_style == self.terminal.CURSOR_STYLE_DEFAULT or
             self.cursor_style == self.terminal.CURSOR_STYLE_BLOCK):
-            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
+            dc.DrawRectangle(cursor_pos[1]*self.char_w, cursor_pos[0]*self.char_h,
                              self.char_w, self.char_h)
-            screen = self.terminal.GetScreen()
+            screen, rend = self.GetScrolledScreen()
             self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name).Bold()
             self.font = wx.Font(self.fontinfo)
             dc.SetFont(self.font)
             dc.SetTextForeground((0,0,0))
-            dc.DrawText(screen[self.cursor_pos[0]][self.cursor_pos[1]],
-                        self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h)
+            dc.DrawText(screen[cursor_pos[0]][cursor_pos[1]],
+                        cursor_pos[1]*self.char_w, cursor_pos[0]*self.char_h)
         elif self.cursor_style == self.terminal.CURSOR_STYLE_BAR:
-            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, self.cursor_pos[0]*self.char_h,
+            dc.DrawRectangle(cursor_pos[1]*self.char_w, cursor_pos[0]*self.char_h,
                              2, self.char_h)
         elif self.cursor_style == self.terminal.CURSOR_STYLE_UNDERLINE:
-            dc.DrawRectangle(self.cursor_pos[1]*self.char_w, (self.cursor_pos[0]+1)*self.char_h-2,
+            dc.DrawRectangle(cursor_pos[1]*self.char_w, (cursor_pos[0]+1)*self.char_h-2,
                              self.char_w, 2)
         return
     def DrawSelection(self, dc):
@@ -640,8 +646,9 @@ class glsTerminalPanel(wx.Window):
         dc.SetBrush(brush)
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
         scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
-        self.DrawScreen(dc, scroll)
-        self.DrawCursor(dc, scroll)
+        self.scroll = scroll
+        self.DrawScreen(dc)
+        self.DrawCursor(dc)
         self.DrawSelection(dc)
         del dc
         dc = wx.BufferedPaintDC(self, self.dc_buffer)
