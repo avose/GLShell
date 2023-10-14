@@ -1,8 +1,6 @@
 import os
 import json
 
-from copy import deepcopy
-
 ################################################################
 
 class glsSettingsManager():
@@ -12,7 +10,9 @@ class glsSettingsManager():
                    "log_level": 1,
                    "shell_path": "/bin/bash",
                    "shell_args": "",
-                   "term_type": "linux",
+                   "term_type": "xterm-256color",
+                   "term_scroll_output": True,
+                   "term_scroll_keypress": True,
                    "term_color": True,
                    "term_fgcolor": (192,192,192),
                    "term_bgcolor": (0,0,0),
@@ -22,7 +22,7 @@ class glsSettingsManager():
                    "term_font": "Monospace",
                    "term_font_size": 11,
                    "graph_3D": True,
-                   "graph_ignore": [".git", ".svn"],
+                   "graph_ignore": (".git", ".svn"),
                    "graph_font": "Monospace",
                    "graph_font_size": 10,
                    "edit_path": "/usr/bin/emacs",
@@ -46,9 +46,12 @@ class glsSettingsManager():
         try:
             with open(conf_path,"r") as conf:
                 d = json.load(conf)
-                for key in glsSettingsManager.__settings:
-                    glsSettingsManager.__settings[key] = d[key] if key in d else self.Get(key)
-        except:
+                settings = glsSettingsManager.__settings
+                for key in settings:
+                    settings[key] = d.get(key, self.Get(key))
+                    if type(settings[key]) == type([]):
+                        settings[key] = tuple(settings[key])
+        except FileNotFoundError:
             self.Save()
             pass
         self.OnChange()
@@ -60,20 +63,27 @@ class glsSettingsManager():
         try:
             with open(conf_path,"w") as conf:
                 json.dump(glsSettingsManager.__settings, conf, indent=2)
-        except:
+        except FileNotFoundError:
             pass
         return
     def Get(self, key):
-        if key in glsSettingsManager.__settings:
-            return deepcopy(glsSettingsManager.__settings[key])
-        return None
-    def Set(self, key, value):
+        return glsSettingsManager.__settings.get(key, None)
+    def Set(self, key, value, callback=True):
+        if key not in glsSettingsManager.__settings:
+            raise Exception("glsSettingsManager(): Invalid Setting '%s'."%
+                            (str(key)))
+        if type(value) != type(glsSettingsManager.__settings[key]):
+            raise Exception("glsSettingsManager(): Type Missmatch ['%s']: '%s' != '%s'."%
+                            (str(key), type(value), type(glsSettingsManager.__settings[key])))
+        if type(value) == type([]):
+            value = tuple(value)
         glsSettingsManager.__settings[key] = value
-        self.OnChange()
+        if callback:
+            self.OnChange()
         return value
     def SetList(self, settings_list):
         for key, value in settings_list:
-            glsSettingsManager.__settings[key] = value
+            self.Set(key, value, callback=False)
         self.OnChange()
         return
     def OnChange(self):

@@ -615,6 +615,7 @@ class V102Terminal:
         if self.curX >= self.cols:
             self.__NewLine()
             self.curX = 0
+        self.curY = min(self.curY, self.rows-1)
         self.screen[self.curY][self.curX] = ch
         self.scrRendition[self.curY][self.curX] = self.curRendition
         self.curX += 1

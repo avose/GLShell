@@ -39,7 +39,6 @@ class glsKeyPress():
                     return '\x00'
                 if wx.WXK_SHIFT in self.keys_down:
                     if ckey >= 'A' and ckey <= 'Z':
-                        print('sending',chr(key))
                         return chr(ord(chr(key))-0x40)
                     if ckey == '-':
                         return '\x1f'

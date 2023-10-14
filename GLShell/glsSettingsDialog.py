@@ -135,22 +135,32 @@ class TabTerminal(wx.Panel):
         vbox.Add(row2, 0, wx.EXPAND | wx.BOTTOM, 5)
         # Row three.
         row3 = wx.BoxSizer(wx.HORIZONTAL)
+        self.cb_termscrlop = wx.CheckBox(self, wx.ID_ANY, "Scroll on Output")
+        self.cb_termscrlop.SetValue(glsSettings.Get('term_scroll_output'))
+        row3.Add(self.cb_termscrlop, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
+        self.cb_termscrlkp = wx.CheckBox(self, wx.ID_ANY, "Scroll on Keypress")
+        self.cb_termscrlkp.SetValue(glsSettings.Get('term_scroll_keypress'))
+        row3.Add(self.cb_termscrlkp, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
+        vbox.Add(row3, 0, wx.EXPAND | wx.BOTTOM, 5)
+        # Row four.
+        row4 = wx.BoxSizer(wx.HORIZONTAL)
         self.cb_termcolor = wx.CheckBox(self, wx.ID_ANY, "Support Text Color")
         self.cb_termcolor.SetValue(glsSettings.Get('term_color'))
-        row3.Add(self.cb_termcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        row2.AddSpacer(5)
-        vbox.Add(row3, 0, wx.EXPAND | wx.BOTTOM, 5)
+        row4.Add(self.cb_termcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
+        vbox.Add(row4, 0, wx.EXPAND | wx.BOTTOM, 5)
         # Row four is a 2x2 grid.
         grid2 = wx.GridSizer(2,2,5,5)
         self.st_fgcolor = wx.StaticText(self, wx.ID_ANY, "Foreground Color:")
         grid2.Add(self.st_fgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.cp_fgcolor = wx.ColourPickerCtrl(self)
         self.cp_fgcolor.SetColour(glsSettings.Get('term_fgcolor'))
+        self.cp_fgcolor.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnFGColor)
         grid2.Add(self.cp_fgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.st_bgcolor = wx.StaticText(self, wx.ID_ANY, "Backround Color:")
         grid2.Add(self.st_bgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.cp_bgcolor = wx.ColourPickerCtrl(self)
         self.cp_bgcolor.SetColour(glsSettings.Get('term_bgcolor'))
+        self.cp_bgcolor.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnBGColor)
         grid2.Add(self.cp_bgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)        
         vbox.Add(grid2, 0, wx.BOTTOM, 5)
         # Row five.
@@ -158,18 +168,34 @@ class TabTerminal(wx.Panel):
         btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
         vbox.Add(btn_font, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 5)
         # Row six.
-        p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
-        p_sample.SetBackgroundColour((255,255,255))
-        self.st_sample = wx.StaticText(p_sample, -1, "Font Sample Text",
+        self.p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
+        self.p_sample.SetBackgroundColour((255,255,255))
+        self.st_sample = wx.StaticText(self.p_sample, -1, "Font Sample Text",
                                        size=(-1, 64))
         self.SetFontSelection(glsSettings.Get('term_font'),
                               glsSettings.Get('term_font_size'))
         box_samp = wx.BoxSizer(wx.VERTICAL)
         box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
-        p_sample.SetSizerAndFit(box_samp)
-        vbox.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        self.p_sample.SetSizerAndFit(box_samp)
+        vbox.Add(self.p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        self.p_sample.SetBackgroundColour(glsSettings.Get('term_bgcolor'))
+        self.st_sample.SetForegroundColour(glsSettings.Get('term_fgcolor'))
+        self.st_sample.SetBackgroundColour(glsSettings.Get('term_bgcolor'))
         # Set vertical box as panel sizer.
         self.SetSizerAndFit(vbox)
+        return
+    def OnFGColor(self, event):
+        color = self.cp_fgcolor.GetColour()
+        color = (color.GetRed(), color.GetGreen(), color.GetBlue())
+        self.st_sample.SetForegroundColour(color)
+        self.Refresh()
+        return
+    def OnBGColor(self, event):
+        color = self.cp_bgcolor.GetColour()
+        color = (color.GetRed(), color.GetGreen(), color.GetBlue())
+        self.p_sample.SetBackgroundColour(color)
+        self.st_sample.SetBackgroundColour(color)
+        self.Refresh()
         return
     def OnFontDialog(self, event):
         self.font_dialog = glsFontDialog(self, self.SetFontSelection)
@@ -189,9 +215,14 @@ class TabTerminal(wx.Panel):
         self.tc_shellpath.SetValue(glsSettings.Get('shell_path'))
         self.tc_shellargs.SetValue(glsSettings.Get('shell_args'))
         self.tc_termtype.SetValue(glsSettings.Get('term_type'))
+        self.cb_termscrlop.SetValue(glsSettings.Get('term_scroll_output'))
+        self.cb_termscrlkp.SetValue(glsSettings.Get('term_scroll_keypress'))
         self.cb_termcolor.SetValue(glsSettings.Get('term_color'))
         self.cp_fgcolor.SetColour(glsSettings.Get('term_fgcolor'))
         self.cp_bgcolor.SetColour(glsSettings.Get('term_bgcolor'))
+        self.p_sample.SetBackgroundColour(glsSettings.Get('term_bgcolor'))
+        self.st_sample.SetForegroundColour(glsSettings.Get('term_fgcolor'))
+        self.st_sample.SetBackgroundColour(glsSettings.Get('term_bgcolor'))
         self.SetFontSelection(glsSettings.Get('term_font'),
                               glsSettings.Get('term_font_size'))
         self.Refresh()
@@ -202,6 +233,8 @@ class TabTerminal(wx.Panel):
         settings.append( ('shell_path', os.path.abspath(shell_path)) )
         settings.append( ('shell_args', self.tc_shellargs.GetValue()) )
         settings.append( ('term_type', self.tc_termtype.GetValue()) )
+        settings.append( ('term_scroll_output', self.cb_termscrlop.IsChecked()) )
+        settings.append( ('term_scroll_keypress', self.cb_termscrlkp.IsChecked()) )
         settings.append( ('term_color', self.cb_termcolor.IsChecked()) )
         color = self.cp_fgcolor.GetColour()
         settings.append( ('term_fgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue())) )
@@ -290,7 +323,7 @@ class TabGraph(wx.Panel):
         ignore = self.tc_graph_ignore.GetValue().split(",")
         ignore = [ i.strip() for i in ignore if i != "" ]
         ignore = [ i for i in ignore if i != "" ]
-        settings.append( ('graph_ignore', ignore) )
+        settings.append( ('graph_ignore', tuple(ignore)) )
         settings.append( ('graph_font', self.font_name) )
         settings.append( ('graph_font_size', self.font_size) )
         glsSettings.SetList(settings)

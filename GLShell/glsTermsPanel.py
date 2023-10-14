@@ -82,22 +82,22 @@ class glsTerminalPanel(wx.Window):
     # https://github.com/selectel/pyte
     # Indices 0-7 alias 8 standard FG colors.
     # Indices 8-15 alias 8 standard bright FG colors.
-    COLORS_256 = [ (0x00, 0x00, 0x00),
-                   (0xcd, 0x00, 0x00),
-                   (0x00, 0xcd, 0x00),
-                   (0xcd, 0xcd, 0x00),
-                   (0x00, 0x00, 0xee),
-                   (0xcd, 0x00, 0xcd),
-                   (0x00, 0xcd, 0xcd),
-                   (0xe5, 0xe5, 0xe5),
-                   (0x7f, 0x7f, 0x7f),
-                   (0xff, 0x00, 0x00),
-                   (0x00, 0xff, 0x00),
-                   (0xff, 0xff, 0x00),
-                   (0x5c, 0x5c, 0xff),
-                   (0xff, 0x00, 0xff),
-                   (0x00, 0xff, 0xff),
-                   (0xff, 0xff, 0xff), ]
+    COLORS_256 = [ (  0,   0,   0),
+                   (205,   0,   0),
+                   (  0, 205,   0),
+                   (205, 205,   0),
+                   (  0,   0, 238),
+                   (205,   0, 205),
+                   (  0, 205, 205),
+                   (229, 229, 229),
+                   (127, 127, 127),
+                   (255,   0,   0),
+                   (  0, 255,   0),
+                   (255, 255,   0),
+                   ( 92,  92, 255),
+                   (255,   0, 255),
+                   (  0, 255, 255),
+                   (255, 255, 255), ]
     # Indices 16-231 form a 6x6x6 RGB color cube.
     COLOR_INTENSITY = (0, 95, 135, 175, 215, 255)
     for i in range(216):
@@ -156,6 +156,8 @@ class glsTerminalPanel(wx.Window):
         self.char_h = None
         self.SetFont()
         # Add scrollbar.
+        self.scroll_outp = glsSettings.Get('term_scroll_output')
+        self.scroll_keyp = glsSettings.Get('term_scroll_keypress')
         self.scroll_delta = 4
         self.scrollbar_w = 12
         self.scrollbar = wx.ScrollBar(self, pos=(self.Size[0]-self.scrollbar_w, 0),
@@ -257,6 +259,11 @@ class glsTerminalPanel(wx.Window):
                     break
         except:
             output = bytes("",'utf8')
+        if output == bytes("",'utf8'):
+            self.output_wait = True
+            return
+        if self.scroll_outp:
+            self.ScrollToEnd()
         try:
             output = output.decode()
             #self.profiler.enable()
@@ -290,6 +297,8 @@ class glsTerminalPanel(wx.Window):
     def OnChangeSettings(self):
         if self.SetFont():
             self.OnSize()
+        self.scroll_outp = glsSettings.Get('term_scroll_output')
+        self.scroll_keyp = glsSettings.Get('term_scroll_keypress')
         self.word_chars = glsSettings.Get('term_wchars')
         self.color_en = glsSettings.Get('term_color')
         self.color_fg = glsSettings.Get('term_fgcolor')
@@ -472,6 +481,9 @@ class glsTerminalPanel(wx.Window):
         self.PopupMenu(glsTermPanelPopupMenu(self, avail_selection, avail_paste),
                        event.GetPosition())
         return
+    def ScrollToEnd(self):
+        self.scrollbar.SetThumbPosition(self.scrollbar.GetRange())
+        return
     def OnWheel(self, event):
         self.SetCurrent()
         self.SetFocus()
@@ -485,10 +497,10 @@ class glsTerminalPanel(wx.Window):
         else:
             if event.GetWheelRotation() < 0:
                 for i in range(self.scroll_delta):
-                    self.SendText(self.key_press.special_key_map[wx.WXK_DOWN])
+                    self.SendText(self.key_press.special_key_map[wx.WXK_DOWN], True)
             else:
                 for i in range(self.scroll_delta):
-                    self.SendText(self.key_press.special_key_map[wx.WXK_UP])
+                    self.SendText(self.key_press.special_key_map[wx.WXK_UP], True)
         return
     def GetColors(self, fgndx, bgndx):
         if self.color_en:
@@ -656,6 +668,9 @@ class glsTerminalPanel(wx.Window):
     def UpdateScrollbar(self, new_lines=0):
         self.scrollbar.SetSize(self.Size[0]-self.scrollbar_w, 0, self.scrollbar_w,
                                self.Size[1])
+        scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
+        if scroll and not self.scroll_outp:
+            new_lines = 0
         self.scrollbar.SetScrollbar(self.scrollbar.GetThumbPosition() + new_lines,
                                     self.rows, self.rows + len(self.scrolled_text),
                                     self.scrollbar_w, refresh=True)
@@ -681,9 +696,12 @@ class glsTerminalPanel(wx.Window):
         # Resize buffer for painting.
         self.dc_buffer = wx.Bitmap(*self.Size)
         return
-    def SendText(self, text):
-        if text is not None and text != "":
-            os.write(self.io, bytes(text,'utf-8'))
+    def SendText(self, text, user):
+        if user and self.scroll_keyp:
+            self.ScrollToEnd()
+        if text is None or text == "":
+            return
+        os.write(self.io, bytes(text,'utf-8'))
         return
     def OnChar(self, event):
         return
@@ -691,7 +709,7 @@ class glsTerminalPanel(wx.Window):
         key = event.GetKeyCode()
         self.keys_down[key] = True
         seq = self.key_press.KeyCodeToSequence(key)
-        self.SendText(seq)
+        self.SendText(seq, True)
         event.Skip()
         return
     def OnKeyUp(self, event):
@@ -756,7 +774,7 @@ class glsTerminalPanel(wx.Window):
     def OnTermSendData(self, data):
         if not self:
             return
-        self.SendText(data)
+        self.SendText(data, False)
         return
     def SetCurrent(self):
         evt = glsEvents.TabCurrent(wx.ID_ANY, terminal=self)
