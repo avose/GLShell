@@ -134,8 +134,10 @@ class V102Terminal:
     __ESC_IND = 'D'         # Non-CSI: Index (linefeed).
     __ESC_NEL = 'E'         # Non-CSI: Next line (CR+LF).
     __ESC_RI = 'M'          # Non-CSI: Reverse index (reverse linefeed).
+    __ESC_DECBI = '6'       # Non-CSI: Back index.
     __ESC_DECSC = '7'       # Non-CSI: Save cursor state.
     __ESC_DECRC = '8'       # Non-CSI: Restore cursor.
+    __ESC_DECFI = '9'       # Non-CSI: Forward index.
     __ESC_DECPNM = '>'      # Non-CSI: keyPad Numeric Mode.
     __ESC_DECPAM = '='      # Non-CSI: keyPad Application Mode.
     __ESC_RIS = 'c'         # Non-CSI: Full reset.
@@ -271,6 +273,8 @@ class V102Terminal:
         self.escHandlers = { self.__ESC_IND:   self.__OnEscIND,
                              self.__ESC_NEL:   self.__OnEscNEL,
                              self.__ESC_RI:    self.__OnEscRI,
+                             self.__ESC_DECFI: self.__OnEscDECFI,
+                             self.__ESC_DECBI: self.__OnEscDECBI,
                              self.__ESC_DECSC: self.__OnEscDECSC,
                              self.__ESC_DECRC: self.__OnEscDECRC,
                              self.__ESC_DECPNM:self.__OnEscDECPNM,
@@ -855,6 +859,16 @@ class V102Terminal:
             return index + 1
         self.__UnhandledEscSeq("\x1b" + text[index])
         return index + 1
+    def __CursorForward(self, n):
+        glsLog.debug("TE: Cursor Forward: %d @ (%d,%d)"%(n, self.curY, self.curX), 3)
+        n = max(n, 1)
+        self.curX = min(self.curX + n, self.cols - 1)
+        return
+    def __CursorBackward(self, n):
+        glsLog.debug("TE: Cursor Backward: %d @ (%d,%d)"%(n, self.curY, self.curX), 3)
+        n = max(n, 1)
+        self.curX = max(self.curX - n, 0)
+        return
     def __SaveCursor(self):
         ndx = 1 if self.modes[self.MODE_ALTBUF] else 0
         self.savedCursor[ndx] = (self.curY, self.curX, self.cursorStyle, self.curRendition)
@@ -1089,9 +1103,7 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-        self.curX += n;
-        if self.curX >= self.cols:
-            self.curX = self.cols - 1
+        self.__CursorForward(n)
         return
     def __OnEscSeqCUB(self, first, params, last):
         # Handler CUB: Cursor Update Back
@@ -1099,9 +1111,7 @@ class V102Terminal:
         n = 1
         if params != None:
             n = int(params)
-        self.curX -= n;
-        if self.curX < 0:
-            self.curX = 0
+        self.__CursorBackward(n)
         return
     def __OnEscSeqCHA(self, first, params, last):
         # Handler CHA: Cursor Horizontal Absolute Position
@@ -1441,6 +1451,8 @@ class V102Terminal:
         return
     def __OnEscRI(self):
         # Handler RI: Reverse Index (LineFeed)
+        glsLog.debug("TE: (RI) Reverse Index @ (%d,%d)"%
+                     (self.curY, self.curX), 3)
         if self.curY == self.scrollRegion[0]:
             self.ScrollDown()
             return
@@ -1449,6 +1461,16 @@ class V102Terminal:
             return
         if self.curY > 0:
             self.curY -= 1
+        return
+    def __OnEscDECFI(self):
+        # Handler DECFI: Forward Index
+        glsLog.debug("TE: (DECFI) Forward Index", 3)
+        self.__CursorForward(1)
+        return
+    def __OnEscDECBI(self):
+        # Handler DECBI: Backward Index
+        glsLog.debug("TE: (DECBI) Backward Index", 3)
+        self.__CursorBackward(1)
         return
     def __OnEscDECSC(self):
         # Handler DECSC: Save Cursor
