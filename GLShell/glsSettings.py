@@ -53,7 +53,6 @@ class glsSettingsManager():
                         settings[key] = tuple(settings[key])
         except FileNotFoundError:
             self.Save()
-            pass
         self.OnChange()
         return
     def Save(self,path=None):

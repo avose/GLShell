@@ -1354,6 +1354,7 @@ class V102Terminal:
         # Handler DA2: Secondary Device Attributes
         reply = '\x1b[>1;' + glsVersion.replace('.','')  + ';0c'
         self.__Callback(self.CALLBACK_SEND_DATA, reply)
+        glsLog.debug("TE: (DA2) Device Attributes Secondary: Sending '%s'"%(reply), 3)
         return
     def __OnEscSeqCSZ(self, first, params, last):
         # Handler CSZ: Cursor Style / Size

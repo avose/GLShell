@@ -372,7 +372,7 @@ class glsTerminalPanel(wx.Window):
             self.sel_start == self.sel_end):
             return None
         text = ""
-        screen = self.terminal.GetScreen()
+        screen, rend = self.GetScrolledScreen()
         start = self.sel_start[0]*self.cols + self.sel_start[1]
         end   = self.sel_end[0]*self.cols + self.sel_end[1]
         max_ndx = self.rows*self.cols - 1
@@ -381,9 +381,9 @@ class glsTerminalPanel(wx.Window):
         if start > end:
             start, end = end, start
         for i in range(start, end):
-            row = int(i/self.cols)
-            col = i%self.cols
-            text += screen[row][col]
+            row, col = divmod(i, self.cols)
+            if row < len(screen) and col < len(screen[row]):
+                text += screen[row][col]
         return text
     def Copy(self):
         text = self.GetSelectedText()
@@ -433,7 +433,9 @@ class glsTerminalPanel(wx.Window):
     def OnLeftDouble(self, event):
         self.SetCurrent()
         row, col = self.PointToCursor(event.GetPosition())
-        screen = self.terminal.GetScreen()
+        screen, rend = self.GetScrolledScreen()
+        if row >= len(screen) or col >= len(screen[row]):
+            return
         if screen[row][col] not in self.word_chars:
             self.sel_start = None
             self.sel_end = None
@@ -441,21 +443,21 @@ class glsTerminalPanel(wx.Window):
         start = row*self.cols + col
         sel_start = row, col
         for i in reversed(range(0,start)):
-            r = int(i/self.cols)
-            c = i%self.cols
-            if screen[r][c] not in self.word_chars:
-                break
-            else:
-                sel_start = r, c
+            r, c = divmod(i, self.cols)
+            if row < len(screen) and col < len(screen[row]):
+                if screen[r][c] not in self.word_chars:
+                    break
+                else:
+                    sel_start = r, c
         self.sel_start = sel_start
         sel_end = row, col+1
         for i in range(start,self.rows*self.cols):
-            r = int(i/self.cols)
-            c = i%self.cols
-            if screen[r][c] not in self.word_chars:
-                break
-            else:
-                sel_end = r, c+1
+            r, c = divmod(i, self.cols)
+            if row < len(screen) and col < len(screen[row]):
+                if screen[r][c] not in self.word_chars:
+                    break
+                else:
+                    sel_end = r, c+1
         self.sel_end = sel_end
         self.dbl_click = True
         if self.sel_start == self.sel_end:
