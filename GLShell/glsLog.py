@@ -13,6 +13,7 @@ class glsLogManager():
         return
     def add(self, text):
         now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+        #print(now, text)
         glsLogManager.__log.append( (now, text) )
         return
     def debug(self, text, level):

@@ -34,7 +34,9 @@ class glsTermPanelPopupMenu(wx.Menu):
     ID_SEARCH_CONTENTS = 1004
     ID_SEARCH_FILES    = 1005
     ID_NAME            = 1006
-    ID_EXIT            = 1007
+    ID_FONT_UP         = 1007
+    ID_FONT_DOWN       = 1008
+    ID_EXIT            = 1009
     def __init__(self, parent, selection_available, paste_available):
         super(glsTermPanelPopupMenu, self).__init__()
         item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
@@ -67,6 +69,12 @@ class glsTermPanelPopupMenu(wx.Menu):
             item.Enable(False)
         item = wx.MenuItem(self, self.ID_NAME, 'Set Tab Name')
         item.SetBitmap(glsIcons.Get('pencil'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_FONT_UP, 'Zoom In')
+        item.SetBitmap(glsIcons.Get('font_add'))
+        self.Append(item)
+        item = wx.MenuItem(self, self.ID_FONT_DOWN, 'Zoom OUT')
+        item.SetBitmap(glsIcons.Get('font_delete'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Terminal')
         item.SetBitmap(glsIcons.Get('cross'))
@@ -123,6 +131,7 @@ class glsTerminalPanel(wx.Window):
         self.color_en = glsSettings.Get('term_color')
         self.color_fg = glsSettings.Get('term_fgcolor')
         self.color_bg = glsSettings.Get('term_bgcolor')
+        self.SetBackgroundColour(self.color_bg)
         # Bind events.
         self.keys_down = {}
         self.key_press = glsKeyPress(self.keys_down)
@@ -150,10 +159,15 @@ class glsTerminalPanel(wx.Window):
         self.sel_end = None
         self.selected = None
         self.select_delay = 0.15
-        # Set background and font.
-        self.SetBackgroundColour(wx.BLACK)
+        # Set font.
+        self.font_name = glsSettings.Get('term_font')
+        self.font_base = glsSettings.Get('term_font_size')
         self.char_w = None
         self.char_h = None
+        self.font_zoom = 0
+        self.font_min = 6
+        self.font_max = 32
+        self.font_step = 2
         self.SetFont()
         # Add scrollbar.
         self.scroll_outp = glsSettings.Get('term_scroll_output')
@@ -232,13 +246,11 @@ class glsTerminalPanel(wx.Window):
         inp_set = [ self.io ]
         while not self.stop_output_notifier and self.ChildIsAlive():
             if self.output_wait:
-                inp_ready, out_ready, err_ready = select.select(inp_set, [], [], 0)
+                inp_ready, out_ready, err_ready = select.select(inp_set, [], [], 0.01)
                 if self.io in inp_ready:
                     self.output_wait = False
                     if self:
                         wx.CallAfter(self.ReadProcessOutput)
-                else:
-                    sleep(0.001)
             else:
                 sleep(0.001)
         if not self.ChildIsAlive():
@@ -278,9 +290,25 @@ class glsTerminalPanel(wx.Window):
         #if self.pcount % 50 == 0:
         #    self.profiler.print_stats()
         return
+    def ZoomIn(self):
+        self.font_zoom += self.font_step
+        if self.font_base + self.font_zoom > self.font_max:
+            self.font_zoom = self.font_max - self.font_base
+        if self.SetFont():
+            self.OnSize()
+        self.Refresh()
+        return
+    def ZoomOut(self):
+        self.font_zoom -= self.font_step
+        if self.font_base + self.font_zoom < self.font_min:
+            self.font_zoom = -(self.font_base - self.font_min)
+        if self.SetFont():
+            self.OnSize()
+        self.Refresh()
+        return
     def SetFont(self):
-        self.font_name = glsSettings.Get('term_font')
-        self.font_size = glsSettings.Get('term_font_size')
+        self.font_size = self.font_base + self.font_zoom
+        self.font_size = min(max(self.font_size, self.font_min), self.font_max)
         self.fontinfo = wx.FontInfo(self.font_size).FaceName(self.font_name)
         self.font = wx.Font(self.fontinfo)
         dc = wx.MemoryDC()
@@ -295,14 +323,17 @@ class glsTerminalPanel(wx.Window):
         self.char_h = h
         return resize
     def OnChangeSettings(self):
-        if self.SetFont():
-            self.OnSize()
         self.scroll_outp = glsSettings.Get('term_scroll_output')
         self.scroll_keyp = glsSettings.Get('term_scroll_keypress')
-        self.word_chars = glsSettings.Get('term_wchars')
-        self.color_en = glsSettings.Get('term_color')
-        self.color_fg = glsSettings.Get('term_fgcolor')
-        self.color_bg = glsSettings.Get('term_bgcolor')
+        self.word_chars  = glsSettings.Get('term_wchars')
+        self.color_en    = glsSettings.Get('term_color')
+        self.color_fg    = glsSettings.Get('term_fgcolor')
+        self.color_bg    = glsSettings.Get('term_bgcolor')
+        self.font_name   = glsSettings.Get('term_font')
+        self.font_base   = glsSettings.Get('term_font_size')
+        if self.SetFont():
+            self.OnSize()
+        self.SetBackgroundColour(self.color_bg)
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -348,11 +379,15 @@ class glsTerminalPanel(wx.Window):
         elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
             self.SearchSelectionContents()
         elif id == glsTermPanelPopupMenu.ID_NAME:
-            with wx.TextEntryDialog(self, "Enter tab name:", caption="Enter Tab Name",
-                                    value="") as dlg:
+            with wx.TextEntryDialog(self, "Enter tab name:",
+                                    caption="Enter Tab Name") as dlg:
                 if dlg.ShowModal() != wx.ID_OK:
                     return
             self.SetTitle(dlg.GetValue())
+        elif id == glsTermPanelPopupMenu.ID_FONT_UP:
+            self.ZoomIn()
+        elif id == glsTermPanelPopupMenu.ID_FONT_DOWN:
+            self.ZoomOut()
         return
     def WriteClipboard(self, text):
         if wx.TheClipboard.Open():
@@ -485,6 +520,8 @@ class glsTerminalPanel(wx.Window):
         return
     def ScrollToEnd(self):
         self.scrollbar.SetThumbPosition(self.scrollbar.GetRange())
+        self.scrollbar.Refresh()
+        self.Refresh()
         return
     def OnWheel(self, event):
         self.SetCurrent()
@@ -503,6 +540,8 @@ class glsTerminalPanel(wx.Window):
             else:
                 for i in range(self.scroll_delta):
                     self.SendText(self.key_press.special_key_map[wx.WXK_UP], True)
+        self.scrollbar.Refresh()
+        self.Refresh()
         return
     def GetColors(self, fgndx, bgndx):
         if self.color_en:
@@ -656,8 +695,8 @@ class glsTerminalPanel(wx.Window):
         dc = wx.MemoryDC()
         dc.SelectObject(self.dc_buffer)
         dc.Clear()
-        brush = wx.Brush((0,0,0))
-        dc.SetBrush(brush)
+        dc.SetPen(wx.Pen(self.color_bg))
+        dc.SetBrush(wx.Brush(self.color_bg))
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
         scroll = self.scrollbar.GetRange() - self.rows - self.scrollbar.GetThumbPosition()
         self.scroll = scroll
@@ -676,9 +715,12 @@ class glsTerminalPanel(wx.Window):
         self.scrollbar.SetScrollbar(self.scrollbar.GetThumbPosition() + new_lines,
                                     self.rows, self.rows + len(self.scrolled_text),
                                     self.scrollbar_w, refresh=True)
+        self.scrollbar.Refresh()
+        self.Refresh()
         return
     def OnScroll(self, event):
         self.SetCurrent()
+        self.scrollbar.Refresh()
         self.Refresh()
         wx.YieldIfNeeded()
         return
@@ -697,6 +739,8 @@ class glsTerminalPanel(wx.Window):
         self.sel_end = None
         # Resize buffer for painting.
         self.dc_buffer = wx.Bitmap(*self.Size)
+        self.scrollbar.Refresh()
+        self.Refresh()
         return
     def SendText(self, text, user):
         if user and self.scroll_keyp:
@@ -918,7 +962,9 @@ class glsTermsPanel(wx.Window):
     ID_PASTE       = 1006
     ID_VERTICAL    = 1007
     ID_HORIZONTAL  = 1008
-    ID_EXIT        = 1009
+    ID_ZOOM_IN     = 1009
+    ID_ZOOM_OUT    = 1010
+    ID_EXIT        = 1011
     def __init__(self, parent, min_term_size, callback_layout):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
@@ -930,16 +976,18 @@ class glsTermsPanel(wx.Window):
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
         tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
                   (self.ID_TERM_NEW, "New Terminal", 'monitor_add', self.OnToolTermNew),
+                  (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_vertical',
+                   self.OnToolHorizontal),
+                  (self.ID_VERTICAL, "Split Vertical", 'application_tile_horizontal',
+                   self.OnToolVertical),
                   (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
                   (self.ID_SEARCH_FILE, "Search Files", 'magnifier', self.OnToolSearchFiles),
                   (self.ID_SEARCH_CNTS, "Search Contents", 'magnifier_zoom_in',
                    self.OnToolSearchContents),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
                   (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
-                  (self.ID_HORIZONTAL, "Split Horizontal", 'application_tile_vertical',
-                   self.OnToolHorizontal),
-                  (self.ID_VERTICAL, "Split Vertical", 'application_tile_horizontal',
-                   self.OnToolVertical) ]
+                  (self.ID_ZOOM_OUT, "Zoom Out", 'font_delete', self.OnToolZoomOut),
+                  (self.ID_ZOOM_IN, "Zoom In", 'font_add', self.OnToolZoomIn) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, glsIcons.Get(icon), wx.NullBitmap,
@@ -992,6 +1040,16 @@ class glsTermsPanel(wx.Window):
         term = self.GetCurrentTerm()
         if term is not None:
             term.Copy()
+        return
+    def OnToolZoomIn(self, event):
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.ZoomIn()
+        return
+    def OnToolZoomOut(self, event):
+        term = self.GetCurrentTerm()
+        if term is not None:
+            term.ZoomOut()
         return
     def Resize(self, split_mode):
         pad = 50
