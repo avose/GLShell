@@ -197,7 +197,9 @@ class glsDataPanel(wx.Window):
             tab.Pause()
         return
     def OnToolRescan(self, event):
-        print('rescan')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.Rescan()
         return
     def OnToolOpenDir(self, event):
         evt = glsEvents.OpenDir(id=wx.ID_ANY, path=None)
@@ -212,19 +214,29 @@ class glsDataPanel(wx.Window):
         wx.PostEvent(self.Parent, evt)
         return
     def OnToolSelAll(self, event):
-        print('selall')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.SelectAll()
         return
     def OnToolSelNone(self, event):
-        print('selnone')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.SelectNone()
         return
     def OnToolSelIvrt(self, event):
-        print('selivrt')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.SelectInverse()
         return
     def OnToolShowFiles(self, event):
-        print('showfiles')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.ShowFiles(True)
         return
     def OnToolShowDirs(self, event):
-        print('showdirs')
+        tab = self.GetCurrentTab()
+        if isinstance(tab, glsGraphPanel):
+            tab.ShowFiles(False)
         return
     def OnToolCloseTab(self, event):
         self.OnCloseTab(self.GetCurrentTab())

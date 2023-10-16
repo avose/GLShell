@@ -494,6 +494,9 @@ class glsGraphCanvas(GLCanvas):
         else:
             self.zoom /= 0.95
         return
+    def ShowFiles(self, enable):
+        self.show_files = enable
+        return
     def OnMenuItem(self, event):
         # Handle menu item event.
         menu_id = event.GetId()
@@ -506,9 +509,9 @@ class glsGraphCanvas(GLCanvas):
         elif menu_id == glsGraphPopupMenu.ID_SEL_IVRT:
             self.dirtree.SelectInverse()
         elif menu_id == glsGraphPopupMenu.ID_SHOW_FILES:
-            self.show_files = True
+            self.ShowFiles(True)
         elif menu_id == glsGraphPopupMenu.ID_SHOW_DIRS:
-            self.show_files = False
+            self.ShowFiles(False)
         return
     def OnSize(self, event):
         # Handle resize event.
@@ -569,6 +572,23 @@ class glsGraphPanel(wx.Window):
         return
     def Pause(self):
         self.dirtree.Pause()
+        return
+    def Rescan(self):
+        self.dirtree.ScanDir()
+        return
+    def ShowFiles(self, enable):
+        if self.graph_canvas is None:
+            return
+        self.graph_canvas.ShowFiles(enable)
+        return
+    def SelectAll(self):
+        self.dirtree.SelectAll()
+        return
+    def SelectNone(self):
+        self.dirtree.SelectNone()
+        return
+    def SelectInverse(self):
+        self.dirtree.SelectInverse()
         return
     def CloseGraph(self):
         self.callback_close(self)

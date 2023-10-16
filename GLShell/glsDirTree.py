@@ -73,8 +73,11 @@ class glsDirTree(wx.EvtHandler):
     def GetNodes(self):
         with self.thread.lock:
             return self.thread.graph.nlist
-    def ScanDir(self, path):
-        path = os.path.abspath(path)
+    def ScanDir(self, path=None):
+        if path is None:
+            path = self.abspath
+        else:
+            path = os.path.abspath(path)
         if os.path.exists(path):
             try:
                 self.watcher.AddTree(os.path.join(path, ""))
