@@ -742,7 +742,7 @@ class glsTerminalPanel(wx.Window):
         self.scrollbar.Refresh()
         self.Refresh()
         return
-    def SendText(self, text, user):
+    def SendText(self, text, user=True):
         if user and self.scroll_keyp:
             self.ScrollToEnd()
         if text is None or text == "":
