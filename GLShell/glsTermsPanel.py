@@ -275,7 +275,7 @@ class glsTerminalPanel(wx.Window):
         if self.scroll_outp:
             self.ScrollToEnd()
         try:
-            self.terminal.ProcessInput(output.decode())
+            self.terminal.ProcessInput(output.decode('utf-8', errors='replace'))
         except Exception:
             glsLog.add("Terminal: Exception in ProcessInput()!\n%s"%
                        (traceback.format_exc()))

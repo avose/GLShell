@@ -97,6 +97,7 @@ class KeyPressesFrame(wx.Frame):
         event.Skip()
         return
     def OnClose(self, event=None):
+        self.Destroy()
         return
 
 ################################################################
@@ -156,7 +157,7 @@ class TabTerminal(wx.Panel):
         self.cp_fgcolor.SetColour(glsSettings.Get('term_fgcolor'))
         self.cp_fgcolor.Bind(wx.EVT_COLOURPICKER_CHANGED, self.OnFGColor)
         grid2.Add(self.cp_fgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        self.st_bgcolor = wx.StaticText(self, wx.ID_ANY, "Backround Color:")
+        self.st_bgcolor = wx.StaticText(self, wx.ID_ANY, "Background Color:")
         grid2.Add(self.st_bgcolor, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
         self.cp_bgcolor = wx.ColourPickerCtrl(self)
         self.cp_bgcolor.SetColour(glsSettings.Get('term_bgcolor'))
@@ -242,90 +243,6 @@ class TabTerminal(wx.Panel):
         settings.append( ('term_bgcolor', (color.GetRed(), color.GetGreen(), color.GetBlue())) )
         settings.append( ('term_font', self.font_name) )
         settings.append( ('term_font_size', self.font_size) )
-        glsSettings.SetList(settings)
-        return
-
-################################################################
-
-class TabGraph(wx.Panel):
-    def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        box_main = wx.BoxSizer(wx.VERTICAL)
-        self.SetBackgroundColour((192,192,192))
-        # Row one.
-        row1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.st_graph_ignore = wx.StaticText(self, wx.ID_ANY, "Path Ignore List:")
-        row1.Add(self.st_graph_ignore, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 5)
-        self.tc_graph_ignore = wx.TextCtrl(self, wx.ID_ANY)
-        graph_ignore = ", ".join(glsSettings.Get('graph_ignore'))
-        self.tc_graph_ignore.SetValue(graph_ignore)
-        row1.Add(self.tc_graph_ignore, 1, wx.ALIGN_CENTER | wx.ALL)
-        box_main.Add(row1, 0, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
-        # Row two.
-        dims = ['3D', '2D']
-        self.rbox = wx.RadioBox(self, label='Graph Rendering', choices=dims,
-                                majorDimension=1, style=wx.RA_SPECIFY_ROWS)
-        if glsSettings.Get('graph_3D'):
-            self.rbox.SetSelection(0)
-        else:
-            self.rbox.SetSelection(1)
-        box_main.Add(self.rbox, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        # Row three.
-        btn_font = wx.Button(self, wx.ID_ANY, "Select Graph Font")
-        btn_font.Bind(wx.EVT_BUTTON, self.OnFontDialog)
-        box_main.Add(btn_font, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 5)
-        # Row four.
-        p_sample = wx.Panel(self, style=wx.RAISED_BORDER)
-        p_sample.SetBackgroundColour((255,255,255))
-        self.st_sample = wx.StaticText(p_sample, -1, "Font Sample Text",
-                                       size=(-1, 64))
-        self.SetFontSelection(glsSettings.Get('graph_font'),
-                              glsSettings.Get('graph_font_size'))
-        box_samp = wx.BoxSizer(wx.VERTICAL)
-        box_samp.Add(self.st_sample, 0, wx.EXPAND | wx.ALL, 5)
-        box_main.Add(p_sample, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        p_sample.SetSizerAndFit(box_samp)
-        self.SetSizerAndFit(box_main)
-        return
-    def OnFontDialog(self, event):
-        self.font_dialog = glsFontDialog(self, self.SetFontSelection)
-        return
-    def SetFontSelection(self, name, size):
-        self.font_name = name
-        self.font_size = size
-        self.st_sample.SetLabel(name+" Sample Text")
-        font = wx.Font(self.font_size, family=wx.DEFAULT,
-                       style=wx.NORMAL, weight=wx.NORMAL, underline=False,
-                       faceName=self.font_name)
-        self.st_sample.SetFont(font)
-        self.Layout()
-        self.Fit()
-        return
-    def Load(self):
-        if glsSettings.Get('graph_3D'):
-            dims = "3D"
-        else:
-            dims = "2D"            
-        graph_ignore = ", ".join(glsSettings.Get('graph_ignore'))
-        self.tc_graph_ignore.SetValue(graph_ignore)
-        self.rbox.SetStringSelection(dims)
-        self.SetFontSelection(glsSettings.Get('graph_font'),
-                              glsSettings.Get('graph_font_size'))
-        self.Refresh()
-        return
-    def Save(self):
-        settings = []
-        dims = self.rbox.GetStringSelection()
-        if dims == "3D":
-            settings.append( ('graph_3D', True) )
-        else:
-            settings.append( ('graph_3D', False) )
-        ignore = self.tc_graph_ignore.GetValue().split(",")
-        ignore = [ i.strip() for i in ignore if i != "" ]
-        ignore = [ i for i in ignore if i != "" ]
-        settings.append( ('graph_ignore', tuple(ignore)) )
-        settings.append( ('graph_font', self.font_name) )
-        settings.append( ('graph_font_size', self.font_size) )
         glsSettings.SetList(settings)
         return
 
@@ -447,15 +364,13 @@ class glsSettingsDialog(wx.Frame):
         self.image_list = wx.ImageList(16, 16)
         self.image_list.Add(glsIcons.Get('monitor'))
         self.image_list.Add(glsIcons.Get('monitor_edit'))
-        self.image_list.Add(glsIcons.Get('chart_organisation'))
         self.image_list.Add(glsIcons.Get('cog'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = [ TabTerminal(self.notebook),
                       TabEditor(self.notebook),
-                      TabGraph(self.notebook),
                       TabGeneral(self.notebook) ]
-        self.tab_names = [ " Terminal", " Term Editor", " FDP Graph", " General" ]
+        self.tab_names = [ " Terminal", " Term Editor", " General" ]
         for t in range(len(self.tabs)):
             self.notebook.AddPage(self.tabs[t], self.tab_names[t])
             self.notebook.SetPageImage(t, t)
