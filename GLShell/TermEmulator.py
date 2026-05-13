@@ -208,6 +208,16 @@ class V102Terminal:
     COLOR_DEFAULT = 0xFF
     DEFAULT_RENDITION = (COLOR_DEFAULT << 24) | (COLOR_DEFAULT << 16)
 
+    # VT100 special-graphics charset (activated by ESC ( 0 / smacs).
+    # Maps the ASCII characters ncurses sends to Unicode box-drawing glyphs.
+    __VT100_GRAPHICS = {
+        '`': '◆', 'a': '▒', 'f': '°',  'g': '±',  'h': '░',
+        'j': '┘', 'k': '┐', 'l': '┌',  'm': '└',  'n': '┼',
+        'o': '⎺', 'p': '⎻', 'q': '─',  'r': '⎼',  's': '⎽',
+        't': '├', 'u': '┤', 'v': '┴',  'w': '┬',  'x': '│',
+        'y': '≤', 'z': '≥', '{': 'π',  '|': '≠',  '}': '£',  '~': '·',
+    }
+
     CALLBACK_SCROLL_UP_SCREEN = 0
     CALLBACK_UPDATE_LINES = 1
     CALLBACK_UPDATE_CURSOR_POS = 2
@@ -338,6 +348,8 @@ class V102Terminal:
                              (self.curY, self.curX, self.cursorStyle, self.curRendition) ]
         # Scroll region.
         self.scrollRegion = (0, self.rows-1)
+        # Character sets.
+        self.g0_charset = 'B'
         # Modes.
         self.ignoreChars = False
         self.modes = { self.MODE_BLINK:   False,
@@ -616,6 +628,8 @@ class V102Terminal:
         Writes the character (ch) into current cursor position and advances
         cursor position.
         """
+        if self.g0_charset == '0' and ch in self.__VT100_GRAPHICS:
+            ch = self.__VT100_GRAPHICS[ch]
         glsLog.debug("TE: Push Char: '%s' @ (%d,%d)"%(ch, self.curY, self.curX), 10)
         if self.curX >= self.cols:
             self.__NewLine()
@@ -799,8 +813,18 @@ class V102Terminal:
                     self.unparsedInput += "\x1b" + firstChar + interChars
                     return index
                 interChars += text[index]
-            glsLog.debug("TE: Charset: Unsupported '%s' @ (%d,%d)"%
-                         (firstChar + interChars, self.curY, self.curX), 10)
+            if firstChar == '(':
+                # G0 charset designation: '0' = VT100 special graphics, 'B' = ASCII
+                if interChars in ('0', 'B'):
+                    self.g0_charset = interChars
+                    glsLog.debug("TE: Charset: G0 set to '%s' @ (%d,%d)"%
+                                 (interChars, self.curY, self.curX), 10)
+                else:
+                    glsLog.debug("TE: Charset: Unsupported G0 '%s' @ (%d,%d)"%
+                                 (firstChar + interChars, self.curY, self.curX), 10)
+            else:
+                glsLog.debug("TE: Charset: Unsupported '%s' @ (%d,%d)"%
+                             (firstChar + interChars, self.curY, self.curX), 10)
             return index + 1
         # Escape but non-CSI sequences.
         if text[index] in self.escHandlers:
@@ -989,10 +1013,10 @@ class V102Terminal:
     def __OnModeALTBUF_SCR(self, enable):
         if enable:
             if not self.modes[self.MODE_ALTB_CSR]:
-                self.SaveCursor()
+                self.__SaveCursor()
         else:
             if self.modes[self.MODE_ALTB_CSR]:
-                self.RestoreCursor()
+                self.__RestoreCursor()
         return
     def __OnModeALTBUF_SCI(self, enable):
         if enable:
@@ -1380,8 +1404,11 @@ class V102Terminal:
         return
     def __OnEscSeqCSZ(self, first, params, last):
         # Handler CSZ: Cursor Style / Size
-        if params == None:
-            glsLog.debug("TE: (CSZ) Cursor Style: No Parameter!", 1)
+        if params == None or params == '0':
+            # Primary Device Attributes (DA1): respond as VT220 with 256-color
+            reply = '\x1b[?62;22c'
+            self.__Callback(self.CALLBACK_SEND_DATA, reply)
+            glsLog.debug("TE: (DA1) Device Attributes Primary: Sending '%s'"%(reply), 3)
             return
         if len(params) != 2 or params[0] != '?':
             if len(params) >= 1 and params[0] == '>':
