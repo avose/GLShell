@@ -203,6 +203,11 @@ class V102Terminal:
     RENDITION_STYLE_INVERSE = 64
     RENDITION_STYLE_HIDDEN = 128
 
+    # 0xFF reserved as "use terminal default color" for fg/bg fields in
+    # the rendition word.  Actual color indices are 0-254 (COLORS_256).
+    COLOR_DEFAULT = 0xFF
+    DEFAULT_RENDITION = (COLOR_DEFAULT << 24) | (COLOR_DEFAULT << 16)
+
     CALLBACK_SCROLL_UP_SCREEN = 0
     CALLBACK_UPDATE_LINES = 1
     CALLBACK_UPDATE_CURSOR_POS = 2
@@ -309,7 +314,7 @@ class V102Terminal:
     ################################################################
     def Reset(self):
         # Screen and rendition arrays.
-        self.curRendition = 0
+        self.curRendition = self.DEFAULT_RENDITION
         self.screen = []
         self.scrRendition = []
         for i in range(self.rows):
@@ -317,7 +322,7 @@ class V102Terminal:
             rendition = array('L')
             for j in range(self.cols):
                 line.append(u' ')
-                rendition.append(0)
+                rendition.append(self.DEFAULT_RENDITION)
             self.screen.append(line)
             self.scrRendition.append(rendition)
         self.savedScreen = []
@@ -397,7 +402,7 @@ class V102Terminal:
                 rendition = array('L')
                 for j in range(cur_cols):
                     line.append(u' ')
-                    rendition.append(0)
+                    rendition.append(self.DEFAULT_RENDITION)
                 self.screen.append(line)
                 self.scrRendition.append(rendition)
         self.rows = rows
@@ -412,7 +417,7 @@ class V102Terminal:
             for i in range(self.rows):
                 for j in range(cols - cur_cols):
                     self.screen[i].append(u' ')
-                    self.scrRendition[i].append(0)
+                    self.scrRendition[i].append(self.DEFAULT_RENDITION)
         self.cols = cols
         #!!avose: maintain state somehow?
         self.scrollRegion = (0, self.rows-1)
@@ -462,7 +467,7 @@ class V102Terminal:
                 end = endCol
             for j in range(start, end + 1):
                 self.screen[i][j] = ' '
-                self.scrRendition[i][j] = 0
+                self.scrRendition[i][j] = self.DEFAULT_RENDITION
         return
     def SetCallback(self, event, func):
         """
@@ -570,7 +575,7 @@ class V102Terminal:
         self.screen.insert(self.scrollRegion[1], line)
         rendition = self.scrRendition.pop(self.scrollRegion[0])
         for i in range(self.cols):
-            rendition[i] = 0
+            rendition[i] = self.DEFAULT_RENDITION
         self.scrRendition.insert(self.scrollRegion[1], rendition)
         return
     def __ScrollDown(self):
@@ -580,7 +585,7 @@ class V102Terminal:
         self.screen.insert(self.scrollRegion[0], line)
         rendition = self.scrRendition.pop(self.scrollRegion[1])
         for i in range(self.cols):
-            rendition[i] = 0
+            rendition[i] = self.DEFAULT_RENDITION
         self.scrRendition.insert(self.scrollRegion[0], rendition)
         glsLog.debug("TE: Scroll Down: rg = (%d,%d) term.rows = %d"%
                      (self.scrollRegion[0], self.scrollRegion[1], self.rows), 3)
@@ -864,18 +869,18 @@ class V102Terminal:
         bits = 0
         if style is not None:
             flag, enable = style
-            mask |= 0xffff
+            flag &= 0xffff
+            mask |= flag        # only touch the specific bits in flag
             if enable:
-                bits |=  0xffff &  flag
-            else:
-                bits &= ~0xffff | ~flag
+                bits |= flag
+            # enable=False: bits for flag stay 0, which clears them
         if fg is not None:
-            mask |= (0xff)      << 16
+            mask |= 0xff << 16
             bits |= (0xff & fg) << 16
         if bg is not None:
-            mask |= (0xff)      << 24
+            mask |= 0xff << 24
             bits |= (0xff & bg) << 24
-        self.curRendition = (self.curRendition & (~mask)) | bits
+        self.curRendition = (self.curRendition & ~mask) | bits
         return
     ################################################################
     # Character Handlers
@@ -1178,7 +1183,7 @@ class V102Terminal:
                 self.scrRendition[self.curY][c] = self.scrRendition[self.curY][c+n]
             else:
                 self.screen[self.curY][c] = ' '
-                self.scrRendition[self.curY][c] = 0
+                self.scrRendition[self.curY][c] = self.DEFAULT_RENDITION
         glsLog.debug("TE: (DCH) Delete Characters: %d @ (%d,%d)"%
                      (n, self.curY, self.curX), 3)
         return
@@ -1197,61 +1202,78 @@ class V102Terminal:
         return
     def __OnEscSeqSGR(self, first, params, last):
         # Handler SGR: Select Graphic Rendition
-        if params is None:
-            self.curRendition = 0
-            glsLog.debug("TE: (SGR) Select Graphic Rendition: No Parameter; Reset.", 3)
+        if params is None or params == '':
+            self.curRendition = self.DEFAULT_RENDITION
+            glsLog.debug("TE: (SGR) Reset.", 3)
             return
         if '?' in params or '>' in params or '%' in params:
             self.__UnhandledEscSeq(first+params+last)
             return
-        if (params.startswith("38:5:") or params.startswith("38;5:") or
-            params.startswith("38;5;") or params.startswith("48:5:") or
-            params.startswith("48;5:") or params.startswith("48;5;")):
-            orig_params = params
-            params = params.replace(':',';')
-            params = params.split(';')
-            if len(params) != 3:
-                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported: '%s'."%
-                             (orig_params), 1)
-                return
-            fg = True if params[0] == '38' else False
-            color = int(params[2])
-            if fg:
-                self.__SetRenditionBits(fg=color)
-            else:
-                self.__SetRenditionBits(bg=color)
-            glsLog.debug("TE: (SGR) Select Graphic Rendition: %scolor: %s."%
-                         ('fg' if fg else 'bg', color), 3)
-            return
-        renditions = params.split(';')
-        for rendition in renditions:
-            irendition = int(rendition)
-            if irendition == 0:
-                # reset rendition
-                self.curRendition = 0
-            elif irendition > 0 and irendition < 9:
-                # style
-                self.__SetRenditionBits(style=(1<<(irendition-1), True))
-            elif irendition >= 30 and irendition <= 37:
-                # foreground
-                self.__SetRenditionBits(fg=(irendition-30))
-            elif irendition >= 40 and irendition <= 47:
-                # background
-                self.__SetRenditionBits(bg=(irendition-40))
-            elif irendition == 27:
-                # reverse video off
+        # Normalize colons (used as separators in some sub-params) to semicolons.
+        parts = params.replace(':', ';').split(';')
+        i = 0
+        while i < len(parts):
+            try:
+                r = int(parts[i]) if parts[i] != '' else 0
+            except ValueError:
+                i += 1
+                continue
+            if r == 0:
+                self.curRendition = self.DEFAULT_RENDITION
+            elif 1 <= r <= 8:
+                self.__SetRenditionBits(style=(1 << (r-1), True))
+            elif r == 22:
+                self.__SetRenditionBits(style=(self.RENDITION_STYLE_BOLD |
+                                               self.RENDITION_STYLE_DIM, False))
+            elif r == 23:
+                self.__SetRenditionBits(style=(self.RENDITION_STYLE_ITALIC, False))
+            elif r == 24:
+                self.__SetRenditionBits(style=(self.RENDITION_STYLE_UNDERLINE, False))
+            elif r == 25:
+                self.__SetRenditionBits(style=(self.RENDITION_STYLE_SLOW_BLINK |
+                                               self.RENDITION_STYLE_FAST_BLINK, False))
+            elif r == 27:
                 self.__SetRenditionBits(style=(self.RENDITION_STYLE_INVERSE, False))
-            elif irendition == 39:
-                # set underline off, set default foreground color
-                self.__SetRenditionBits(style=(self.RENDITION_STYLE_UNDERLINE, False), fg=0)
-            elif irendition == 49:
-                # set default background color
-                self.__SetRenditionBits(bg=0)
+            elif r == 28:
+                self.__SetRenditionBits(style=(self.RENDITION_STYLE_HIDDEN, False))
+            elif 30 <= r <= 37:
+                self.__SetRenditionBits(fg=(r - 30))
+            elif r == 38:
+                if i+2 < len(parts) and parts[i+1] == '5':
+                    try:
+                        color = min(int(parts[i+2]), 254)
+                        self.__SetRenditionBits(fg=color)
+                        i += 2
+                    except (ValueError, IndexError):
+                        pass
+                elif i+4 < len(parts) and parts[i+1] == '2':
+                    i += 4  # 24-bit color unsupported; skip R;G;B
+            elif r == 39:
+                self.__SetRenditionBits(fg=self.COLOR_DEFAULT)
+            elif 40 <= r <= 47:
+                self.__SetRenditionBits(bg=(r - 40))
+            elif r == 48:
+                if i+2 < len(parts) and parts[i+1] == '5':
+                    try:
+                        color = min(int(parts[i+2]), 254)
+                        self.__SetRenditionBits(bg=color)
+                        i += 2
+                    except (ValueError, IndexError):
+                        pass
+                elif i+4 < len(parts) and parts[i+1] == '2':
+                    i += 4  # 24-bit color unsupported; skip R;G;B
+            elif r == 49:
+                self.__SetRenditionBits(bg=self.COLOR_DEFAULT)
+            elif 90 <= r <= 97:
+                # Bright foreground colours (indices 8-15 in COLORS_256).
+                self.__SetRenditionBits(fg=(r - 90 + 8))
+            elif 100 <= r <= 107:
+                # Bright background colours.
+                self.__SetRenditionBits(bg=(r - 100 + 8))
             else:
-                glsLog.debug("TE: (SGR) Select Graphic Rendition: Unsupported %d"%
-                             (irendition), 1)
-                pass
-        glsLog.debug("TE: (SGR) Select Graphic Rendition: '%s'"%(first+params+last), 5)
+                glsLog.debug("TE: (SGR) Unsupported: %d"%(r), 1)
+            i += 1
+        glsLog.debug("TE: (SGR) '%s'"%(first+params+last), 5)
         return
     def __OnEscSeqDSR(self, first, params, last):
         # Handler DSR: Device Status Report

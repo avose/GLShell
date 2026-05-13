@@ -530,14 +530,14 @@ class glsTerminalPanel(wx.Window):
         return
     def GetColors(self, fgndx, bgndx):
         if self.color_en:
-            if fgndx == 0:
+            if fgndx == TermEmulator.V102Terminal.COLOR_DEFAULT:
                 fgcolor = self.color_fg
             else:
-                fgcolor = self.COLORS_256[fgndx]
-            if bgndx == 0:
+                fgcolor = self.COLORS_256[fgndx % 256]
+            if bgndx == TermEmulator.V102Terminal.COLOR_DEFAULT:
                 bgcolor = self.color_bg
             else:
-                bgcolor = self.COLORS_256[bgndx]
+                bgcolor = self.COLORS_256[bgndx % 256]
         else:
             fgcolor = self.color_fg
             bgcolor = self.color_bg
@@ -551,8 +551,6 @@ class glsTerminalPanel(wx.Window):
                 self.fontinfo = self.fontinfo.Underlined()
             if style & self.terminal.RENDITION_STYLE_BOLD:
                 self.fontinfo = self.fontinfo.Bold()
-            if style & self.terminal.RENDITION_STYLE_INVERSE:
-                fgcolor, bgcolor = bgcolor, fgcolor
             self.font = wx.Font(self.fontinfo)
             dc.SetFont(self.font)
             dc.SetTextForeground(fgcolor)
@@ -589,9 +587,10 @@ class glsTerminalPanel(wx.Window):
         return screen, rendition
     def DrawScreen(self, dc):
         screen, rendition = self.GetScrolledScreen()
+        CD = TermEmulator.V102Terminal.COLOR_DEFAULT
         cur_style = 0
-        cur_fgcolor_ndx = 0
-        cur_bgcolor_ndx = 0
+        cur_fgcolor_ndx = CD
+        cur_bgcolor_ndx = CD
         cur_fgcolor, cur_bgcolor = self.GetColors(cur_fgcolor_ndx, cur_bgcolor_ndx)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
         for row in range(len(screen)):
@@ -600,8 +599,8 @@ class glsTerminalPanel(wx.Window):
             for col in range(min(len(screen[row]),self.cols)):
                 rend = rendition[row][col]
                 style = rend & 0x0000ffff
-                fgcolor_ndx = (rend>>16) & 255
-                bgcolor_ndx = (rend>>24) & 255
+                fgcolor_ndx = (rend>>16) & 0xff
+                bgcolor_ndx = (rend>>24) & 0xff
                 if (cur_style != style or
                     cur_fgcolor_ndx != fgcolor_ndx or
                     cur_bgcolor_ndx != bgcolor_ndx):
@@ -609,6 +608,8 @@ class glsTerminalPanel(wx.Window):
                     col_start = col
                     text = ""
                     fgcolor, bgcolor = self.GetColors(fgcolor_ndx, bgcolor_ndx)
+                    if style & self.terminal.RENDITION_STYLE_INVERSE:
+                        fgcolor, bgcolor = bgcolor, fgcolor
                     cur_style   = self.SetTextStyle(dc, cur_style, style, fgcolor, bgcolor)
                     cur_fgcolor = self.SetTextFGColor(dc, cur_fgcolor, fgcolor)
                     cur_bgcolor = self.SetTextBGColor(dc, cur_bgcolor, bgcolor)
