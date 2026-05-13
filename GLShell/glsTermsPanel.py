@@ -528,16 +528,21 @@ class glsTerminalPanel(wx.Window):
         self.scrollbar.Refresh()
         self.Refresh()
         return
-    def GetColors(self, fgndx, bgndx):
+    def GetColors(self, fg_val, fg_is_rgb, bg_val, bg_is_rgb):
+        CD = TermEmulator.V102Terminal.COLOR_DEFAULT
         if self.color_en:
-            if fgndx == TermEmulator.V102Terminal.COLOR_DEFAULT:
+            if fg_is_rgb:
+                fgcolor = ((fg_val >> 16) & 0xFF, (fg_val >> 8) & 0xFF, fg_val & 0xFF)
+            elif (fg_val & 0xFF) == CD:
                 fgcolor = self.color_fg
             else:
-                fgcolor = self.COLORS_256[fgndx % 256]
-            if bgndx == TermEmulator.V102Terminal.COLOR_DEFAULT:
+                fgcolor = self.COLORS_256[(fg_val & 0xFF) % 256]
+            if bg_is_rgb:
+                bgcolor = ((bg_val >> 16) & 0xFF, (bg_val >> 8) & 0xFF, bg_val & 0xFF)
+            elif (bg_val & 0xFF) == CD:
                 bgcolor = self.color_bg
             else:
-                bgcolor = self.COLORS_256[bgndx % 256]
+                bgcolor = self.COLORS_256[(bg_val & 0xFF) % 256]
         else:
             fgcolor = self.color_fg
             bgcolor = self.color_bg
@@ -589,32 +594,40 @@ class glsTerminalPanel(wx.Window):
         screen, rendition = self.GetScrolledScreen()
         CD = TermEmulator.V102Terminal.COLOR_DEFAULT
         cur_style = 0
-        cur_fgcolor_ndx = CD
-        cur_bgcolor_ndx = CD
-        cur_fgcolor, cur_bgcolor = self.GetColors(cur_fgcolor_ndx, cur_bgcolor_ndx)
+        cur_fg_val = CD
+        cur_bg_val = CD
+        cur_fg_rgb = False
+        cur_bg_rgb = False
+        cur_fgcolor, cur_bgcolor = self.GetColors(cur_fg_val, cur_fg_rgb,
+                                                  cur_bg_val, cur_bg_rgb)
         self.SetTextStyle(dc, None, cur_style, cur_fgcolor, cur_bgcolor)
         for row in range(len(screen)):
             col_start = 0
             text = ""
             for col in range(min(len(screen[row]),self.cols)):
                 rend = rendition[row][col]
-                style = rend & 0x0000ffff
-                fgcolor_ndx = (rend>>16) & 0xff
-                bgcolor_ndx = (rend>>24) & 0xff
+                style    =      rend & 0xFF
+                fg_val   =     (rend >> 8)  & 0xFFFFFF
+                bg_val   =     (rend >> 32) & 0xFFFFFF
+                fg_is_rgb = bool((rend >> 56) & 1)
+                bg_is_rgb = bool((rend >> 57) & 1)
                 if (cur_style != style or
-                    cur_fgcolor_ndx != fgcolor_ndx or
-                    cur_bgcolor_ndx != bgcolor_ndx):
+                    cur_fg_val != fg_val or cur_fg_rgb != fg_is_rgb or
+                    cur_bg_val != bg_val or cur_bg_rgb != bg_is_rgb):
                     self.DrawText(dc, text, row, col_start)
                     col_start = col
                     text = ""
-                    fgcolor, bgcolor = self.GetColors(fgcolor_ndx, bgcolor_ndx)
+                    fgcolor, bgcolor = self.GetColors(fg_val, fg_is_rgb,
+                                                      bg_val, bg_is_rgb)
                     if style & self.terminal.RENDITION_STYLE_INVERSE:
                         fgcolor, bgcolor = bgcolor, fgcolor
                     cur_style   = self.SetTextStyle(dc, cur_style, style, fgcolor, bgcolor)
                     cur_fgcolor = self.SetTextFGColor(dc, cur_fgcolor, fgcolor)
                     cur_bgcolor = self.SetTextBGColor(dc, cur_bgcolor, bgcolor)
-                    cur_fgcolor_ndx = fgcolor_ndx
-                    cur_bgcolor_ndx = bgcolor_ndx
+                    cur_fg_val  = fg_val
+                    cur_bg_val  = bg_val
+                    cur_fg_rgb  = fg_is_rgb
+                    cur_bg_rgb  = bg_is_rgb
                 text += screen[row][col]
             self.DrawText(dc, text, row, col_start)
         return
@@ -755,7 +768,7 @@ class glsTerminalPanel(wx.Window):
             return
         text = "".join(self.terminal.GetScreen()[0])
         rendition = self.terminal.GetRendition()[0]
-        rend = array('L')
+        rend = array('Q')
         for c in range(self.cols):
             rend.append(rendition[c])
         if len(self.scrolled_text) >= self.max_scroll_history:

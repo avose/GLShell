@@ -203,10 +203,15 @@ class V102Terminal:
     RENDITION_STYLE_INVERSE = 64
     RENDITION_STYLE_HIDDEN = 128
 
-    # 0xFF reserved as "use terminal default color" for fg/bg fields in
-    # the rendition word.  Actual color indices are 0-254 (COLORS_256).
+    # Rendition is a 64-bit unsigned integer:
+    #   bits  7-0:  style flags (BOLD, ITALIC, etc.)
+    #   bits 31-8:  fg value (24-bit: lower 8 = index when not RGB, full 24 = RGB)
+    #   bits 55-32: bg value (24-bit: lower 8 = index when not RGB, full 24 = RGB)
+    #   bit 56:     fg_is_rgb (0=palette index, 1=24-bit RGB in bits 31-8)
+    #   bit 57:     bg_is_rgb (0=palette index, 1=24-bit RGB in bits 55-32)
+    # 0xFF is reserved as "use terminal default color" for index mode.
     COLOR_DEFAULT = 0xFF
-    DEFAULT_RENDITION = (COLOR_DEFAULT << 24) | (COLOR_DEFAULT << 16)
+    DEFAULT_RENDITION = (COLOR_DEFAULT << 32) | (COLOR_DEFAULT << 8)
 
     # VT100 special-graphics charset (activated by ESC ( 0 / smacs).
     # Maps the ASCII characters ncurses sends to Unicode box-drawing glyphs.
@@ -329,7 +334,7 @@ class V102Terminal:
         self.scrRendition = []
         for i in range(self.rows):
             line = array('u')
-            rendition = array('L')
+            rendition = array('Q')
             for j in range(self.cols):
                 line.append(u' ')
                 rendition.append(self.DEFAULT_RENDITION)
@@ -339,7 +344,7 @@ class V102Terminal:
         self.savedRendition = []
         for scrl,renl in zip(self.screen, self.scrRendition):
             self.savedScreen.append(array('u', scrl))
-            self.savedRendition.append(array('L', renl))
+            self.savedRendition.append(array('Q', renl))
         # Cursor.
         self.curY = 0
         self.curX = 0
@@ -411,7 +416,7 @@ class V102Terminal:
             # add blank rows at bottom
             for i in range(rows - cur_rows):
                 line = array('u')
-                rendition = array('L')
+                rendition = array('Q')
                 for j in range(cur_cols):
                     line.append(u' ')
                     rendition.append(self.DEFAULT_RENDITION)
@@ -888,22 +893,32 @@ class V102Terminal:
         glsLog.debug("TE: (ALTBUF) Exit: restore=%s clear=%s"%
                      (str(restore), str(clear)), 3)
         return
-    def __SetRenditionBits(self, style=None, fg=None, bg=None):
+    def __SetRenditionBits(self, style=None, fg=None, bg=None,
+                           fg_rgb=None, bg_rgb=None):
         mask = 0
         bits = 0
         if style is not None:
             flag, enable = style
-            flag &= 0xffff
-            mask |= flag        # only touch the specific bits in flag
+            flag &= 0xFF
+            mask |= flag
             if enable:
                 bits |= flag
-            # enable=False: bits for flag stay 0, which clears them
-        if fg is not None:
-            mask |= 0xff << 16
-            bits |= (0xff & fg) << 16
-        if bg is not None:
-            mask |= 0xff << 24
-            bits |= (0xff & bg) << 24
+        if fg_rgb is not None:
+            r, g, b = fg_rgb
+            r, g, b = max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))
+            mask |= (0xFFFFFF << 8) | (1 << 56)
+            bits |= ((r << 16 | g << 8 | b) << 8) | (1 << 56)
+        elif fg is not None:
+            mask |= (0xFFFFFF << 8) | (1 << 56)
+            bits |= (fg & 0xFF) << 8   # rgb flag stays 0 (cleared by mask)
+        if bg_rgb is not None:
+            r, g, b = bg_rgb
+            r, g, b = max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))
+            mask |= (0xFFFFFF << 32) | (1 << 57)
+            bits |= ((r << 16 | g << 8 | b) << 32) | (1 << 57)
+        elif bg is not None:
+            mask |= (0xFFFFFF << 32) | (1 << 57)
+            bits |= (bg & 0xFF) << 32  # rgb flag stays 0 (cleared by mask)
         self.curRendition = (self.curRendition & ~mask) | bits
         return
     ################################################################
@@ -1270,8 +1285,15 @@ class V102Terminal:
                         i += 2
                     except (ValueError, IndexError):
                         pass
-                elif i+4 < len(parts) and parts[i+1] == '2':
-                    i += 4  # 24-bit color unsupported; skip R;G;B
+                elif i+1 < len(parts) and parts[i+1] == '2':
+                    try:
+                        rv = int(parts[i+2]) if i+2 < len(parts) else 0
+                        gv = int(parts[i+3]) if i+3 < len(parts) else 0
+                        bv = int(parts[i+4]) if i+4 < len(parts) else 0
+                        self.__SetRenditionBits(fg_rgb=(rv, gv, bv))
+                        i += 4
+                    except (ValueError, IndexError):
+                        pass
             elif r == 39:
                 self.__SetRenditionBits(fg=self.COLOR_DEFAULT)
             elif 40 <= r <= 47:
@@ -1284,8 +1306,15 @@ class V102Terminal:
                         i += 2
                     except (ValueError, IndexError):
                         pass
-                elif i+4 < len(parts) and parts[i+1] == '2':
-                    i += 4  # 24-bit color unsupported; skip R;G;B
+                elif i+1 < len(parts) and parts[i+1] == '2':
+                    try:
+                        rv = int(parts[i+2]) if i+2 < len(parts) else 0
+                        gv = int(parts[i+3]) if i+3 < len(parts) else 0
+                        bv = int(parts[i+4]) if i+4 < len(parts) else 0
+                        self.__SetRenditionBits(bg_rgb=(rv, gv, bv))
+                        i += 4
+                    except (ValueError, IndexError):
+                        pass
             elif r == 49:
                 self.__SetRenditionBits(bg=self.COLOR_DEFAULT)
             elif 90 <= r <= 97:
