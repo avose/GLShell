@@ -13,16 +13,22 @@ class glsKeyPress():
                         wx.WXK_BACK:"\x7f",   wx.WXK_DELETE:"\x1b[3~", wx.WXK_RETURN:"\x0a",
                         wx.WXK_PAGEUP:"\x1b[5~", wx.WXK_PAGEDOWN:"\x1b[6~"}
 
+    # Application cursor mode sequences (sent when DECCKM / ?1 is set).
+    app_cursor_key_map = { wx.WXK_UP:"\x1bOA",   wx.WXK_DOWN:"\x1bOB",
+                           wx.WXK_RIGHT:"\x1bOC", wx.WXK_LEFT:"\x1bOD" }
+
     special_alt_key_map = { wx.WXK_UP:"\x1b[1;3A",    wx.WXK_DOWN:"\x1b[1;3B",
                             wx.WXK_RIGHT:"\x1b[1;3C", wx.WXK_LEFT:"\x1b[1;3D" }
     def __init__(self, keys_down):
         self.keys_down = keys_down
         return
-    def KeyCodeToSequence(self, key):
+    def KeyCodeToSequence(self, key, decckm=False):
         seq = None
         if wx.WXK_ALT in self.keys_down:
             if key in self.special_alt_key_map:
                 return self.special_alt_key_map[key]
+        if decckm and key in self.app_cursor_key_map:
+            return self.app_cursor_key_map[key]
         if key in self.special_key_map:
             return self.special_key_map[key]
         if key < 256:

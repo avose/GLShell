@@ -364,7 +364,11 @@ class V102Terminal:
                        self.MODE_ALTBUF:  False,
                        self.MODE_ALTB_SCO:False,
                        self.MODE_ALTB_CSR:False,
-                       self.MODE_ALTB_SCI:False, }
+                       self.MODE_ALTB_SCI:False,
+                       self.MODE_DECCKM:  False,
+                       self.MODE_DECAWM:  True,
+                       self.MODE_DECSCLM: False,
+                       self.MODE_DECOM:   False, }
         return
     def GetScreen(self):
         """
@@ -1339,7 +1343,7 @@ class V102Terminal:
         if param == 5:
             reply = '\x1b[0n'
         elif param == 6:
-            reply = '\x1b[%d;%dR'%(self.curY, self.curX)
+            reply = '\x1b[%d;%dR'%(self.curY + 1, self.curX + 1)
         else:
             self.__UnhandledEscSeq(first+params+last)
             return

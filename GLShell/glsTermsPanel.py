@@ -753,7 +753,8 @@ class glsTerminalPanel(wx.Window):
     def OnKeyDown(self, event):
         key = event.GetKeyCode()
         self.keys_down[key] = True
-        seq = self.key_press.KeyCodeToSequence(key)
+        decckm = self.modes.get(self.terminal.MODE_DECCKM, False)
+        seq = self.key_press.KeyCodeToSequence(key, decckm=decckm)
         self.SendText(seq, True)
         event.Skip()
         return
