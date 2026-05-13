@@ -27,26 +27,18 @@ import TermEmulator
 ################################################################
 
 class glsTermPanelPopupMenu(wx.Menu):
-    ID_NEW_TERM        = 1000
-    ID_NEW_DIR         = 1001
-    ID_COPY            = 1002
-    ID_PASTE           = 1003
-    ID_SEARCH_CONTENTS = 1004
-    ID_SEARCH_FILES    = 1005
-    ID_NAME            = 1006
-    ID_FONT_UP         = 1007
-    ID_FONT_DOWN       = 1008
-    ID_EXIT            = 1009
+    ID_NEW_TERM  = 1000
+    ID_COPY      = 1001
+    ID_PASTE     = 1002
+    ID_NAME      = 1003
+    ID_FONT_UP   = 1004
+    ID_FONT_DOWN = 1005
+    ID_EXIT      = 1006
     def __init__(self, parent, selection_available, paste_available):
         super(glsTermPanelPopupMenu, self).__init__()
         item = wx.MenuItem(self, self.ID_NEW_TERM, 'New Terminal')
         item.SetBitmap(glsIcons.Get('monitor_add'))
         self.Append(item)
-        item = wx.MenuItem(self, self.ID_NEW_DIR, 'Open Directory')
-        item.SetBitmap(glsIcons.Get('chart_organisation_add'))
-        self.Append(item)
-        if not selection_available:
-            item.Enable(False)
         item = wx.MenuItem(self, self.ID_COPY, 'Copy')
         item.SetBitmap(glsIcons.Get('page_copy'))
         self.Append(item)
@@ -57,23 +49,13 @@ class glsTermPanelPopupMenu(wx.Menu):
         self.Append(item)
         if not paste_available:
             item.Enable(False)
-        item = wx.MenuItem(self, self.ID_SEARCH_CONTENTS, 'Search Contents')
-        item.SetBitmap(glsIcons.Get('magnifier_zoom_in'))
-        self.Append(item)
-        if not selection_available:
-            item.Enable(False)
-        item = wx.MenuItem(self, self.ID_SEARCH_FILES, 'Search Files')
-        item.SetBitmap(glsIcons.Get('magnifier'))
-        self.Append(item)
-        if not selection_available:
-            item.Enable(False)
         item = wx.MenuItem(self, self.ID_NAME, 'Set Tab Name')
         item.SetBitmap(glsIcons.Get('pencil'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_FONT_UP, 'Zoom In')
         item.SetBitmap(glsIcons.Get('font_add'))
         self.Append(item)
-        item = wx.MenuItem(self, self.ID_FONT_DOWN, 'Zoom OUT')
+        item = wx.MenuItem(self, self.ID_FONT_DOWN, 'Zoom Out')
         item.SetBitmap(glsIcons.Get('font_delete'))
         self.Append(item)
         item = wx.MenuItem(self, self.ID_EXIT, 'Close Terminal')
@@ -222,11 +204,22 @@ class glsTerminalPanel(wx.Window):
         tcattrib = termios.tcgetattr(self.io)
         tcattrib[3] = tcattrib[3] & ~termios.ICANON
         termios.tcsetattr(self.io, termios.TCSAFLUSH, tcattrib)
+        # Non-blocking so reads on the GUI thread never stall.
+        flags = fcntl.fcntl(self.io, fcntl.F_GETFL)
+        fcntl.fcntl(self.io, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         self.notified_parent_closed = False
+        # _widget_alive: cleared before destruction so the background thread
+        # never touches wx objects after the widget is gone.
+        self._widget_alive = threading.Event()
+        self._widget_alive.set()
+        # _stop_event: signals the notifier thread to exit.
+        self._stop_event = threading.Event()
+        # _output_idle: set when no read is in flight; cleared when one is
+        # dispatched so we never queue duplicate ReadProcessOutput calls.
+        self._output_idle = threading.Event()
+        self._output_idle.set()
         self.child_output_notifier_thread = threading.Thread(
             target = self.ChildOuputNotifier)
-        self.output_wait = True
-        self.stop_output_notifier = False
         self.child_output_notifier_thread.start()
         self.child_running = True
         # Setup buffer for double-buffered rendering.
@@ -243,52 +236,50 @@ class glsTerminalPanel(wx.Window):
             return False
         return True
     def ChildOuputNotifier(self):
-        inp_set = [ self.io ]
-        while not self.stop_output_notifier and self.ChildIsAlive():
-            if self.output_wait:
-                inp_ready, out_ready, err_ready = select.select(inp_set, [], [], 0.01)
+        inp_set = [self.io]
+        while not self._stop_event.is_set() and self.ChildIsAlive():
+            if self._output_idle.is_set():
+                inp_ready, _, _ = select.select(inp_set, [], [], 0.01)
                 if self.io in inp_ready:
-                    self.output_wait = False
-                    if self:
+                    self._output_idle.clear()
+                    if self._widget_alive.is_set():
                         wx.CallAfter(self.ReadProcessOutput)
             else:
                 sleep(0.001)
         if not self.ChildIsAlive():
             self.child_running = False
-            if self:
+            if self._widget_alive.is_set():
                 wx.CallAfter(self.ReadProcessOutput)
-        if self:
+        if self._widget_alive.is_set():
             wx.PostEvent(self, glsEvents.ChildExit(wx.ID_ANY))
         return
     def ReadProcessOutput(self):
-        output = bytes("",'utf8')
+        if not self._widget_alive.is_set():
+            self._output_idle.set()
+            return
+        output = bytes('', 'utf8')
         try:
             while True:
-                data = os.read(self.io, 512)
-                datalen = len(data)
-                output += data
-                if datalen < 512:
+                try:
+                    data = os.read(self.io, 4096)
+                except BlockingIOError:
                     break
-        except:
-            output = bytes("",'utf8')
-        if output == bytes("",'utf8'):
-            self.output_wait = True
+                if not data:
+                    break
+                output += data
+        except OSError:
+            pass
+        if not output:
+            self._output_idle.set()
             return
         if self.scroll_outp:
             self.ScrollToEnd()
         try:
-            output = output.decode()
-            #self.profiler.enable()
-            self.terminal.ProcessInput(output)
-            #self.profiler.disable()
-            #self.pcount += 1
-        except:
+            self.terminal.ProcessInput(output.decode())
+        except Exception:
             glsLog.add("Terminal: Exception in ProcessInput()!\n%s"%
                        (traceback.format_exc()))
-        self.output_wait = True
-        #print(self.pcount)
-        #if self.pcount % 50 == 0:
-        #    self.profiler.print_stats()
+        self._output_idle.set()
         return
     def ZoomIn(self):
         self.font_zoom += self.font_step
@@ -363,21 +354,15 @@ class glsTerminalPanel(wx.Window):
         wx.PostEvent(self.Parent, evt)
         return
     def OnMenuItem(self, event):
-        id = event.GetId() 
+        id = event.GetId()
         if id == glsTermPanelPopupMenu.ID_COPY:
             self.Copy()
         elif id == glsTermPanelPopupMenu.ID_PASTE:
             self.Paste()
         elif id == glsTermPanelPopupMenu.ID_NEW_TERM:
             self.Parent.Parent.OnNewTerm()
-        elif id == glsTermPanelPopupMenu.ID_NEW_DIR:
-            self.OpenSelectionDir()
         elif id == glsTermPanelPopupMenu.ID_EXIT:
             self.OnClose()
-        elif id == glsTermPanelPopupMenu.ID_SEARCH_FILES:
-            self.SearchSelectionFiles()
-        elif id == glsTermPanelPopupMenu.ID_SEARCH_CONTENTS:
-            self.SearchSelectionContents()
         elif id == glsTermPanelPopupMenu.ID_NAME:
             with wx.TextEntryDialog(self, "Enter tab name:",
                                     caption="Enter Tab Name") as dlg:
@@ -840,11 +825,13 @@ class glsTerminalPanel(wx.Window):
             self.notified_parent_closed = True
         return
     def OnClose(self, event=None):
-        self.stop_output_notifier = True
+        self._widget_alive.clear()
+        self._stop_event.set()
         glsSettings.RemoveWatcher(self.OnChangeSettings)
         return
     def OnDestroy(self, event):
-        self.stop_output_notifier = True
+        self._widget_alive.clear()
+        self._stop_event.set()
         glsSettings.RemoveWatcher(self.OnChangeSettings)
         if self.child_output_notifier_thread is not None:
             self.child_output_notifier_thread.join()
@@ -953,18 +940,14 @@ class glsTermNotebook(wx.Window):
 ################################################################
 
 class glsTermsPanel(wx.Window):
-    ID_OPEN_DIR    = 1000
-    ID_OPEN_FILE   = 1001
-    ID_SEARCH_FILE = 1002
-    ID_SEARCH_CNTS = 1003
-    ID_TERM_NEW    = 1004
-    ID_COPY        = 1005
-    ID_PASTE       = 1006
-    ID_VERTICAL    = 1007
-    ID_HORIZONTAL  = 1008
-    ID_ZOOM_IN     = 1009
-    ID_ZOOM_OUT    = 1010
-    ID_EXIT        = 1011
+    ID_TERM_NEW   = 1000
+    ID_COPY       = 1001
+    ID_PASTE      = 1002
+    ID_VERTICAL   = 1003
+    ID_HORIZONTAL = 1004
+    ID_ZOOM_IN    = 1005
+    ID_ZOOM_OUT   = 1006
+    ID_EXIT       = 1007
     def __init__(self, parent, min_term_size, callback_layout):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(glsTermsPanel, self).__init__(parent,style=style)
@@ -980,10 +963,6 @@ class glsTermsPanel(wx.Window):
                    self.OnToolHorizontal),
                   (self.ID_VERTICAL, "Split Vertical", 'application_tile_horizontal',
                    self.OnToolVertical),
-                  (self.ID_OPEN_DIR, "Open Directory", 'chart_organisation_add', self.OnToolOpenDir),
-                  (self.ID_SEARCH_FILE, "Search Files", 'magnifier', self.OnToolSearchFiles),
-                  (self.ID_SEARCH_CNTS, "Search Contents", 'magnifier_zoom_in',
-                   self.OnToolSearchContents),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
                   (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
                   (self.ID_ZOOM_OUT, "Zoom Out", 'font_delete', self.OnToolZoomOut),
@@ -1013,23 +992,8 @@ class glsTermsPanel(wx.Window):
         return
     def VetoEvent(self, event):
         return
-    def OnToolOpenDir(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.OpenSelectionDir()
-        return
     def OnToolTermNew(self, event):
         self.TerminalStart()
-        return
-    def OnToolSearchFiles(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.SearchSelectionFiles()
-        return
-    def OnToolSearchContents(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.SearchSelectionContents()
         return
     def OnToolPaste(self, event):
         term = self.GetCurrentTerm()

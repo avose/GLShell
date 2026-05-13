@@ -225,7 +225,7 @@ class V102Terminal:
         self.printableChars = "0123456789"
         self.printableChars += "abcdefghijklmnopqrstuvwxyz"
         self.printableChars += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        self.printableChars += """!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ """
+        self.printableChars += r"""!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ """
         self.printableChars += "\t"
 
         # unparsed part of last input
@@ -1445,10 +1445,11 @@ class V102Terminal:
     ################################################################
     # Extended Escape Sequence Handlers
     ################################################################
-    def __OnExICON_TITLE(self):
+    def __OnExICON_TITLE(self, firstChar, params):
         # Handler: Window Title
-        glsLog.debug("TE: Set Window Title: Unimplemented.", 1)
-        #self.__Callback(self.CALLBACK_UPDATE_WINDOW_TITLE, params)
+        if params:
+            self.__Callback(self.CALLBACK_UPDATE_WINDOW_TITLE, params)
+        glsLog.debug("TE: Set Window Title: '%s'."%(params), 3)
         return
 
 ################################################################
